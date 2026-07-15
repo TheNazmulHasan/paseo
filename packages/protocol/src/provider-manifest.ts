@@ -194,7 +194,33 @@ const MOCK_SLOW_MODES: AgentProviderModeDefinition[] = [
   },
 ];
 
+const ANTIGRAVITY_MODES: AgentProviderModeDefinition[] = [
+  {
+    id: "default",
+    label: "Default",
+    description: "Ask for permission before executing tools",
+    icon: "ShieldAlert",
+    colorTier: "moderate",
+  },
+  {
+    id: "bypass",
+    label: "Full Access",
+    description: "Auto-approve all tool calls (skips permission prompts)",
+    icon: "ShieldOff",
+    colorTier: "dangerous",
+    isUnattended: true,
+  },
+];
+
 export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
+  {
+    id: "antigravity",
+    label: "Antigravity",
+    description:
+      "Google's Antigravity CLI (agy) — Gemini, Claude, and GPT models via your Google account",
+    defaultModeId: "default",
+    modes: ANTIGRAVITY_MODES,
+  },
   {
     id: "claude",
     label: "Claude",
