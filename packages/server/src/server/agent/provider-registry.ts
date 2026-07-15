@@ -34,6 +34,7 @@ import type {
   ProviderProfileModel,
   ProviderRuntimeSettings,
 } from "./provider-launch-config.js";
+import { AntigravityAgentClient } from "./providers/antigravity/agent.js";
 import { ClaudeAgentClient, type ClaudeAgentClientOptions } from "./providers/claude/agent.js";
 import { enrichClaudeCatalogModel } from "./providers/claude/model-manifest.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
@@ -195,6 +196,11 @@ const HUB_E2E_PROVIDER_CONTRACT: ProviderContract = {
 };
 
 const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
+  antigravity: (logger, runtimeSettings) =>
+    new AntigravityAgentClient({
+      logger,
+      runtimeSettings,
+    }),
   claude: (logger, runtimeSettings, options) =>
     new ClaudeAgentClient({
       logger,
