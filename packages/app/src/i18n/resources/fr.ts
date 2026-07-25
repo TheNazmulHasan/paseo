@@ -394,6 +394,7 @@ export const fr: TranslationResources = {
     fileActions: {
       openFile: "Ouvrir le fichier",
       copyPath: "Copier le chemin",
+      revealIn: "Afficher dans {{target}}",
       download: "Télécharger",
       addToChat: "Ajouter au chat",
       moreActions: "Plus de propositions",

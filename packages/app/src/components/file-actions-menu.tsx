@@ -1,6 +1,13 @@
 import { useMemo, type ReactElement, type ReactNode } from "react";
 import { withUnistyles } from "react-native-unistyles";
-import { Copy, Download, FileText, MessageSquarePlus, type LucideIcon } from "lucide-react-native";
+import {
+  Copy,
+  Download,
+  FileText,
+  FolderOpen,
+  MessageSquarePlus,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
@@ -23,6 +30,9 @@ interface FileActionsContextMenuContentProps {
   fileExists?: boolean;
   onOpenFile?: () => void;
   onCopyPath?: () => void;
+  /** Reveals the entry in the local file manager; label names the target (Finder/Explorer). */
+  onReveal?: () => void;
+  revealLabel?: string;
   onDownload?: () => void;
   onAddToChat?: () => void;
   /** Optional metadata block rendered above the actions (e.g. size/modified). */
@@ -39,6 +49,8 @@ export function FileActionsContextMenuContent({
   fileExists = true,
   onOpenFile,
   onCopyPath,
+  onReveal,
+  revealLabel,
   onDownload,
   onAddToChat,
   header,
@@ -65,6 +77,14 @@ export function FileActionsContextMenuContent({
         onSelect: onCopyPath,
       });
     }
+    if (onReveal && revealLabel) {
+      next.push({
+        key: "reveal",
+        label: t("workspace.fileActions.revealIn", { target: revealLabel }),
+        icon: FolderOpen,
+        onSelect: onReveal,
+      });
+    }
     if (availableFile && onDownload) {
       next.push({
         key: "download",
@@ -83,7 +103,18 @@ export function FileActionsContextMenuContent({
       });
     }
     return next;
-  }, [fileExists, fileKind, onAddToChat, onCopyPath, onDownload, onOpenFile, t, testIDPrefix]);
+  }, [
+    fileExists,
+    fileKind,
+    onAddToChat,
+    onCopyPath,
+    onDownload,
+    onOpenFile,
+    onReveal,
+    revealLabel,
+    t,
+    testIDPrefix,
+  ]);
 
   if (actions.length === 0) {
     return null;

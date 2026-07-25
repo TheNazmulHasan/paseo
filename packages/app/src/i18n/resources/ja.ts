@@ -394,6 +394,7 @@ export const ja: TranslationResources = {
     fileActions: {
       openFile: "ファイルを開く",
       copyPath: "パスをコピー",
+      revealIn: "{{target}} で表示",
       download: "ダウンロード",
       addToChat: "チャットに追加",
       moreActions: "その他のアクション",
