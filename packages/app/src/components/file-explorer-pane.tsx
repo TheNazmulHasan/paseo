@@ -41,6 +41,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
@@ -89,6 +91,8 @@ interface TreeRowItemProps {
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  onRevealEntry?: (entry: ExplorerEntry) => void;
+  revealTargetLabel?: string;
   onAddToChat?: (path: string) => void;
   testID?: string;
 }
@@ -119,6 +123,8 @@ function TreeRowItem({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onRevealEntry,
+  revealTargetLabel,
   onAddToChat,
   testID,
 }: TreeRowItemProps) {
@@ -155,6 +161,10 @@ function TreeRowItem({
   const handleAddToChat = useCallback(() => {
     onAddToChat?.(entry.path);
   }, [onAddToChat, entry.path]);
+
+  const handleReveal = useCallback(() => {
+    onRevealEntry?.(entry);
+  }, [onRevealEntry, entry]);
 
   const metaHeader = useMemo(
     () => (
@@ -209,6 +219,8 @@ function TreeRowItem({
       <FileActionsContextMenuContent
         fileKind={entry.kind}
         onCopyPath={handleCopy}
+        onReveal={onRevealEntry ? handleReveal : undefined}
+        revealLabel={revealTargetLabel}
         onDownload={handleDownload}
         onAddToChat={onAddToChat ? handleAddToChat : undefined}
         header={metaHeader}
@@ -377,6 +389,38 @@ export function FileExplorerPane({
     [downloadFile],
   );
 
+  // Reveal-in-file-manager (Nazmul mod): surface upstream's native file-manager
+  // editor target (Finder/Explorer) as a per-row menu item. Only meaningful for
+  // local daemons — a remote workspace path means nothing to the local Finder.
+  const isLocalDaemon = useIsLocalDaemon(serverId);
+  const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
+    useDesktopOpenTargets({ isLocalExecution: isLocalDaemon });
+  const fileManagerTarget = useMemo(() => {
+    if (!isDesktopOpenAvailable) {
+      return null;
+    }
+    return desktopOpenTargets.find((target) => target.kind === "file-manager") ?? null;
+  }, [desktopOpenTargets, isDesktopOpenAvailable]);
+
+  const handleRevealEntry = useCallback(
+    async (entry: ExplorerEntry) => {
+      if (!fileManagerTarget) {
+        return;
+      }
+      const absolutePath = buildAbsoluteExplorerPath({
+        workspaceRoot: normalizedWorkspaceRoot,
+        entryPath: entry.path,
+      });
+      // The file-manager target reveals (selects) filePath when set, else opens workspacePath.
+      await openDesktopTarget({
+        editorId: fileManagerTarget.id,
+        workspacePath: absolutePath,
+        filePath: entry.kind === "directory" ? undefined : absolutePath,
+      });
+    },
+    [fileManagerTarget, normalizedWorkspaceRoot],
+  );
+
   const handleSortCycle = useCallback(() => {
     const currentIndex = SORT_OPTIONS.findIndex((opt) => opt.value === sortOption);
     const nextIndex = (currentIndex + 1) % SORT_OPTIONS.length;
@@ -476,6 +520,8 @@ export function FileExplorerPane({
         onEntryPress={handleEntryPress}
         onCopyPath={handleCopyPath}
         onDownloadEntry={handleDownloadEntry}
+        onRevealEntry={fileManagerTarget ? handleRevealEntry : undefined}
+        revealTargetLabel={fileManagerTarget?.label}
         onAddToChat={onAddToChat}
       />
     ),
@@ -484,6 +530,8 @@ export function FileExplorerPane({
       handleEntryPress,
       handleCopyPath,
       handleDownloadEntry,
+      handleRevealEntry,
+      fileManagerTarget,
       isDirectoryLoading,
       selectedEntryPath,
       onAddToChat,
@@ -806,6 +854,8 @@ function TreeRowDispatcher({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onRevealEntry,
+  revealTargetLabel,
   onAddToChat,
 }: {
   serverId: string;
@@ -817,6 +867,8 @@ function TreeRowDispatcher({
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  onRevealEntry?: (entry: ExplorerEntry) => void | Promise<void>;
+  revealTargetLabel?: string;
   onAddToChat?: (path: string) => void;
 }) {
   const entry = info.item.entry;
@@ -838,6 +890,8 @@ function TreeRowDispatcher({
       onEntryPress={onEntryPress}
       onCopyPath={onCopyPath}
       onDownloadEntry={onDownloadEntry}
+      onRevealEntry={onRevealEntry}
+      revealTargetLabel={revealTargetLabel}
       onAddToChat={onAddToChat}
       testID={`file-explorer-row-${info.index}`}
     />

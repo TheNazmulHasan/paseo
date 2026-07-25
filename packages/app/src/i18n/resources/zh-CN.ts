@@ -409,6 +409,7 @@ export const zhCN: TranslationResources = {
     fileActions: {
       openFile: "打开文件",
       copyPath: "复制路径",
+      revealIn: "在 {{target}} 中显示",
       download: "下载",
       addToChat: "添加到聊天",
       moreActions: "更多操作",

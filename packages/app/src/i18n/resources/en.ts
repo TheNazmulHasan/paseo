@@ -408,6 +408,7 @@ export const en = {
     fileActions: {
       openFile: "Open file",
       copyPath: "Copy path",
+      revealIn: "Reveal in {{target}}",
       download: "Download",
       addToChat: "Add to chat",
       moreActions: "More actions",

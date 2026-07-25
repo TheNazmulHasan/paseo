@@ -412,6 +412,7 @@ export const ru: TranslationResources = {
     fileActions: {
       openFile: "Открыть файл",
       copyPath: "Копировать путь",
+      revealIn: "Показать в {{target}}",
       download: "Скачать",
       addToChat: "Добавить в чат",
       moreActions: "Дополнительные действия",

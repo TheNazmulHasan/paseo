@@ -409,6 +409,7 @@ export const ar: TranslationResources = {
     fileActions: {
       openFile: "افتح الملف",
       copyPath: "نسخ المسار",
+      revealIn: "إظهار في {{target}}",
       download: "تحميل",
       addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
