@@ -26,6 +26,8 @@ import {
   MAX_UI_BASE_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
   MIN_CONTENT_FONT_SIZE,
+  MIN_CONTENT_TEXT_TONE,
+  MAX_CONTENT_TEXT_TONE,
   MIN_UI_BASE_FONT_SIZE,
   parseClampedFontSize,
   sanitizeFontFamily,
@@ -396,6 +398,8 @@ interface FontSizeRowProps {
   accessibilityLabel: string;
   draft: string;
   withBorder?: boolean;
+  /** Suffix shown after the field. Defaults to px; the contrast row passes "%". */
+  unit?: string;
   onChangeDraft: (value: string) => void;
   onCommit: () => void;
 }
@@ -406,6 +410,7 @@ function FontSizeRow({
   accessibilityLabel,
   draft,
   withBorder = true,
+  unit = "px",
   onChangeDraft,
   onCommit,
 }: FontSizeRowProps) {
@@ -427,7 +432,7 @@ function FontSizeRow({
           style={styles.sizeInput}
           accessibilityLabel={accessibilityLabel}
         />
-        <Text style={styles.unit}>px</Text>
+        <Text style={styles.unit}>{unit}</Text>
       </View>
     </View>
   );
@@ -522,6 +527,7 @@ export function AppearanceSection() {
   const [monoFontDraft, setMonoFontDraft] = useState(settings.monoFontFamily);
   const [uiBaseSizeDraft, setUiBaseSizeDraft] = useState(String(settings.uiBaseFontSize));
   const [contentSizeDraft, setContentSizeDraft] = useState(String(settings.contentFontSize));
+  const [contentToneDraft, setContentToneDraft] = useState(String(settings.contentTextTone));
   const [codeSizeDraft, setCodeSizeDraft] = useState(String(settings.codeFontSize));
 
   // Resync numeric drafts when the committed value changes elsewhere.
@@ -531,6 +537,10 @@ export function AppearanceSection() {
   useEffect(() => {
     setContentSizeDraft(String(settings.contentFontSize));
   }, [settings.contentFontSize]);
+
+  useEffect(() => {
+    setContentToneDraft(String(settings.contentTextTone));
+  }, [settings.contentTextTone]);
   useEffect(() => {
     setCodeSizeDraft(String(settings.codeFontSize));
   }, [settings.codeFontSize]);
@@ -619,6 +629,10 @@ export function AppearanceSection() {
     setContentSizeDraft(value.replace(/[^\d]/g, ""));
   }, []);
 
+  const handleContentToneChange = useCallback((value: string) => {
+    setContentToneDraft(value.replace(/[^\d]/g, ""));
+  }, []);
+
   const commitUiBaseSize = useCallback(() => {
     const parsed = parseClampedFontSize(uiBaseSizeDraft, {
       min: MIN_UI_BASE_FONT_SIZE,
@@ -654,6 +668,18 @@ export function AppearanceSection() {
       void updateSettings({ contentFontSize: next });
     }
   }, [contentSizeDraft, settings.contentFontSize, updateSettings]);
+
+  const commitContentTone = useCallback(() => {
+    const parsed = parseClampedFontSize(contentToneDraft, {
+      min: MIN_CONTENT_TEXT_TONE,
+      max: MAX_CONTENT_TEXT_TONE,
+    });
+    const next = parsed ?? settings.contentTextTone;
+    setContentToneDraft(String(next));
+    if (next !== settings.contentTextTone) {
+      void updateSettings({ contentTextTone: next });
+    }
+  }, [contentToneDraft, settings.contentTextTone, updateSettings]);
 
   // Live-while-typing: the in-progress drafts drive the preview without
   // committing to the global theme. Empty/invalid fields fall back to the
@@ -730,6 +756,15 @@ export function AppearanceSection() {
             draft={contentSizeDraft}
             onChangeDraft={handleContentSizeChange}
             onCommit={commitContentSize}
+          />
+          <FontSizeRow
+            title={t("settings.appearance.fonts.contentContrast")}
+            hint={t("settings.appearance.fonts.contentContrastHint")}
+            accessibilityLabel={t("settings.appearance.fonts.contentContrastAccessibility")}
+            draft={contentToneDraft}
+            unit="%"
+            onChangeDraft={handleContentToneChange}
+            onCommit={commitContentTone}
           />
           <FontFamilyRow
             title={t("settings.appearance.fonts.codeFont")}

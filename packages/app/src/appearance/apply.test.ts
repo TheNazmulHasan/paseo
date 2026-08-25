@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { darkHighlightColors, resolveSyntaxColors } from "@getpaseo/highlight";
 import { DEFAULT_UI_FONT_STACK, REGISTERED_THEMES } from "@/styles/theme";
-import { applyAppearance, type AppearanceInput } from "./apply";
+import { applyAppearance, mixTowardBackdrop, type AppearanceInput } from "./apply";
 
 // Override the global react-native-unistyles mock (vitest.setup.ts) so that
 // UnistylesRuntime.updateTheme is a spy that records (themeName, updater) calls.
@@ -37,7 +37,12 @@ interface FakeTheme {
     "4xl": number;
   };
   lineHeight: { diff: number };
-  colors: { foreground: string; syntax: Record<string, string> };
+  colors: {
+    foreground: string;
+    surfaceWorkspace: string;
+    contentForeground?: string;
+    syntax: Record<string, string>;
+  };
 }
 
 function makeFakeTheme(): FakeTheme {
@@ -56,7 +61,7 @@ function makeFakeTheme(): FakeTheme {
       "4xl": 26,
     },
     lineHeight: { diff: 22 },
-    colors: { foreground: "#fff", syntax: {} },
+    colors: { foreground: "#ffffff", surfaceWorkspace: "#000000", syntax: {} },
   };
 }
 
@@ -66,6 +71,7 @@ function makeInput(overrides: Partial<AppearanceInput> = {}): AppearanceInput {
     monoFontFamily: "",
     uiBaseFontSize: 14,
     contentFontSize: 15,
+    contentTextTone: 100,
     codeFontSize: 12,
     syntaxTheme: "one",
     ...overrides,
@@ -193,5 +199,33 @@ describe("applyAppearance", () => {
     // makeFakeTheme().colorScheme === "dark" -> github resolves to the dark palette.
     expect(runCapturedUpdater().colors.syntax).toEqual(darkHighlightColors);
     expect(runCapturedUpdater().colors.syntax).toEqual(resolveSyntaxColors("github", "dark"));
+  });
+});
+
+describe("content contrast", () => {
+  beforeEach(() => {
+    updateTheme.mockClear();
+    runtime.themeName = undefined;
+  });
+
+  it("leaves prose at full strength when the tone is 100", () => {
+    applyAppearance(makeInput({ contentTextTone: 100 }));
+    expect(runCapturedUpdater().colors.contentForeground).toBe("#ffffff");
+  });
+
+  it("blends prose toward the workspace surface as the tone drops", () => {
+    applyAppearance(makeInput({ contentTextTone: 50 }));
+    // 50% of #ffffff over #000000 lands on mid grey.
+    expect(runCapturedUpdater().colors.contentForeground).toBe("#808080");
+  });
+
+  it("never dims app chrome, only the content token", () => {
+    applyAppearance(makeInput({ contentTextTone: 40 }));
+    expect(runCapturedUpdater().colors.foreground).toBe("#ffffff");
+  });
+
+  it("passes non-hex colours through untouched", () => {
+    expect(mixTowardBackdrop("rgb(1 2 3)", "#000000", 50)).toBe("rgb(1 2 3)");
+    expect(mixTowardBackdrop("#ffffff", "not-a-colour", 50)).toBe("#ffffff");
   });
 });

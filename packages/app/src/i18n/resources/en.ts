@@ -2425,6 +2425,10 @@ export const en = {
         contentSize: "Content size",
         contentSizeHint: "Used for chat text and rendered Markdown",
         contentSizeAccessibility: "Content font size",
+        contentContrast: "Content contrast",
+        contentContrastHint:
+          "Brightness of chat text and rendered Markdown. Lower is easier on the eyes",
+        contentContrastAccessibility: "Content contrast",
         codeFont: "Code font",
         codeFontHint:
           "Used in code, diffs, and the terminal output. Leave empty for the system default",
