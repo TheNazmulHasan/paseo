@@ -2306,6 +2306,10 @@ export const fr: TranslationResources = {
         contentSize: "Taille du contenu",
         contentSizeHint: "Utilisée pour le texte du chat et le Markdown rendu",
         contentSizeAccessibility: "Taille de police du contenu",
+        contentContrast: "Contraste du contenu",
+        contentContrastHint:
+          "Luminosité du texte de discussion et du Markdown affiché. Plus bas fatigue moins les yeux",
+        contentContrastAccessibility: "Contraste du contenu",
         codeFont: "Police de code",
         codeFontHint:
           "Utilisé dans le code, les différences et la sortie du terminal. Laisser vide pour la valeur par défaut du système",
