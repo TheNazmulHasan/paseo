@@ -2262,6 +2262,10 @@ export const ko: TranslationResources = {
         contentSize: "콘텐츠 크기",
         contentSizeHint: "채팅 텍스트와 렌더링된 Markdown에 사용됩니다",
         contentSizeAccessibility: "콘텐츠 글꼴 크기",
+        contentContrast: "콘텐츠 대비",
+        contentContrastHint:
+          "채팅 텍스트와 렌더링된 Markdown의 밝기입니다. 낮을수록 눈이 편안합니다",
+        contentContrastAccessibility: "콘텐츠 대비",
         codeFont: "코드 글꼴",
         codeFontHint:
           "코드, diff, 터미널 출력에 사용됩니다. 시스템 기본값을 사용하려면 비워 두세요",
