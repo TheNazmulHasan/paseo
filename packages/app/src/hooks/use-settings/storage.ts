@@ -95,6 +95,14 @@ export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
 export const MAX_FONT_FAMILY_LENGTH = 200;
+/**
+ * Contrast of chat prose and rendered Markdown, as a percent of the theme's
+ * full-strength foreground. 100 = unchanged; lower blends toward the workspace
+ * surface for less glare. App chrome is never affected.
+ */
+export const DEFAULT_CONTENT_TEXT_TONE = 100;
+export const MIN_CONTENT_TEXT_TONE = 40;
+export const MAX_CONTENT_TEXT_TONE = 100;
 
 export interface AppSettings {
   theme: ThemePreference;
@@ -110,6 +118,7 @@ export interface AppSettings {
   uiBaseFontSize: number; // clamped px, platform default 14 or 15
   contentFontSize: number; // clamped px, default 15
   codeFontSize: number; // clamped px, default 12
+  contentTextTone: number; // clamped percent, default 100
   syntaxTheme: SyntaxThemeId; // default "one"
   workspaceTitleSource: WorkspaceTitleSource;
   sidebarWorkspaceTrailing: SidebarWorkspaceTrailing;
@@ -156,6 +165,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   uiBaseFontSize: DEFAULT_UI_BASE_FONT_SIZE,
   contentFontSize: DEFAULT_CONTENT_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
+  contentTextTone: DEFAULT_CONTENT_TEXT_TONE,
   syntaxTheme: "one",
   workspaceTitleSource: "title",
   sidebarWorkspaceTrailing: "diff",
@@ -245,6 +255,9 @@ const StoredAppSettingsSchema = z
     uiFontSize: clampedNumber(11, 24).optional().catch(undefined),
     codeFontSize: clampedNumber(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE).catch(
       DEFAULT_CODE_FONT_SIZE,
+    ),
+    contentTextTone: clampedNumber(MIN_CONTENT_TEXT_TONE, MAX_CONTENT_TEXT_TONE).catch(
+      DEFAULT_CONTENT_TEXT_TONE,
     ),
     syntaxTheme: z.string().refine(isSyntaxThemeId).catch("one"),
     workspaceTitleSource: z.enum(["title", "branch"]).catch("title"),

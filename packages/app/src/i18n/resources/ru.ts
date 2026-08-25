@@ -2217,6 +2217,10 @@ export const ru: TranslationResources = {
         contentSize: "Размер содержимого",
         contentSizeHint: "Используется для текста чата и отображаемого Markdown",
         contentSizeAccessibility: "Размер шрифта содержимого",
+        contentContrast: "Контрастность содержимого",
+        contentContrastHint:
+          "Яркость текста чата и отрисованного Markdown. Ниже — меньше нагрузка на глаза",
+        contentContrastAccessibility: "Контрастность содержимого",
         codeFont: "Шрифт кода",
         codeFontHint:
           "Используется для кода, диффов и вывода терминала. Оставьте поле пустым, чтобы использовать системный шрифт.",

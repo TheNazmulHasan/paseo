@@ -2180,6 +2180,9 @@ export const ar: TranslationResources = {
         contentSize: "حجم المحتوى",
         contentSizeHint: "يُستخدم لنص الدردشة وملفات Markdown المعروضة",
         contentSizeAccessibility: "حجم خط المحتوى",
+        contentContrast: "تباين المحتوى",
+        contentContrastHint: "سطوع نص المحادثة وMarkdown المعروض. الأقل أرفق بالعين",
+        contentContrastAccessibility: "تباين المحتوى",
         codeFont: "خط الكود",
         codeFontHint:
           "تستخدم في الكود والاختلافات والمخرجات الطرفية. اتركه فارغًا للإعداد الافتراضي للنظام",
