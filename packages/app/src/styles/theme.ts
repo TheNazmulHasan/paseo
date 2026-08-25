@@ -261,6 +261,12 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     foreground: tint.foreground,
     foregroundMuted: tint.foregroundMuted,
     foregroundExtraMuted: tint.foregroundExtraMuted,
+    /**
+     * Body text for chat prose and rendered Markdown. Defaults to `foreground`;
+     * `applyAppearance` dims it toward the surface when the user lowers the
+     * Content contrast setting. Chrome (sidebar, controls) keeps `foreground`.
+     */
+    contentForeground: tint.foreground,
 
     border: tint.border,
     borderAccent: tint.borderAccent,
@@ -391,6 +397,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     foreground,
     foregroundMuted: tint.foregroundMuted,
     foregroundExtraMuted: tint.foregroundExtraMuted,
+    /** See the light builder: dimmable body text for chat prose and Markdown. */
+    contentForeground: foreground,
 
     border: tint.border,
     borderAccent: tint.borderAccent,

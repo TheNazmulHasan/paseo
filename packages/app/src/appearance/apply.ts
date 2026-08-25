@@ -18,6 +18,41 @@ export interface AppearanceInput {
   contentFontSize: number; // already clamped
   codeFontSize: number; // already clamped
   syntaxTheme: SyntaxThemeId;
+  contentTextTone: number; // already clamped percent, 100 = full contrast
+}
+
+/**
+ * Blend a hex colour toward a backdrop. Used to dim chat prose without touching
+ * app chrome. Mixing (rather than alpha) keeps the text opaque, so it reads the
+ * same over code fences, callouts, and selection highlights.
+ * Returns `color` unchanged for any value that is not a 6-digit hex.
+ */
+export function mixTowardBackdrop(color: string, backdrop: string, tone: number): string {
+  const ratio = Math.min(1, Math.max(0, tone / 100));
+  if (ratio >= 1) {
+    return color;
+  }
+  const parse = (value: string): [number, number, number] | null => {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
+    if (!match) {
+      return null;
+    }
+    const int = Number.parseInt(match[1], 16);
+    return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+  };
+  const front = parse(color);
+  const back = parse(backdrop);
+  if (!front || !back) {
+    return color;
+  }
+  const channel = (index: number) =>
+    Math.round(front[index] * ratio + back[index] * (1 - ratio))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
 
 /**
@@ -80,13 +115,24 @@ export function applyAppearance(input: AppearanceInput): void {
         input.codeFontSize,
       );
       const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
+      // Dim prose toward the workspace surface the chat actually sits on, so the
+      // requested tone lands the same in light and dark themes.
+      const contentForeground = mixTowardBackdrop(
+        t.colors.foreground,
+        t.colors.surfaceWorkspace,
+        input.contentTextTone,
+      );
       if (t.colorScheme === "light") {
         return {
           ...t,
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+          colors: {
+            ...t.colors,
+            contentForeground,
+            syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
+          },
         };
       }
       return {
@@ -94,7 +140,11 @@ export function applyAppearance(input: AppearanceInput): void {
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+        colors: {
+          ...t.colors,
+          contentForeground,
+          syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
+        },
       };
     });
   }
