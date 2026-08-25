@@ -623,14 +623,19 @@ export function FileExplorerPane({
       if (!fileManagerTarget) {
         return;
       }
+      // Nazmul mod: a directory opens ITSELF in the file manager rather than being
+      // selected inside its parent. Upstream reveals both kinds in the parent; files
+      // keep that (correct) behaviour, folders go back to opening their contents.
+      const absolutePath = buildAbsoluteExplorerPath({
+        workspaceRoot: normalizedWorkspaceRoot,
+        entryPath: entry.path,
+      });
+      const isDirectory = entry.kind === "directory";
       try {
         await openDesktopTarget({
           editorId: fileManagerTarget.id,
-          workspacePath: normalizedWorkspaceRoot,
-          filePath: buildAbsoluteExplorerPath({
-            workspaceRoot: normalizedWorkspaceRoot,
-            entryPath: entry.path,
-          }),
+          workspacePath: isDirectory ? absolutePath : normalizedWorkspaceRoot,
+          filePath: isDirectory ? undefined : absolutePath,
         });
       } catch (cause) {
         toast.error(
