@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  FileX,
   FolderOpen,
   type LucideIcon,
 } from "lucide-react-native";
@@ -15,15 +16,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOptionalAssistantFileLinkResolverContext } from "./provider";
+import type { AssistantFileLinkStatus } from "./use-file-link";
 import { useRevealInFileManager } from "./use-reveal-in-file-manager";
 
-export type AssistantLinkActionId = "open" | "reveal" | "copy";
+export type AssistantLinkActionId = "open" | "reveal" | "copy" | "missing";
 
 export interface AssistantLinkAction {
   id: AssistantLinkActionId;
   label: string;
   icon: LucideIcon;
   onSelect: () => void;
+  /** Drawn dimmed: a state marker ("no file"), not something to do. */
+  muted?: boolean;
 }
 
 export interface AssistantLinkActionsInput {
@@ -36,10 +40,10 @@ export interface AssistantLinkActionsInput {
   /** The link's normal click action (browser for URLs, the workspace viewer for files). */
   onOpen?: () => void;
   /**
-   * For a link whose file is not known yet (a bare "menu.tsx" the daemon has to find):
-   * resolves to the absolute path on demand. Lets Reveal and Copy appear before the lookup.
+   * Lookup state for a file link. Defaults to `resolved` when `filePath` is set and `none`
+   * otherwise; a chip whose bare name is being looked up passes `checking` / `missing`.
    */
-  resolveFilePath?: () => Promise<string | null>;
+  fileStatus?: AssistantFileLinkStatus;
 }
 
 /**
@@ -52,32 +56,41 @@ export function useAssistantLinkActions({
   filePath,
   fallbackCopyText,
   onOpen,
-  resolveFilePath,
+  fileStatus,
 }: AssistantLinkActionsInput): AssistantLinkAction[] {
   const { t } = useTranslation();
   const context = useOptionalAssistantFileLinkResolverContext();
   const revealInFileManager = useRevealInFileManager();
 
   const isLink = externalUrl !== null;
-  const canResolveFile = !isLink && (filePath !== null || resolveFilePath !== undefined);
+  const status: AssistantFileLinkStatus = fileStatus ?? (filePath ? "resolved" : "none");
   const copyText = externalUrl ?? filePath ?? fallbackCopyText;
   const handleCopy = useStableEvent(() => {
+    if (!copyText) return;
     void (async () => {
-      const resolved = !isLink && !filePath && resolveFilePath ? await resolveFilePath() : null;
-      const text = resolved ?? copyText;
-      if (!text) return;
-      await Clipboard.setStringAsync(text);
+      await Clipboard.setStringAsync(copyText);
       context?.configRef.current.toast?.copied();
     })();
   });
   const handleReveal = useStableEvent(() => {
-    void (async () => {
-      const path = filePath ?? (await resolveFilePath?.()) ?? null;
-      if (path) revealInFileManager?.reveal(path);
-    })();
+    if (filePath) revealInFileManager?.reveal(filePath);
+  });
+  const missingLabel = t("common.errors.noFileFound", { token: fallbackCopyText });
+  const handleMissing = useStableEvent(() => {
+    context?.configRef.current.toast?.show(missingLabel, { variant: "error" });
   });
 
   return useMemo<AssistantLinkAction[]>(() => {
+    // A bare name still being looked up: show nothing rather than guess.
+    if (!isLink && status === "checking") {
+      return [];
+    }
+    // Looked up, nothing matched: one dimmed marker so the absence is a statement, not a gap.
+    if (!isLink && status === "missing") {
+      return [
+        { id: "missing", label: missingLabel, icon: FileX, onSelect: handleMissing, muted: true },
+      ];
+    }
     const specs: Array<AssistantLinkAction | null> = [
       onOpen
         ? {
@@ -87,7 +100,7 @@ export function useAssistantLinkActions({
             onSelect: onOpen,
           }
         : null,
-      canResolveFile && revealInFileManager
+      !isLink && filePath && revealInFileManager
         ? {
             id: "reveal",
             label: t("workspace.fileActions.revealIn", {
@@ -107,7 +120,19 @@ export function useAssistantLinkActions({
         : null,
     ];
     return specs.filter((spec): spec is AssistantLinkAction => spec !== null);
-  }, [canResolveFile, copyText, handleCopy, handleReveal, isLink, onOpen, revealInFileManager, t]);
+  }, [
+    copyText,
+    filePath,
+    handleCopy,
+    handleMissing,
+    handleReveal,
+    isLink,
+    missingLabel,
+    onOpen,
+    revealInFileManager,
+    status,
+    t,
+  ]);
 }
 
 interface AssistantLinkInlineActionsProps extends AssistantLinkActionsInput {
@@ -202,12 +227,14 @@ function AssistantLinkActionButton({
         accessibilityRole="button"
         accessibilityLabel={label}
         hitSlop={4}
-        style={styles.button}
+        style={action.muted ? MUTED_BUTTON_STYLE : styles.button}
       >
         {({ hovered }) => (
           <Icon
             size={size}
-            color={hovered ? styles.iconHoveredColor.color : styles.iconColor.color}
+            color={
+              hovered && !action.muted ? styles.iconHoveredColor.color : styles.iconColor.color
+            }
           />
         )}
       </TooltipTrigger>
@@ -256,3 +283,4 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 const INLINE_ROW_STYLE = [styles.inlineRow, INLINE_ROW_WEB_STYLE];
+const MUTED_BUTTON_STYLE = [styles.button, { opacity: 0.45 }];
