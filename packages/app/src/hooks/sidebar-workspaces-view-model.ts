@@ -518,6 +518,62 @@ export function sortSidebarProjectsByRecentActivity(input: {
   return keyed.map((entry) => entry.project);
 }
 
+/**
+ * Workspaces with the freshest activity first — the workspace-level twin of
+ * `sortSidebarProjectsByRecentActivity`, for the rows inside a project section and for the
+ * Pinned section. Same contract: recency is `statusEnteredAt` on the hydrated entry, undated
+ * workspaces keep their incoming order after every dated one, and the input array comes back
+ * untouched when nothing moves.
+ */
+export function sortSidebarWorkspacesByRecentActivity<T extends { workspaceKey: string }>(input: {
+  workspaces: T[];
+  workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
+}): T[] {
+  if (input.workspaces.length <= 1) {
+    return input.workspaces;
+  }
+
+  const keyed = input.workspaces.map((workspace, index) => {
+    const enteredAt = input.workspaceEntriesByKey.get(workspace.workspaceKey)?.statusEnteredAt;
+    const time = enteredAt?.getTime();
+    const latest = time !== undefined && Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+    return { workspace, index, latest };
+  });
+
+  keyed.sort((left, right) =>
+    left.latest === right.latest ? left.index - right.index : right.latest - left.latest,
+  );
+
+  if (keyed.every((entry, index) => entry.index === index)) {
+    return input.workspaces;
+  }
+  return keyed.map((entry) => entry.workspace);
+}
+
+/**
+ * Applies `sortSidebarWorkspacesByRecentActivity` inside every project. Projects whose rows did
+ * not move keep their object identity, and the projects array itself is returned as-is when no
+ * project changed, so memoized consumers don't churn.
+ */
+export function sortSidebarProjectWorkspacesByRecentActivity(input: {
+  projects: SidebarProjectEntry[];
+  workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
+}): SidebarProjectEntry[] {
+  let changed = false;
+  const next = input.projects.map((project) => {
+    const workspaces = sortSidebarWorkspacesByRecentActivity({
+      workspaces: project.workspaces,
+      workspaceEntriesByKey: input.workspaceEntriesByKey,
+    });
+    if (workspaces === project.workspaces) {
+      return project;
+    }
+    changed = true;
+    return { ...project, workspaces };
+  });
+  return changed ? next : input.projects;
+}
+
 export function applyStoredOrdering<T>(input: {
   items: T[];
   storedOrder: string[];
