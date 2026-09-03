@@ -1091,6 +1091,11 @@ export const en = {
         status: "Status",
         labels: "Labels",
       },
+      projectSort: {
+        label: "Sort projects",
+        manual: "Manual",
+        recent: "Recent activity",
+      },
       titleSource: {
         label: "Title",
         title: "Title",
