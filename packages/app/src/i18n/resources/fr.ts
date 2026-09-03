@@ -311,6 +311,8 @@ export const fr: TranslationResources = {
     },
     actions: {
       copyCode: "Copier le code",
+      openLink: "Ouvrir le lien",
+      copyLink: "Copier le lien",
       copyTurn: "Copier le tour",
       copyMessage: "Copier le message",
       forkMenu: "Dupliquer le message",
