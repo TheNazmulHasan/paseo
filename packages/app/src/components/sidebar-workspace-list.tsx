@@ -2032,6 +2032,11 @@ export function SidebarWorkspaceList({
   );
   const handlePinnedWorkspaceReorder = useCallback(
     (reorderedWorkspaces: SidebarWorkspacePlacement[]) => {
+      // Same rule as the project list: a drop inside a recency-sorted view must not overwrite
+      // the manual order that Manual mode will restore.
+      if (useSidebarViewStore.getState().projectSort === "recent") {
+        return;
+      }
       const reorderedWorkspaceKeys = reorderedWorkspaces.map((workspace) => workspace.workspaceKey);
       const currentOrder = getPinnedWorkspaceOrder();
       if (
@@ -2347,6 +2352,9 @@ function ProjectModeList({
 
   const handleWorkspaceReorder = useCallback(
     (projectViewKey: string, reorderedWorkspaces: SidebarWorkspacePlacement[]) => {
+      if (useSidebarViewStore.getState().projectSort === "recent") {
+        return;
+      }
       const reorderedWorkspaceKeys = reorderedWorkspaces.map((workspace) => workspace.workspaceKey);
       const currentWorkspaceOrder = getWorkspaceOrder(projectViewKey);
       if (

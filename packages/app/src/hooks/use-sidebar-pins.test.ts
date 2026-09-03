@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   SidebarProjectEntry,
+  SidebarWorkspaceEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/sidebar-workspaces-view-model";
 import { splitPinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
@@ -109,5 +110,62 @@ describe("splitPinnedSidebarGroups", () => {
       "older",
       "newer",
     ]);
+  });
+});
+
+describe("splitPinnedSidebarGroups under the recent sort", () => {
+  function entry(workspaceKey: string, statusEnteredAt: Date | null): SidebarWorkspaceEntry {
+    return {
+      ...placement(workspaceKey),
+      status: "done",
+      statusEnteredAt,
+      pinnedAt: null,
+      labels: [],
+      archivingAt: null,
+      diffStat: null,
+      prHint: null,
+      isCreating: false,
+    } as unknown as SidebarWorkspaceEntry;
+  }
+
+  it("orders pinned chats by activity and ignores pinned-at and the drag order", () => {
+    const projects = [project("p1", [placement("w1"), placement("w2"), placement("w3")])];
+    const result = splitPinnedSidebarGroups({
+      projects,
+      keys: {
+        pinnedWorkspaceKeys: ["w1", "w2", "w3"],
+        pinnedAtByKey: {
+          w1: "2026-03-01T00:00:00Z",
+          w2: "2026-02-01T00:00:00Z",
+          w3: "2026-01-01T00:00:00Z",
+        },
+      },
+      pinnedWorkspaceOrder: ["w2", "w1", "w3"],
+      sortMode: "recent",
+      workspaceEntriesByKey: new Map([
+        ["w1", entry("w1", new Date("2026-08-01T00:00:00Z"))],
+        ["w2", entry("w2", null)],
+        ["w3", entry("w3", new Date("2026-08-30T00:00:00Z"))],
+      ]),
+    });
+    expect(result.pinnedChats.map((chat) => chat.workspaceKey)).toEqual(["w3", "w1", "w2"]);
+  });
+
+  it("keeps the pinned-at + drag order when the sort is manual", () => {
+    const projects = [project("p1", [placement("w1"), placement("w2")])];
+    const result = splitPinnedSidebarGroups({
+      projects,
+      keys: {
+        pinnedWorkspaceKeys: ["w1", "w2"],
+        pinnedAtByKey: { w1: "2026-03-01T00:00:00Z", w2: "2026-02-01T00:00:00Z" },
+      },
+      pinnedWorkspaceOrder: ["w2", "w1"],
+      sortMode: "manual",
+      workspaceEntriesByKey: new Map([
+        ["w1", entry("w1", new Date("2026-08-01T00:00:00Z"))],
+        ["w2", entry("w2", new Date("2026-08-30T00:00:00Z"))],
+      ]),
+    });
+    expect(result.pinnedChats.map((chat) => chat.workspaceKey)).toEqual(["w2", "w1"]);
   });
 });
