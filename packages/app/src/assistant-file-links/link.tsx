@@ -32,7 +32,10 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, externalUrl, resolveFilePath, onHoverIn, onPress } = useFileLink(source);
+  // Chips resolve bare names up front so the icon row can say found / not found immediately.
+  const { target, externalUrl, fileStatus, onHoverIn, onPress } = useFileLink(source, {
+    resolveEagerly: !isNative,
+  });
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -110,7 +113,7 @@ export function AssistantMarkdownLink({
           filePath={filePath}
           fallbackCopyText={fallbackCopyText}
           onOpen={onPress}
-          resolveFilePath={resolveFilePath}
+          fileStatus={fileStatus}
         >
           {anchor}
         </AssistantLinkContextMenu>
@@ -120,7 +123,7 @@ export function AssistantMarkdownLink({
         filePath={filePath}
         fallbackCopyText={fallbackCopyText}
         onOpen={onPress}
-        resolveFilePath={resolveFilePath}
+        fileStatus={fileStatus}
       />
     </>
   );
