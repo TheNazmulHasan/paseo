@@ -212,6 +212,41 @@ describe("useFileLink", () => {
     expect(getDirectorySuggestions).toHaveBeenCalledTimes(2);
   });
 
+  it("resolves eagerly on mount when asked and reports found / missing", async () => {
+    const getDirectorySuggestions = vi
+      .fn()
+      .mockResolvedValueOnce(resolvedSuggestions([{ path: "docs/dumm.md", kind: "file" }]));
+    const { result } = renderHook(() => useFileLink(SOURCE, { resolveEagerly: true }), {
+      wrapper: createWrapper({ client: { getDirectorySuggestions }, openedFiles: [] }),
+    });
+    expect(result.current.fileStatus).toBe("checking");
+    await waitFor(() => {
+      expect(result.current.fileStatus).toBe("resolved");
+    });
+    expect(result.current.target?.path).toBe("/Users/test/project/docs/dumm.md");
+    expect(getDirectorySuggestions).toHaveBeenCalledTimes(1);
+
+    const missingLookup = vi.fn().mockResolvedValueOnce(resolvedSuggestions([]));
+    const missing = renderHook(() => useFileLink(SOURCE, { resolveEagerly: true }), {
+      wrapper: createWrapper({
+        client: { getDirectorySuggestions: missingLookup },
+        openedFiles: [],
+      }),
+    });
+    await waitFor(() => {
+      expect(missing.result.current.fileStatus).toBe("missing");
+    });
+  });
+
+  it("does not look anything up before hover by default", () => {
+    const getDirectorySuggestions = vi.fn();
+    const { result } = renderHook(() => useFileLink(SOURCE), {
+      wrapper: createWrapper({ client: { getDirectorySuggestions }, openedFiles: [] }),
+    });
+    expect(result.current.fileStatus).toBe("checking");
+    expect(getDirectorySuggestions).not.toHaveBeenCalled();
+  });
+
   it("dedupes two links pointing at the same source", async () => {
     const deferred = createDeferred<DirectorySuggestionResult>();
     const getDirectorySuggestions = vi.fn(() => deferred.promise);
