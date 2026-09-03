@@ -1,39 +1,23 @@
 import { useMemo, type ReactElement, type ReactNode } from "react";
 import type { ViewStyle } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
-import * as Clipboard from "expo-clipboard";
-import { Copy, ExternalLink, FileText, FolderOpen, type LucideIcon } from "lucide-react-native";
-import { useTranslation } from "react-i18next";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { useStableEvent } from "@/hooks/use-stable-event";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { useOptionalAssistantFileLinkResolverContext } from "./provider";
-import { useRevealInFileManager } from "./use-reveal-in-file-manager";
+import {
+  useAssistantLinkActions,
+  type AssistantLinkAction,
+  type AssistantLinkActionsInput,
+} from "./link-actions";
 
-export interface AssistantLinkContextMenuProps {
-  /** Set when the link opens in the browser. */
-  externalUrl: string | null;
-  /** Set when the link resolved to a local file or folder. */
-  filePath: string | null;
-  /** What "Copy" puts on the clipboard when neither of the above is known yet. */
-  fallbackCopyText: string;
-  /** The link's normal click action (browser for URLs, the workspace viewer for files). */
-  onOpen?: () => void;
+export interface AssistantLinkContextMenuProps extends AssistantLinkActionsInput {
   /** Inline (default) sits inside a line of text; block wraps a whole code block. */
   layout?: "inline" | "block";
   children: ReactNode;
-}
-
-interface LinkAction {
-  key: string;
-  label: string;
-  icon: LucideIcon;
-  onSelect: () => void;
 }
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -45,74 +29,15 @@ const INLINE_TRIGGER_STYLE: ViewStyle = {
 };
 
 /**
- * Right-click menu for every link and path in an assistant message: Open, Reveal in
- * Finder (paths, desktop + local daemon only) and Copy. Left click keeps doing what it did.
+ * Right-click menu with the same actions as the inline icon row (`AssistantLinkInlineActions`).
+ * Left click keeps doing what it did.
  */
 export function AssistantLinkContextMenu({
-  externalUrl,
-  filePath,
-  fallbackCopyText,
-  onOpen,
   layout = "inline",
   children,
+  ...input
 }: AssistantLinkContextMenuProps): ReactElement {
-  const { t } = useTranslation();
-  const context = useOptionalAssistantFileLinkResolverContext();
-  const revealInFileManager = useRevealInFileManager();
-
-  const copyText = externalUrl ?? filePath ?? fallbackCopyText;
-  const handleCopy = useStableEvent(() => {
-    if (!copyText) return;
-    void Clipboard.setStringAsync(copyText).then(() => {
-      context?.configRef.current.toast?.copied();
-    });
-  });
-  const handleReveal = useStableEvent(() => {
-    if (filePath) revealInFileManager?.reveal(filePath);
-  });
-
-  const actions = useMemo<LinkAction[]>(() => {
-    const isLink = externalUrl !== null;
-    const specs: Array<LinkAction | null> = [
-      onOpen
-        ? {
-            key: "open",
-            label: isLink ? t("message.actions.openLink") : t("workspace.fileActions.openFile"),
-            icon: isLink ? ExternalLink : FileText,
-            onSelect: onOpen,
-          }
-        : null,
-      !isLink && filePath && revealInFileManager
-        ? {
-            key: "reveal",
-            label: t("workspace.fileActions.revealIn", {
-              target: revealInFileManager.targetName,
-            }),
-            icon: FolderOpen,
-            onSelect: handleReveal,
-          }
-        : null,
-      copyText
-        ? {
-            key: "copy",
-            label: isLink ? t("message.actions.copyLink") : t("workspace.fileActions.copyPath"),
-            icon: Copy,
-            onSelect: handleCopy,
-          }
-        : null,
-    ];
-    return specs.filter((spec): spec is LinkAction => spec !== null);
-  }, [
-    context,
-    copyText,
-    externalUrl,
-    filePath,
-    handleCopy,
-    handleReveal,
-    onOpen,
-    revealInFileManager,
-    t,
-  ]);
+  const actions = useAssistantLinkActions(input);
 
   return (
     <ContextMenu>
@@ -124,14 +49,14 @@ export function AssistantLinkContextMenu({
       </ContextMenuTrigger>
       <ContextMenuContent align="start" width={220}>
         {actions.map((action) => (
-          <LinkActionMenuItem key={action.key} action={action} />
+          <LinkActionMenuItem key={action.id} action={action} />
         ))}
       </ContextMenuContent>
     </ContextMenu>
   );
 }
 
-function LinkActionMenuItem({ action }: { action: LinkAction }): ReactElement {
+function LinkActionMenuItem({ action }: { action: AssistantLinkAction }): ReactElement {
   const leading = useMemo(() => {
     const ThemedIcon = withUnistyles(action.icon);
     return <ThemedIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />;
