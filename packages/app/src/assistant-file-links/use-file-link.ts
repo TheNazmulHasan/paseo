@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -16,15 +16,26 @@ import {
   type AssistantFileLinkSource,
 } from "./resolver";
 
+/**
+ * What we know about the file behind a link: `none` (not a file link), `checking` (a bare
+ * name is being looked up in the workspace), `resolved` (path known), `missing` (looked up,
+ * nothing matched).
+ */
+export type AssistantFileLinkStatus = "none" | "checking" | "resolved" | "missing";
+
+export interface UseFileLinkOptions {
+  /**
+   * Look a bare file name up as soon as the link renders instead of on hover, so the UI can
+   * show found / not-found state up front. Off by default to keep the lookup lazy.
+   */
+  resolveEagerly?: boolean;
+}
+
 export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   /** The http(s) URL this link opens in the browser, when it is not a file link. */
   externalUrl: string | null;
-  /**
-   * Resolves the link to an absolute path, asking the daemon for a bare file name
-   * ("menu.tsx") that has not been looked up yet. Null (with a toast) when nothing matches.
-   */
-  resolveFilePath: () => Promise<string | null>;
+  fileStatus: AssistantFileLinkStatus;
   onHoverIn: () => void;
   onPress: () => void;
   open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
@@ -45,7 +56,11 @@ type AssistantFileLinkQueryKey = readonly [
 
 const DISABLED_QUERY_KEY = ["assistantFileLink", null, null, ""] as const;
 
-export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult {
+export function useFileLink(
+  source: AssistantFileLinkSource,
+  options: UseFileLinkOptions = {},
+): UseFileLinkResult {
+  const resolveEagerly = options.resolveEagerly ?? false;
   const { t } = useTranslation();
   const context = useAssistantFileLinkResolverContext();
   const queryClient = useQueryClient();
@@ -127,33 +142,12 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     open(stableSource, "preferred");
   });
 
-  const resolveFilePath = useStableEvent(async (): Promise<string | null> => {
-    if (resolution.kind === "resolved") {
-      return resolution.value.kind === "file" ? resolution.value.target.path : null;
+  useEffect(() => {
+    if (!resolveEagerly || resolution.kind !== "needsLookup") {
+      return;
     }
-    try {
-      const resolved = await queryClient.fetchQuery({
-        queryKey,
-        queryFn: () =>
-          fetchDaemonResolution({
-            ambiguousQuery: resolution.ambiguousQuery,
-            token: resolution.token,
-            target: resolution.target,
-            workspaceRoot,
-            getDirectorySuggestions: context.getDirectorySuggestions,
-          }),
-        retry: 0,
-        staleTime: Infinity,
-      });
-      return resolved.path;
-    } catch {
-      context.configRef.current.toast?.show(
-        t("common.errors.noFileFound", { token: resolution.token }),
-        { variant: "error" },
-      );
-      return null;
-    }
-  });
+    onHoverIn();
+  }, [onHoverIn, queryKey, resolution.kind, resolveEagerly]);
 
   const target = useMemo(() => {
     if (resolution.kind === "resolved") {
@@ -167,9 +161,18 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
       ? resolution.value.url
       : null;
 
+  const fileStatus = useMemo<AssistantFileLinkStatus>(() => {
+    if (resolution.kind === "resolved") {
+      return resolution.value.kind === "file" ? "resolved" : "none";
+    }
+    if (query.data) return "resolved";
+    if (query.isError) return "missing";
+    return "checking";
+  }, [query.data, query.isError, resolution]);
+
   return useMemo(
-    () => ({ target, externalUrl, resolveFilePath, onHoverIn, onPress, open }),
-    [target, externalUrl, resolveFilePath, onHoverIn, onPress, open],
+    () => ({ target, externalUrl, fileStatus, onHoverIn, onPress, open }),
+    [target, externalUrl, fileStatus, onHoverIn, onPress, open],
   );
 }
 
