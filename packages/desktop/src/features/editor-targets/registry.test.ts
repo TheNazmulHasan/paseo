@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { listAvailableEditorTargets, openEditorTarget } from "./registry.js";
+import { expandHomePath, listAvailableEditorTargets, openEditorTarget } from "./registry.js";
 import type { EditorTargetIcon, EditorTargetRuntime } from "./target.js";
 import { cursorTarget } from "./targets/cursor.js";
 import { explorerTarget, fileManagerTarget, finderTarget } from "./targets/file-manager.js";
@@ -307,6 +307,26 @@ describe("editor target registry", () => {
 
     expect(runtime.openedPaths).toEqual(["C:/repo"]);
     expect(runtime.revealedPaths).toEqual(["C:/repo/src/app.ts"]);
+  });
+
+  it("expands a leading ~ against HOME before validating and revealing", async () => {
+    const runtime = new FakeEditorTargets("darwin", { HOME: "/Users/nazmul" });
+    runtime.addPath("/Users/nazmul/notes");
+    runtime.addPath("/Users/nazmul/notes/today.md");
+
+    await openEditorTarget(
+      {
+        editorId: "finder",
+        workspacePath: "~/notes",
+        filePath: "~/notes/today.md",
+      },
+      runtime,
+      [finderTarget],
+    );
+
+    expect(runtime.revealedPaths).toEqual(["/Users/nazmul/notes/today.md"]);
+    expect(expandHomePath("~", runtime)).toBe("/Users/nazmul");
+    expect(expandHomePath("/already/absolute", runtime)).toBe("/already/absolute");
   });
 
   it("keeps the platform file-manager ids used by stored preferences", async () => {

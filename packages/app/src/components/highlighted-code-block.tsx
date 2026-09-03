@@ -3,7 +3,7 @@ import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from 
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import * as Clipboard from "expo-clipboard";
-import { Check, Copy } from "lucide-react-native";
+import { Check, Copy, ExternalLink, FolderOpen, type LucideIcon } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { HighlightToken } from "@getpaseo/highlight";
 import { isNative, isWeb } from "@/constants/platform";
@@ -16,6 +16,9 @@ import {
   markdownCopyDataSet,
   TRAILING_CODE_LINE_BREAKS,
 } from "@/assistant-selection-copy/markup";
+import { classifyCodeQuickAction } from "@/assistant-file-links/quick-action";
+import { useRevealInFileManager } from "@/assistant-file-links/use-reveal-in-file-manager";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 interface HighlightedCodeBlockProps {
   code: string;
@@ -87,6 +90,9 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   // and ends in more than one when the author left a blank line before the closing
   // fence; pasting any of them into a terminal runs the last line.
   const getCode = useCallback(() => code.replace(TRAILING_CODE_LINE_BREAKS, ""), [code]);
+  // A block that is just one path or one URL gets a second button: reveal it in Finder, or
+  // open it in the browser. Copy stays for everything.
+  const quickAction = useMemo(() => classifyCodeQuickAction(renderedCode), [renderedCode]);
 
   return (
     <View
@@ -104,10 +110,95 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
           {renderedCode}
         </MarkdownTextSpan>
       )}
-      <CopyButton getCode={getCode} visible={controlsVisible} />
+      <CodeBlockActions visible={controlsVisible}>
+        {quickAction?.kind === "path" ? <RevealPathButton path={quickAction.path} /> : null}
+        {quickAction?.kind === "url" ? <OpenUrlButton url={quickAction.url} /> : null}
+        <CopyButton getCode={getCode} />
+      </CodeBlockActions>
     </View>
   );
 });
+
+interface CodeBlockActionsProps {
+  visible: boolean;
+  children: React.ReactNode;
+}
+
+function CodeBlockActions({ visible, children }: CodeBlockActionsProps) {
+  const visibilityStyle = visible
+    ? copyButtonStyles.containerVisible
+    : copyButtonStyles.containerHidden;
+  const style = useMemo(() => [copyButtonStyles.actions, visibilityStyle], [visibilityStyle]);
+  return (
+    <View style={style} pointerEvents={visible ? "auto" : "none"}>
+      {children}
+    </View>
+  );
+}
+
+interface CodeBlockActionButtonProps {
+  icon: LucideIcon;
+  accessibilityLabel: string;
+  onPress: () => void;
+}
+
+const CodeBlockActionButton = React.memo(function CodeBlockActionButton({
+  icon: Icon,
+  accessibilityLabel,
+  onPress,
+}: CodeBlockActionButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={copyButtonStyles.container}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      dataSet={markdownCopyDataSet.ignore}
+    >
+      {({ hovered }) => (
+        <Icon
+          size={14}
+          color={
+            hovered ? copyButtonStyles.iconHoveredColor.color : copyButtonStyles.iconColor.color
+          }
+        />
+      )}
+    </Pressable>
+  );
+});
+
+function RevealPathButton({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const revealInFileManager = useRevealInFileManager();
+  const handlePress = useCallback(() => {
+    revealInFileManager?.reveal(path);
+  }, [path, revealInFileManager]);
+  if (!revealInFileManager) return null;
+  return (
+    <CodeBlockActionButton
+      icon={FolderOpen}
+      accessibilityLabel={t("workspace.fileActions.revealIn", {
+        target: revealInFileManager.targetName,
+      })}
+      onPress={handlePress}
+    />
+  );
+}
+
+function OpenUrlButton({ url }: { url: string }) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    void openExternalUrl(url);
+  }, [url]);
+  return (
+    <CodeBlockActionButton
+      icon={ExternalLink}
+      accessibilityLabel={t("message.actions.openLink")}
+      onPress={handlePress}
+    />
+  );
+}
 
 function renderCodeSegments(keyedLines: KeyedLine[]): React.ReactNode[] {
   const segments: React.ReactNode[] = [];
@@ -166,12 +257,11 @@ function splitFenceStyle(inheritedStyles: TextStyle, textStyle: TextStyle): Spli
 
 interface CopyButtonProps {
   getCode: () => string;
-  visible: boolean;
 }
 
 const COPIED_RESET_MS = 1500;
 
-const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButtonProps) {
+const CopyButton = React.memo(function CopyButton({ getCode }: CopyButtonProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,19 +285,10 @@ const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButt
     }, COPIED_RESET_MS);
   }, [getCode]);
 
-  const visibilityStyle = visible
-    ? copyButtonStyles.containerVisible
-    : copyButtonStyles.containerHidden;
-  const wrapperStyle = useMemo(
-    () => [copyButtonStyles.container, visibilityStyle],
-    [visibilityStyle],
-  );
-
   return (
     <Pressable
       onPress={handlePress}
-      style={wrapperStyle}
-      pointerEvents={visible ? "auto" : "none"}
+      style={copyButtonStyles.container}
       accessibilityRole="button"
       accessibilityLabel={copied ? t("message.actions.copied") : t("message.actions.copyCode")}
       hitSlop={8}
@@ -228,10 +309,15 @@ const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButt
 });
 
 const copyButtonStyles = StyleSheet.create((theme) => ({
-  container: {
+  actions: {
     position: "absolute",
     top: theme.spacing[2],
     right: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  container: {
     padding: theme.spacing[1],
   },
   containerVisible: {

@@ -310,6 +310,8 @@ export const ptBR: TranslationResources = {
     },
     actions: {
       copyCode: "Copiar código",
+      openLink: "Abrir link",
+      copyLink: "Copiar link",
       copyTurn: "Copiar turno",
       copyMessage: "Copiar mensagem",
       forkMenu: "Bifurcar mensagem",

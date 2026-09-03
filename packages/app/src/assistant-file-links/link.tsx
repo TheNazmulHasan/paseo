@@ -8,6 +8,7 @@ import { AssistantLinkPressProvider, type AssistantLinkPress } from "./link-pres
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
+import { AssistantLinkContextMenu } from "./link-context-menu";
 import { useAssistantFileLinkResolverContext } from "./provider";
 import type { AssistantFileLinkSource } from "./resolver";
 import { useFileLink } from "./use-file-link";
@@ -30,7 +31,7 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, onHoverIn, onPress } = useFileLink(source);
+  const { target, externalUrl, onHoverIn, onPress } = useFileLink(source);
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -98,7 +99,18 @@ export function AssistantMarkdownLink({
     </a>
   );
 
-  return <FileLinkHoverTooltip filePath={tooltipPath}>{anchor}</FileLinkHoverTooltip>;
+  return (
+    <FileLinkHoverTooltip filePath={tooltipPath}>
+      <AssistantLinkContextMenu
+        externalUrl={externalUrl}
+        filePath={target?.path ?? null}
+        fallbackCopyText={source.text?.trim() || source.href}
+        onOpen={onPress}
+      >
+        {anchor}
+      </AssistantLinkContextMenu>
+    </FileLinkHoverTooltip>
+  );
 }
 
 interface AssistantMarkdownCodeLinkProps {
