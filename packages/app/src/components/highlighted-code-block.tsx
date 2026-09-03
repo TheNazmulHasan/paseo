@@ -3,7 +3,7 @@ import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from 
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import * as Clipboard from "expo-clipboard";
-import { Check, Copy, ExternalLink, FolderOpen, type LucideIcon } from "lucide-react-native";
+import { Check, Copy } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { HighlightToken } from "@getpaseo/highlight";
 import { isNative, isWeb } from "@/constants/platform";
@@ -18,7 +18,8 @@ import {
 } from "@/assistant-selection-copy/markup";
 import { classifyCodeQuickAction } from "@/assistant-file-links/quick-action";
 import { AssistantLinkContextMenu } from "@/assistant-file-links/link-context-menu";
-import { useRevealInFileManager } from "@/assistant-file-links/use-reveal-in-file-manager";
+import { AssistantLinkInlineActions } from "@/assistant-file-links/link-actions";
+import { useOptionalAssistantFileLinkResolverContext } from "@/assistant-file-links/provider";
 import { openExternalUrl } from "@/utils/open-external-url";
 
 interface HighlightedCodeBlockProps {
@@ -94,9 +95,24 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   // A block that is just one path or one URL gets a second button: reveal it in Finder, or
   // open it in the browser. Copy stays for everything.
   const quickAction = useMemo(() => classifyCodeQuickAction(renderedCode), [renderedCode]);
-  const handleOpenUrl = useCallback(() => {
-    if (quickAction?.kind === "url") void openExternalUrl(quickAction.url);
-  }, [quickAction]);
+  const fileLinkContext = useOptionalAssistantFileLinkResolverContext();
+  const canOpenFile = Boolean(fileLinkContext?.configRef.current.onOpenWorkspaceFile);
+  const handleOpen = useCallback(() => {
+    if (quickAction?.kind === "url") {
+      void openExternalUrl(quickAction.url);
+      return;
+    }
+    if (quickAction?.kind === "path") {
+      fileLinkContext?.configRef.current.onOpenWorkspaceFile?.(
+        { raw: quickAction.path, path: quickAction.path },
+        "preferred",
+      );
+    }
+  }, [fileLinkContext, quickAction]);
+  const quickActionOnOpen =
+    quickAction?.kind === "url" || (quickAction?.kind === "path" && canOpenFile)
+      ? handleOpen
+      : undefined;
 
   const block = (
     <View
@@ -114,11 +130,23 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
           {renderedCode}
         </MarkdownTextSpan>
       )}
-      <CodeBlockActions visible={controlsVisible}>
-        {quickAction?.kind === "path" ? <RevealPathButton path={quickAction.path} /> : null}
-        {quickAction?.kind === "url" ? <OpenUrlButton url={quickAction.url} /> : null}
-        <CopyButton getCode={getCode} />
-      </CodeBlockActions>
+      {quickAction ? (
+        // A block that is one path or one URL keeps its actions in sight, like an inline chip.
+        <CodeBlockActions visible>
+          <AssistantLinkInlineActions
+            layout="block"
+            size={14}
+            externalUrl={quickAction.kind === "url" ? quickAction.url : null}
+            filePath={quickAction.kind === "path" ? quickAction.path : null}
+            fallbackCopyText={renderedCode}
+            onOpen={quickActionOnOpen}
+          />
+        </CodeBlockActions>
+      ) : (
+        <CodeBlockActions visible={controlsVisible}>
+          <CopyButton getCode={getCode} />
+        </CodeBlockActions>
+      )}
     </View>
   );
 
@@ -132,7 +160,7 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
       externalUrl={quickAction.kind === "url" ? quickAction.url : null}
       filePath={quickAction.kind === "path" ? quickAction.path : null}
       fallbackCopyText={renderedCode}
-      onOpen={quickAction.kind === "url" ? handleOpenUrl : undefined}
+      onOpen={quickActionOnOpen}
     >
       {block}
     </AssistantLinkContextMenu>
@@ -153,70 +181,6 @@ function CodeBlockActions({ visible, children }: CodeBlockActionsProps) {
     <View style={style} pointerEvents={visible ? "auto" : "none"}>
       {children}
     </View>
-  );
-}
-
-interface CodeBlockActionButtonProps {
-  icon: LucideIcon;
-  accessibilityLabel: string;
-  onPress: () => void;
-}
-
-const CodeBlockActionButton = React.memo(function CodeBlockActionButton({
-  icon: Icon,
-  accessibilityLabel,
-  onPress,
-}: CodeBlockActionButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={copyButtonStyles.container}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
-      dataSet={markdownCopyDataSet.ignore}
-    >
-      {({ hovered }) => (
-        <Icon
-          size={14}
-          color={
-            hovered ? copyButtonStyles.iconHoveredColor.color : copyButtonStyles.iconColor.color
-          }
-        />
-      )}
-    </Pressable>
-  );
-});
-
-function RevealPathButton({ path }: { path: string }) {
-  const { t } = useTranslation();
-  const revealInFileManager = useRevealInFileManager();
-  const handlePress = useCallback(() => {
-    revealInFileManager?.reveal(path);
-  }, [path, revealInFileManager]);
-  if (!revealInFileManager) return null;
-  return (
-    <CodeBlockActionButton
-      icon={FolderOpen}
-      accessibilityLabel={t("workspace.fileActions.revealIn", {
-        target: revealInFileManager.targetName,
-      })}
-      onPress={handlePress}
-    />
-  );
-}
-
-function OpenUrlButton({ url }: { url: string }) {
-  const { t } = useTranslation();
-  const handlePress = useCallback(() => {
-    void openExternalUrl(url);
-  }, [url]);
-  return (
-    <CodeBlockActionButton
-      icon={ExternalLink}
-      accessibilityLabel={t("message.actions.openLink")}
-      onPress={handlePress}
-    />
   );
 }
 
