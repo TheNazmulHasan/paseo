@@ -32,7 +32,7 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, externalUrl, onHoverIn, onPress } = useFileLink(source);
+  const { target, externalUrl, resolveFilePath, onHoverIn, onPress } = useFileLink(source);
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -110,6 +110,7 @@ export function AssistantMarkdownLink({
           filePath={filePath}
           fallbackCopyText={fallbackCopyText}
           onOpen={onPress}
+          resolveFilePath={resolveFilePath}
         >
           {anchor}
         </AssistantLinkContextMenu>
@@ -119,6 +120,7 @@ export function AssistantMarkdownLink({
         filePath={filePath}
         fallbackCopyText={fallbackCopyText}
         onOpen={onPress}
+        resolveFilePath={resolveFilePath}
       />
     </>
   );
