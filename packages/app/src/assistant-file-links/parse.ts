@@ -528,13 +528,20 @@ function isAllowedAbsolutePath(pathValue: string, workspaceRoot?: string): boole
 /**
  * A token with whitespace is normally prose, not a path. The exception is an absolute or
  * home-relative path whose folders contain spaces ("/Users/me/My Notes/today.md"): those are
- * unambiguous because nothing else starts with "/" or "~/". Tabs and newlines still mean prose.
+ * unambiguous because nothing else starts with "/" or "~/". Tabs and newlines still mean prose,
+ * and so does a trailing bare word ("/x/tool.sh install" is a command line).
  */
-function isSpacedLocalPathToken(value: string): boolean {
+export function isSpacedLocalPathToken(value: string): boolean {
   if (/[\t\r\n]/.test(value)) {
     return false;
   }
-  return isAbsolutePath(value) || isHomeRelativePath(value);
+  if (!isAbsolutePath(value) && !isHomeRelativePath(value)) {
+    return false;
+  }
+  // "/path/to/tool.sh install" is a command, not a path. After the last space we expect a
+  // file name (has a dot) or a folder (ends with a slash) — a bare word is an argument.
+  const lastWord = value.slice(value.lastIndexOf(" ") + 1);
+  return lastWord.includes(".") || lastWord.includes("/") || value.endsWith("/");
 }
 
 function isHomeRelativePath(pathValue: string): boolean {
