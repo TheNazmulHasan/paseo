@@ -469,3 +469,28 @@ describe("normalizeInlinePathTarget", () => {
     });
   });
 });
+
+describe("paths with spaces", () => {
+  it("links an absolute or home-relative path whose folders contain spaces", () => {
+    expect(
+      classifyAssistantFileLink("/Users/me/My Notes/01 – today.md", {
+        workspaceRoot: "/Users/me/repo",
+      }),
+    ).toEqual({
+      kind: "directFile",
+      target: {
+        raw: "/Users/me/My Notes/01 – today.md",
+        path: "/Users/me/My Notes/01 – today.md",
+        lineStart: undefined,
+        lineEnd: undefined,
+      },
+    });
+    expect(classifyAssistantFileLink("~/My Notes/today.md")?.kind).toBe("directFile");
+  });
+
+  it("still refuses prose and relative tokens with spaces", () => {
+    expect(classifyAssistantFileLink("npm install foo")).toBeNull();
+    expect(classifyAssistantFileLink("src/my file.ts", { workspaceRoot: "/repo" })).toBeNull();
+    expect(classifyAssistantFileLink("/a\tb")).toBeNull();
+  });
+});
