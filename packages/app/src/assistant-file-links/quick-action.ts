@@ -1,4 +1,5 @@
 import { isAbsolutePath } from "@/utils/path";
+import { isSpacedLocalPathToken } from "./parse";
 
 /**
  * What a single-line code block "is", for the hover buttons on it. A block that holds one
@@ -17,7 +18,8 @@ export function classifyCodeQuickAction(code: string): CodeQuickAction | null {
   if (SINGLE_URL.test(trimmed)) {
     return { kind: "url", url: trimmed };
   }
-  if (isAbsolutePath(trimmed) || trimmed === "~" || trimmed.startsWith("~/")) {
+  const isLocal = isAbsolutePath(trimmed) || trimmed === "~" || trimmed.startsWith("~/");
+  if (isLocal && (!trimmed.includes(" ") || isSpacedLocalPathToken(trimmed))) {
     return { kind: "path", path: trimmed };
   }
   return null;
