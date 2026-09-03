@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import * as Clipboard from "expo-clipboard";
@@ -7,7 +7,7 @@ import { Check, Copy } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { HighlightToken } from "@getpaseo/highlight";
 import { isNative, isWeb } from "@/constants/platform";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { highlightToKeyedLines, type KeyedLine } from "@/utils/highlight-cache";
@@ -83,11 +83,9 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
     [renderedCode, language],
   );
 
-  const isCompact = useIsCompactFormFactor();
-  const [isHovered, setIsHovered] = useState(false);
-  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
-  const controlsVisible = isHovered || isNative || isCompact;
+  // Upstream hid Copy until hover to keep the block clean. Nazmul wants it in sight always:
+  // a button you cannot see is a button you cannot trust. Permanent on every form factor.
+  const controlsVisible = true;
   // Copy the code without its trailing blank lines. A fence body ends in a newline,
   // and ends in more than one when the author left a blank line before the closing
   // fence; pasting any of them into a terminal runs the last line.
@@ -115,12 +113,7 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
       : undefined;
 
   const block = (
-    <View
-      style={containerStyle}
-      dataSet={copyDataSet}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
-    >
+    <View style={containerStyle} dataSet={copyDataSet}>
       {keyedLines ? (
         <MarkdownTextSpan style={innerTextStyle} copyTag="code">
           {renderCodeSegments(keyedLines)}
@@ -269,26 +262,34 @@ const CopyButton = React.memo(function CopyButton({ getCode }: CopyButtonProps) 
     }, COPIED_RESET_MS);
   }, [getCode]);
 
+  const label = copied ? t("message.actions.copied") : t("message.actions.copyCode");
   return (
-    <Pressable
-      onPress={handlePress}
-      style={copyButtonStyles.container}
-      accessibilityRole="button"
-      accessibilityLabel={copied ? t("message.actions.copied") : t("message.actions.copyCode")}
-      hitSlop={8}
-      dataSet={markdownCopyDataSet.ignore}
-    >
-      {({ hovered }) => {
-        const iconColor = hovered
-          ? copyButtonStyles.iconHoveredColor.color
-          : copyButtonStyles.iconColor.color;
-        return copied ? (
-          <Check size={14} color={iconColor} />
-        ) : (
-          <Copy size={14} color={iconColor} />
-        );
-      }}
-    </Pressable>
+    <Tooltip delayDuration={400}>
+      <TooltipTrigger
+        onPress={handlePress}
+        style={copyButtonStyles.container}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        hitSlop={8}
+        dataSet={markdownCopyDataSet.ignore}
+      >
+        {({ hovered }) => {
+          const iconColor = hovered
+            ? copyButtonStyles.iconHoveredColor.color
+            : copyButtonStyles.iconColor.color;
+          return copied ? (
+            <Check size={14} color={iconColor} />
+          ) : (
+            <Copy size={14} color={iconColor} />
+          );
+        }}
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center">
+        <Text selectable={false} style={copyButtonStyles.tooltipText}>
+          {label}
+        </Text>
+      </TooltipContent>
+    </Tooltip>
   );
 });
 
@@ -315,5 +316,10 @@ const copyButtonStyles = StyleSheet.create((theme) => ({
   },
   iconHoveredColor: {
     color: theme.colors.foreground,
+  },
+  tooltipText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
   },
 }));
