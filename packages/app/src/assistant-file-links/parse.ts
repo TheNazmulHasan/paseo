@@ -268,7 +268,7 @@ export function classifyAssistantFileLink(
     };
   }
 
-  if (/\s/.test(trimmed)) {
+  if (/\s/.test(trimmed) && !isSpacedLocalPathToken(trimmed)) {
     return null;
   }
 
@@ -371,7 +371,7 @@ export function isFileLookingAssistantToken(value: string): boolean {
   const normalized = normalizePathToken(value);
   if (
     !normalized ||
-    /\s/.test(normalized) ||
+    (/\s/.test(normalized) && !isSpacedLocalPathToken(normalized)) ||
     normalized.includes("?") ||
     normalized.includes("://")
   ) {
@@ -523,6 +523,18 @@ function isAllowedAbsolutePath(pathValue: string, workspaceRoot?: string): boole
   const comparePrefix = compareWorkspaceRoot === "/" ? "/" : `${compareWorkspaceRoot}/`;
 
   return comparePath === compareWorkspaceRoot || comparePath.startsWith(comparePrefix);
+}
+
+/**
+ * A token with whitespace is normally prose, not a path. The exception is an absolute or
+ * home-relative path whose folders contain spaces ("/Users/me/My Notes/today.md"): those are
+ * unambiguous because nothing else starts with "/" or "~/". Tabs and newlines still mean prose.
+ */
+function isSpacedLocalPathToken(value: string): boolean {
+  if (/[\t\r\n]/.test(value)) {
+    return false;
+  }
+  return isAbsolutePath(value) || isHomeRelativePath(value);
 }
 
 function isHomeRelativePath(pathValue: string): boolean {

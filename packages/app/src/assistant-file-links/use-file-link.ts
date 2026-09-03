@@ -18,6 +18,8 @@ import {
 
 export interface UseFileLinkResult {
   target: InlinePathTarget | null;
+  /** The http(s) URL this link opens in the browser, when it is not a file link. */
+  externalUrl: string | null;
   onHoverIn: () => void;
   onPress: () => void;
   open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
@@ -127,7 +129,15 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     return query.data ?? null;
   }, [query.data, resolution]);
 
-  return useMemo(() => ({ target, onHoverIn, onPress, open }), [target, onHoverIn, onPress, open]);
+  const externalUrl =
+    resolution.kind === "resolved" && resolution.value.kind === "external"
+      ? resolution.value.url
+      : null;
+
+  return useMemo(
+    () => ({ target, externalUrl, onHoverIn, onPress, open }),
+    [target, externalUrl, onHoverIn, onPress, open],
+  );
 }
 
 export function useAssistantFileLinkActions(): AssistantFileLinkActions {
