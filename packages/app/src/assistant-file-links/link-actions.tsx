@@ -35,6 +35,11 @@ export interface AssistantLinkActionsInput {
   fallbackCopyText: string;
   /** The link's normal click action (browser for URLs, the workspace viewer for files). */
   onOpen?: () => void;
+  /**
+   * For a link whose file is not known yet (a bare "menu.tsx" the daemon has to find):
+   * resolves to the absolute path on demand. Lets Reveal and Copy appear before the lookup.
+   */
+  resolveFilePath?: () => Promise<string | null>;
 }
 
 /**
@@ -47,25 +52,32 @@ export function useAssistantLinkActions({
   filePath,
   fallbackCopyText,
   onOpen,
+  resolveFilePath,
 }: AssistantLinkActionsInput): AssistantLinkAction[] {
   const { t } = useTranslation();
   const context = useOptionalAssistantFileLinkResolverContext();
   const revealInFileManager = useRevealInFileManager();
 
+  const isLink = externalUrl !== null;
+  const canResolveFile = !isLink && (filePath !== null || resolveFilePath !== undefined);
   const copyText = externalUrl ?? filePath ?? fallbackCopyText;
   const handleCopy = useStableEvent(() => {
-    if (!copyText) return;
     void (async () => {
-      await Clipboard.setStringAsync(copyText);
+      const resolved = !isLink && !filePath && resolveFilePath ? await resolveFilePath() : null;
+      const text = resolved ?? copyText;
+      if (!text) return;
+      await Clipboard.setStringAsync(text);
       context?.configRef.current.toast?.copied();
     })();
   });
   const handleReveal = useStableEvent(() => {
-    if (filePath) revealInFileManager?.reveal(filePath);
+    void (async () => {
+      const path = filePath ?? (await resolveFilePath?.()) ?? null;
+      if (path) revealInFileManager?.reveal(path);
+    })();
   });
 
   return useMemo<AssistantLinkAction[]>(() => {
-    const isLink = externalUrl !== null;
     const specs: Array<AssistantLinkAction | null> = [
       onOpen
         ? {
@@ -75,7 +87,7 @@ export function useAssistantLinkActions({
             onSelect: onOpen,
           }
         : null,
-      !isLink && filePath && revealInFileManager
+      canResolveFile && revealInFileManager
         ? {
             id: "reveal",
             label: t("workspace.fileActions.revealIn", {
@@ -95,7 +107,7 @@ export function useAssistantLinkActions({
         : null,
     ];
     return specs.filter((spec): spec is AssistantLinkAction => spec !== null);
-  }, [copyText, externalUrl, filePath, handleCopy, handleReveal, onOpen, revealInFileManager, t]);
+  }, [canResolveFile, copyText, handleCopy, handleReveal, isLink, onOpen, revealInFileManager, t]);
 }
 
 interface AssistantLinkInlineActionsProps extends AssistantLinkActionsInput {

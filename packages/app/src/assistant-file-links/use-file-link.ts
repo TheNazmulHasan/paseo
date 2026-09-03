@@ -20,6 +20,11 @@ export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   /** The http(s) URL this link opens in the browser, when it is not a file link. */
   externalUrl: string | null;
+  /**
+   * Resolves the link to an absolute path, asking the daemon for a bare file name
+   * ("menu.tsx") that has not been looked up yet. Null (with a toast) when nothing matches.
+   */
+  resolveFilePath: () => Promise<string | null>;
   onHoverIn: () => void;
   onPress: () => void;
   open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
@@ -122,6 +127,34 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     open(stableSource, "preferred");
   });
 
+  const resolveFilePath = useStableEvent(async (): Promise<string | null> => {
+    if (resolution.kind === "resolved") {
+      return resolution.value.kind === "file" ? resolution.value.target.path : null;
+    }
+    try {
+      const resolved = await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () =>
+          fetchDaemonResolution({
+            ambiguousQuery: resolution.ambiguousQuery,
+            token: resolution.token,
+            target: resolution.target,
+            workspaceRoot,
+            getDirectorySuggestions: context.getDirectorySuggestions,
+          }),
+        retry: 0,
+        staleTime: Infinity,
+      });
+      return resolved.path;
+    } catch {
+      context.configRef.current.toast?.show(
+        t("common.errors.noFileFound", { token: resolution.token }),
+        { variant: "error" },
+      );
+      return null;
+    }
+  });
+
   const target = useMemo(() => {
     if (resolution.kind === "resolved") {
       return resolution.value.kind === "file" ? resolution.value.target : null;
@@ -135,8 +168,8 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
       : null;
 
   return useMemo(
-    () => ({ target, externalUrl, onHoverIn, onPress, open }),
-    [target, externalUrl, onHoverIn, onPress, open],
+    () => ({ target, externalUrl, resolveFilePath, onHoverIn, onPress, open }),
+    [target, externalUrl, resolveFilePath, onHoverIn, onPress, open],
   );
 }
 
