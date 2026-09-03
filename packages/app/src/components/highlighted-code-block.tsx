@@ -17,6 +17,7 @@ import {
   TRAILING_CODE_LINE_BREAKS,
 } from "@/assistant-selection-copy/markup";
 import { classifyCodeQuickAction } from "@/assistant-file-links/quick-action";
+import { AssistantLinkContextMenu } from "@/assistant-file-links/link-context-menu";
 import { useRevealInFileManager } from "@/assistant-file-links/use-reveal-in-file-manager";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -93,8 +94,11 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   // A block that is just one path or one URL gets a second button: reveal it in Finder, or
   // open it in the browser. Copy stays for everything.
   const quickAction = useMemo(() => classifyCodeQuickAction(renderedCode), [renderedCode]);
+  const handleOpenUrl = useCallback(() => {
+    if (quickAction?.kind === "url") void openExternalUrl(quickAction.url);
+  }, [quickAction]);
 
-  return (
+  const block = (
     <View
       style={containerStyle}
       dataSet={copyDataSet}
@@ -116,6 +120,22 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
         <CopyButton getCode={getCode} />
       </CodeBlockActions>
     </View>
+  );
+
+  // Same right-click menu as an inline link, so a path behaves the same wherever it appears.
+  if (!quickAction || isNative) {
+    return block;
+  }
+  return (
+    <AssistantLinkContextMenu
+      layout="block"
+      externalUrl={quickAction.kind === "url" ? quickAction.url : null}
+      filePath={quickAction.kind === "path" ? quickAction.path : null}
+      fallbackCopyText={renderedCode}
+      onOpen={quickAction.kind === "url" ? handleOpenUrl : undefined}
+    >
+      {block}
+    </AssistantLinkContextMenu>
   );
 });
 

@@ -492,5 +492,6 @@ describe("paths with spaces", () => {
     expect(classifyAssistantFileLink("npm install foo")).toBeNull();
     expect(classifyAssistantFileLink("src/my file.ts", { workspaceRoot: "/repo" })).toBeNull();
     expect(classifyAssistantFileLink("/a\tb")).toBeNull();
+    expect(classifyAssistantFileLink("/Users/me/tools/install.sh install")).toBeNull();
   });
 });

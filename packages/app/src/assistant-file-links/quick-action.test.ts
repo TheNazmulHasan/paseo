@@ -11,7 +11,10 @@ describe("classifyCodeQuickAction", () => {
       kind: "path",
       path: "~/DeepLearning/tools",
     });
-    expect(classifyCodeQuickAction("C:\\repo\\src")).toEqual({ kind: "path", path: "C:\\repo\\src" });
+    expect(classifyCodeQuickAction("C:\\repo\\src")).toEqual({
+      kind: "path",
+      path: "C:\\repo\\src",
+    });
   });
 
   it("treats a single http(s) URL as a link", () => {
@@ -26,6 +29,8 @@ describe("classifyCodeQuickAction", () => {
     expect(classifyCodeQuickAction("npm install foo")).toBeNull();
     expect(classifyCodeQuickAction("const x = 1;")).toBeNull();
     expect(classifyCodeQuickAction("https://a.com and more")).toBeNull();
+    expect(classifyCodeQuickAction("/Users/me/tools/install.sh install")).toBeNull();
+    expect(classifyCodeQuickAction("~/bin/tool --flag")).toBeNull();
     expect(classifyCodeQuickAction("   ")).toBeNull();
   });
 });
