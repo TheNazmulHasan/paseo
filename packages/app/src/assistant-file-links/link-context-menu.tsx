@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { useAssistantFileLinkResolverContext } from "./provider";
+import { useOptionalAssistantFileLinkResolverContext } from "./provider";
 import { useRevealInFileManager } from "./use-reveal-in-file-manager";
 
 export interface AssistantLinkContextMenuProps {
@@ -23,7 +23,9 @@ export interface AssistantLinkContextMenuProps {
   /** What "Copy" puts on the clipboard when neither of the above is known yet. */
   fallbackCopyText: string;
   /** The link's normal click action (browser for URLs, the workspace viewer for files). */
-  onOpen: () => void;
+  onOpen?: () => void;
+  /** Inline (default) sits inside a line of text; block wraps a whole code block. */
+  layout?: "inline" | "block";
   children: ReactNode;
 }
 
@@ -51,17 +53,18 @@ export function AssistantLinkContextMenu({
   filePath,
   fallbackCopyText,
   onOpen,
+  layout = "inline",
   children,
 }: AssistantLinkContextMenuProps): ReactElement {
   const { t } = useTranslation();
-  const { configRef } = useAssistantFileLinkResolverContext();
+  const context = useOptionalAssistantFileLinkResolverContext();
   const revealInFileManager = useRevealInFileManager();
 
   const copyText = externalUrl ?? filePath ?? fallbackCopyText;
   const handleCopy = useStableEvent(() => {
     if (!copyText) return;
     void Clipboard.setStringAsync(copyText).then(() => {
-      configRef.current.toast?.copied();
+      context?.configRef.current.toast?.copied();
     });
   });
   const handleReveal = useStableEvent(() => {
@@ -71,12 +74,14 @@ export function AssistantLinkContextMenu({
   const actions = useMemo<LinkAction[]>(() => {
     const isLink = externalUrl !== null;
     const specs: Array<LinkAction | null> = [
-      {
-        key: "open",
-        label: isLink ? t("message.actions.openLink") : t("workspace.fileActions.openFile"),
-        icon: isLink ? ExternalLink : FileText,
-        onSelect: onOpen,
-      },
+      onOpen
+        ? {
+            key: "open",
+            label: isLink ? t("message.actions.openLink") : t("workspace.fileActions.openFile"),
+            icon: isLink ? ExternalLink : FileText,
+            onSelect: onOpen,
+          }
+        : null,
       !isLink && filePath && revealInFileManager
         ? {
             key: "reveal",
@@ -97,11 +102,24 @@ export function AssistantLinkContextMenu({
         : null,
     ];
     return specs.filter((spec): spec is LinkAction => spec !== null);
-  }, [copyText, externalUrl, filePath, handleCopy, handleReveal, onOpen, revealInFileManager, t]);
+  }, [
+    context,
+    copyText,
+    externalUrl,
+    filePath,
+    handleCopy,
+    handleReveal,
+    onOpen,
+    revealInFileManager,
+    t,
+  ]);
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger contextOnly style={INLINE_TRIGGER_STYLE}>
+      <ContextMenuTrigger
+        contextOnly
+        style={layout === "inline" ? INLINE_TRIGGER_STYLE : undefined}
+      >
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent align="start" width={220}>
