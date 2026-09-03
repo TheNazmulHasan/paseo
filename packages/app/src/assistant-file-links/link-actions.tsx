@@ -135,7 +135,14 @@ export function AssistantLinkInlineActions({
     }, COPIED_RESET_MS);
   }, []);
 
-  if (actions.length === 0) {
+  // A chip is already clickable, so an Open icon next to it would repeat what the click does.
+  // A code block's text is not clickable, so there the Open icon earns its place.
+  const visibleActions = useMemo(
+    () => (layout === "inline" ? actions.filter((action) => action.id !== "open") : actions),
+    [actions, layout],
+  );
+
+  if (visibleActions.length === 0) {
     return null;
   }
   return (
@@ -143,7 +150,7 @@ export function AssistantLinkInlineActions({
       style={layout === "inline" ? INLINE_ROW_STYLE : styles.blockRow}
       dataSet={markdownCopyDataSet.ignore}
     >
-      {actions.map((action) => (
+      {visibleActions.map((action) => (
         <AssistantLinkActionButton
           key={action.id}
           action={action}
@@ -213,16 +220,15 @@ const styles = StyleSheet.create((theme) => ({
   inlineRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
-    marginLeft: theme.spacing[1],
+    marginLeft: 2,
   },
   blockRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
   },
   button: {
-    padding: theme.spacing[1],
+    paddingHorizontal: 3,
+    paddingVertical: theme.spacing[1],
   },
   iconColor: {
     color: theme.colors.foregroundMuted,
