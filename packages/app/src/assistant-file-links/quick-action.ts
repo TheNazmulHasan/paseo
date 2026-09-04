@@ -41,3 +41,12 @@ export function getRevealParentPath(path: string): string {
   const parent = normalized.slice(0, lastSlash);
   return /^[A-Za-z]:$/.test(parent) ? `${parent}/` : parent;
 }
+
+/**
+ * What "Copy link" puts on the clipboard. An auto-linked email or phone number carries a
+ * `mailto:` / `tel:` scheme the user never typed and never wants pasted — copy the bare
+ * address. Everything else copies as written.
+ */
+export function getExternalUrlCopyText(url: string): string {
+  return url.replace(/^(?:mailto|tel):/i, "");
+}
