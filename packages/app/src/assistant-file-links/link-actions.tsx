@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOptionalAssistantFileLinkResolverContext } from "./provider";
+import { getExternalUrlCopyText } from "./quick-action";
 import type { AssistantFileLinkStatus } from "./use-file-link";
 import { useRevealInFileManager } from "./use-reveal-in-file-manager";
 
@@ -64,7 +65,9 @@ export function useAssistantLinkActions({
 
   const isLink = externalUrl !== null;
   const status: AssistantFileLinkStatus = fileStatus ?? (filePath ? "resolved" : "none");
-  const copyText = externalUrl ?? filePath ?? fallbackCopyText;
+  const copyText = externalUrl
+    ? getExternalUrlCopyText(externalUrl)
+    : (filePath ?? fallbackCopyText);
   const handleCopy = useStableEvent(() => {
     if (!copyText) return;
     void (async () => {

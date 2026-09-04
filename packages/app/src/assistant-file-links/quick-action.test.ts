@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifyCodeQuickAction, getRevealParentPath } from "./quick-action";
+import {
+  classifyCodeQuickAction,
+  getExternalUrlCopyText,
+  getRevealParentPath,
+} from "./quick-action";
 
 describe("classifyCodeQuickAction", () => {
   it("treats a single absolute path as a path, spaces included", () => {
@@ -43,5 +47,17 @@ describe("getRevealParentPath", () => {
     expect(getRevealParentPath("~/notes/today.md")).toBe("~/notes");
     expect(getRevealParentPath("~/today.md")).toBe("~");
     expect(getRevealParentPath("C:/x.txt")).toBe("C:/");
+  });
+});
+
+describe("getExternalUrlCopyText", () => {
+  it("drops the mailto: / tel: scheme markdown adds to auto-linked addresses", () => {
+    expect(getExternalUrlCopyText("mailto:team@deepcycle.ai")).toBe("team@deepcycle.ai");
+    expect(getExternalUrlCopyText("MAILTO:a@b.c")).toBe("a@b.c");
+    expect(getExternalUrlCopyText("tel:+8801700000000")).toBe("+8801700000000");
+  });
+
+  it("leaves web links untouched", () => {
+    expect(getExternalUrlCopyText("https://paseo.sh/mailto:x")).toBe("https://paseo.sh/mailto:x");
   });
 });
