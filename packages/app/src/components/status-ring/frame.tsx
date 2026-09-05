@@ -19,6 +19,11 @@ export interface StatusRingProps {
   // tab dot, the project tile under a sidebar badge. Leave it out where the ring sits on flat
   // background and has nothing to knock out.
   backdrop?: SurfaceBackdrop | null;
+  // What sits in the middle of the ring. Left out, the ring draws its own centre dot. The sidebar
+  // uses it to mark a row that is busy with background tasks rather than with an agent. It lives
+  // on the shared props, not on the frame alone, so a caller never has to reach past `StatusRing`
+  // into a platform clock to get a custom centre — see the note in `clock.ts`.
+  center?: ReactNode;
 }
 
 /**
@@ -34,7 +39,7 @@ export function StatusRingFrame({
   backdrop,
   children,
   center,
-}: StatusRingProps & { children: ReactNode; center?: ReactNode }) {
+}: StatusRingProps & { children: ReactNode }) {
   return (
     <View style={[styles.frame, getBackdropStyle(backdrop)]}>
       <View style={styles.track} />
