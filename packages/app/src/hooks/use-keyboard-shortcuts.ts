@@ -20,6 +20,7 @@ import {
   shouldPublishBrowserShortcutPolicy,
 } from "@/desktop/browser/shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
+import { cycleTabSwitcher } from "@/tab-switcher/controller";
 import {
   routeKeyboardShortcut,
   type ShortcutAction,
@@ -217,6 +218,8 @@ export function useKeyboardShortcuts({
         case "shortcuts-dialog-toggle":
           useKeyboardShortcutsStore.getState().setShortcutsDialogOpen(action.nextOpen);
           return true;
+        case "tab-switcher-cycle":
+          return cycleTabSwitcher(action.delta);
       }
     };
 

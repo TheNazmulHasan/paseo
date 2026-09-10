@@ -408,6 +408,9 @@ export const ru: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Недавние вкладки",
+    },
     route: {
       loading: "Загрузка рабочего пространства",
       connecting: "Подключение",
@@ -2377,6 +2380,7 @@ export const ru: TranslationResources = {
         toggleFocusMode: "Переключить режим фокусировки",
         cycleTheme: "Переключить тему",
         findInChat: "Найти в чате",
+        switchRecentTabs: "Переключение недавних вкладок",
         focusMessageInput: "Перейти к полю ввода сообщения",
         cycleAgentMode: "Переключить режим агента",
         toggleVoiceMode: "Переключить голосовой режим",

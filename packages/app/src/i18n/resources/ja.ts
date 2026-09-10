@@ -409,6 +409,9 @@ export const ja: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "最近のタブ",
+    },
     route: {
       loading: "ワークスペースを読み込み中",
       connecting: "接続中",
@@ -2358,6 +2361,7 @@ export const ja: TranslationResources = {
         toggleFocusMode: "フォーカスモードを切り替え",
         cycleTheme: "テーマを順に切り替え",
         findInChat: "チャット内を検索",
+        switchRecentTabs: "最近のタブを切り替え",
         focusMessageInput: "メッセージ入力にフォーカス",
         cycleAgentMode: "エージェントモードを順に切り替え",
         toggleVoiceMode: "音声モードを切り替え",

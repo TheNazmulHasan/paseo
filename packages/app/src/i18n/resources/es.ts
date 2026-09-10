@@ -409,6 +409,9 @@ export const es: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Pestañas recientes",
+    },
     route: {
       loading: "Cargando espacio de trabajo",
       connecting: "Conectando",
@@ -2388,6 +2391,7 @@ export const es: TranslationResources = {
         toggleFocusMode: "Alternar modo de enfoque",
         cycleTheme: "Tema del ciclo",
         findInChat: "Buscar en el chat",
+        switchRecentTabs: "Cambiar entre pestañas recientes",
         focusMessageInput: "Entrada de mensaje de enfoque",
         cycleAgentMode: "Alternar modo del agente",
         toggleVoiceMode: "Alternar modo de voz",

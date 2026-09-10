@@ -409,6 +409,9 @@ export const ptBR: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Abas recentes",
+    },
     route: {
       loading: "Carregando workspace",
       connecting: "Conectando",
@@ -2371,6 +2374,7 @@ export const ptBR: TranslationResources = {
         toggleFocusMode: "Alternar modo de foco",
         cycleTheme: "Alternar tema",
         findInChat: "Buscar no chat",
+        switchRecentTabs: "Alternar abas recentes",
         focusMessageInput: "Focar entrada de mensagem",
         cycleAgentMode: "Alternar modo do agente",
         toggleVoiceMode: "Alternar modo de voz",
