@@ -171,6 +171,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "archive-workspace",
   ],
   "tabs-panes": [
+    "tab-switcher-recent",
     "workspace-tab-new",
     "workspace-tab-target-agent",
     "workspace-terminal-new",
@@ -242,6 +243,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "toggle-settings": "settings.shortcuts.help.toggleSettings",
   "toggle-focus": "settings.shortcuts.help.toggleFocusMode",
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
+  "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
@@ -712,6 +714,32 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Next tab",
     },
+  },
+
+  // --- Recent-tab switcher (Arc-style MRU) ---
+  // Ctrl+Tab is the browser-standard "switch tab" chord and is otherwise unused
+  // in Paseo. Karabiner maps Hyper+L onto it while Paseo is frontmost, so the
+  // same key switches tabs in Arc and here.
+  {
+    id: "workspace-tab-switcher-cycle-ctrl-tab",
+    action: "workspace.tab.switcher.cycle",
+    combo: "Ctrl+Tab",
+    when: { commandCenter: false },
+    payload: { type: "delta", delta: 1 },
+    preventDefault: true,
+    help: {
+      id: "tab-switcher-recent",
+      section: "tabs-panes",
+      label: "Switch recent tabs",
+    },
+  },
+  {
+    id: "workspace-tab-switcher-cycle-ctrl-shift-tab",
+    action: "workspace.tab.switcher.cycle",
+    combo: "Ctrl+Shift+Tab",
+    when: { commandCenter: false },
+    payload: { type: "delta", delta: -1 },
+    preventDefault: true,
   },
 
   // --- Pane management (mac only) ---
