@@ -433,6 +433,9 @@ export const zhCN: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "最近的标签页",
+    },
     route: {
       loading: "正在加载 workspace",
       connecting: "正在连接",
@@ -2366,6 +2369,7 @@ export const zhCN: TranslationResources = {
         toggleSettings: "切换设置",
         toggleFocusMode: "切换专注模式",
         cycleTheme: "循环切换主题",
+        switchRecentTabs: "切换最近的标签页",
         focusMessageInput: "聚焦消息输入框",
         cycleAgentMode: "循环切换代理模式",
         toggleVoiceMode: "切换语音模式",

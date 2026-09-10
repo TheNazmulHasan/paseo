@@ -439,6 +439,9 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Onglets récents",
+    },
     route: {
       loading: "Chargement de l'espace de travail",
       connecting: "De liaison",
@@ -2448,6 +2451,7 @@ export const fr: TranslationResources = {
         toggleSettings: "Basculer les paramètres",
         toggleFocusMode: "Basculer le mode de mise au point",
         cycleTheme: "Thème du cycle",
+        switchRecentTabs: "Changer d'onglet récent",
         focusMessageInput: "Saisie du message de focus",
         cycleAgentMode: "Parcourir les modes de l'agent",
         toggleVoiceMode: "Changer le mode vocal",
