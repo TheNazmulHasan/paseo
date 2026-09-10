@@ -15,8 +15,27 @@ export interface TabSwitcherVisit {
 export const TAB_SWITCHER_HISTORY_LIMIT = 30;
 /** How many rows the overlay lists. */
 export const TAB_SWITCHER_VISIBLE_LIMIT = 10;
-/** Idle gap after the last keypress before the selection commits. */
-export const TAB_SWITCHER_COMMIT_DELAY_MS = 900;
+/**
+ * Safety net only. The switcher commits when the held modifier is released
+ * (Hyper, in Nazmul's setup) — that is the whole interaction. This timer exists
+ * so a missed modifier keyup can never leave the overlay stuck on screen, and it
+ * switches itself off for good the first time a real release is observed.
+ */
+export const TAB_SWITCHER_FALLBACK_COMMIT_MS = 8000;
+
+/**
+ * A tap-and-release switch is over in well under this, so the overlay never
+ * paints for it. Hold the modifier past it and the list appears and stays.
+ */
+export const TAB_SWITCHER_REVEAL_DELAY_MS = 250;
+
+/**
+ * Karabiner suppresses Hyper's modifiers for the remapped event and restores
+ * them a moment later, so right after the trigger key goes up we cannot yet tell
+ * "tapped and released" from "still holding". This is how long we wait for a
+ * modifier to show itself before deciding it was a tap and committing.
+ */
+export const TAB_SWITCHER_MODIFIER_GRACE_MS = 200;
 
 export function visitKey(visit: Pick<TabSwitcherVisit, "serverId" | "agentId">): string {
   return `${visit.serverId}:${visit.agentId}`;

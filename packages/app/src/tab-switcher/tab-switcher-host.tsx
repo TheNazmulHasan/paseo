@@ -14,6 +14,7 @@ import {
   cancelTabSwitcher,
   commitTabSwitcher,
   cycleTabSwitcher,
+  handleTabSwitcherKeyEvent,
   selectTabSwitcherIndex,
 } from "@/tab-switcher/controller";
 import { mergeRecentOrder, TAB_SWITCHER_VISIBLE_LIMIT } from "@/tab-switcher/model";
@@ -147,11 +148,12 @@ function useCandidateSync(): void {
 function TabSwitcherOverlay() {
   const { t } = useTranslation();
   const open = useTabSwitcherStore((state) => state.open);
+  const visible = useTabSwitcherStore((state) => state.visible);
   const candidates = useTabSwitcherStore((state) => state.candidates);
   const selectedIndex = useTabSwitcherStore((state) => state.selectedIndex);
   useOverlayKeys(open);
 
-  if (!open || candidates.length === 0) {
+  if (!open || !visible || candidates.length === 0) {
     return null;
   }
 
@@ -209,10 +211,12 @@ function TabSwitcherRow({
 }
 
 /**
- * While the switcher is open, Escape / Enter / arrows drive it directly. These
- * keys are deliberately NOT registered as app shortcuts: they only mean
- * anything for the ~1s the overlay is up, and stealing them globally would
- * break every other surface.
+ * While the switcher is open the whole keyboard is ours.
+ *
+ * Two jobs. Escape / Enter / arrows drive the list directly — deliberately NOT
+ * registered as app shortcuts, since they only mean anything for the moment the
+ * overlay is up. And every event, whatever it is, is handed to the controller so
+ * it can tell "still holding Hyper" from "let go", which is what commits.
  */
 function useOverlayKeys(open: boolean): void {
   const openRef = useRef(open);
@@ -222,10 +226,29 @@ function useOverlayKeys(open: boolean): void {
     if (!isWeb || !open || typeof document === "undefined") {
       return;
     }
+    const modifiersHeld = (event: KeyboardEvent) =>
+      event.ctrlKey || event.altKey || event.metaKey || event.shiftKey;
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (!openRef.current) {
+        return;
+      }
+      handleTabSwitcherKeyEvent({
+        type: "keyup",
+        key: event.key,
+        modifiersHeld: modifiersHeld(event),
+      });
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (!openRef.current) {
         return;
       }
+      handleTabSwitcherKeyEvent({
+        type: "keydown",
+        key: event.key,
+        modifiersHeld: modifiersHeld(event),
+      });
       if (event.key === "Escape") {
         event.preventDefault();
         cancelTabSwitcher();
@@ -246,8 +269,18 @@ function useOverlayKeys(open: boolean): void {
         cycleTabSwitcher(-1);
       }
     };
+
+    // A window that loses focus can never deliver the keyup we commit on.
+    const onBlur = () => cancelTabSwitcher();
+
     document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", onBlur);
+    };
   }, [open]);
 }
 
