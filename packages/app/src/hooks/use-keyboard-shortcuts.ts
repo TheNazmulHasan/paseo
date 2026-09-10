@@ -65,8 +65,12 @@ export function useKeyboardShortcuts({
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const isDesktopApp = getIsElectronRuntime();
+  const shortcutsAvailable = keyboardShortcutsAvailable({
+    isNative,
+    isCompact: isMobile,
+    isDesktop: isDesktopApp,
+  });
   const isMac = getShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
