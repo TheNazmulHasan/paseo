@@ -16,7 +16,7 @@ import {
   cycleTabSwitcher,
   selectTabSwitcherIndex,
 } from "@/tab-switcher/controller";
-import { TAB_SWITCHER_VISIBLE_LIMIT } from "@/tab-switcher/model";
+import { mergeRecentOrder, TAB_SWITCHER_VISIBLE_LIMIT } from "@/tab-switcher/model";
 import { useTabSwitcherMruStore } from "@/tab-switcher/mru-store";
 import { useTabSwitcherStore, type TabSwitcherCandidate } from "@/tab-switcher/tab-switcher-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
@@ -98,26 +98,43 @@ function useCandidateSync(): void {
   }, [projects]);
 
   const candidates = useMemo<TabSwitcherCandidate[]>(() => {
-    const agentByKey = new Map(agents.map((agent) => [`${agent.serverId}:${agent.id}`, agent]));
+    const live = agents.filter((agent) => !agent.archivedAt);
+    const agentByKey = new Map(live.map((agent) => [`${agent.serverId}:${agent.id}`, agent]));
+    const visitedAtByKey = new Map(
+      history.map((entry) => [`${entry.serverId}:${entry.agentId}`, entry.at]),
+    );
+    // Visited chats keep their true visit order; everything else follows by how
+    // recently the agent itself did something, so the list is never one row long.
+    const fallbackKeys = live
+      .slice()
+      .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime())
+      .map((agent) => `${agent.serverId}:${agent.id}`);
+    const orderedKeys = mergeRecentOrder(
+      history
+        .map((entry) => `${entry.serverId}:${entry.agentId}`)
+        .filter((key) => agentByKey.has(key)),
+      fallbackKeys,
+      TAB_SWITCHER_VISIBLE_LIMIT,
+    );
+
     const rows: TabSwitcherCandidate[] = [];
-    for (const entry of history) {
-      const agent = agentByKey.get(`${entry.serverId}:${entry.agentId}`);
-      if (!agent || agent.archivedAt) {
+    for (const key of orderedKeys) {
+      const agent = agentByKey.get(key);
+      if (!agent) {
         continue;
       }
       const workspaceTitle = agent.workspaceId
         ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
         : undefined;
       rows.push({
-        ...entry,
+        serverId: agent.serverId,
+        agentId: agent.id,
+        at: visitedAtByKey.get(key) ?? agent.lastActivityAt.getTime(),
         title: agent.title || t("shell.commandCenter.newAgent"),
         subtitle: workspaceTitle ?? shortenPath(agent.cwd),
         status: agent.status ?? null,
         requiresAttention: Boolean(agent.requiresAttention),
       });
-      if (rows.length >= TAB_SWITCHER_VISIBLE_LIMIT) {
-        break;
-      }
     }
     return rows;
   }, [agents, history, t, workspaceTitleByKey]);

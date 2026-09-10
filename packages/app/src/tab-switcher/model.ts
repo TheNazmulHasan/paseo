@@ -73,3 +73,31 @@ export function cycleIndex(index: number, delta: number, length: number): number
   }
   return (((index + delta) % length) + length) % length;
 }
+
+/**
+ * Order the switcher rows: chats you actually visited first, in visit order,
+ * then a backfill of everything else the app knows about.
+ *
+ * The backfill is what makes the switcher work on a fresh install. Visit history
+ * starts empty, so without it the list holds one entry — the chat you are in —
+ * and the switcher refuses to open, which reads as "the key does nothing".
+ */
+export function mergeRecentOrder(
+  historyKeys: readonly string[],
+  fallbackKeys: readonly string[],
+  limit: number = TAB_SWITCHER_VISIBLE_LIMIT,
+): string[] {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const key of [...historyKeys, ...fallbackKeys]) {
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    ordered.push(key);
+    if (ordered.length >= limit) {
+      break;
+    }
+  }
+  return ordered;
+}
