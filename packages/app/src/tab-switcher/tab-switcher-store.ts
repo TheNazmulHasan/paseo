@@ -11,6 +11,11 @@ export interface TabSwitcherCandidate extends TabSwitcherVisit {
 
 interface TabSwitcherStoreState {
   open: boolean;
+  /**
+   * Open but not yet painted. A tap-and-release switch lives entirely inside
+   * this state, so switching to the previous chat never flashes a panel.
+   */
+  visible: boolean;
   selectedIndex: number;
   /**
    * Frozen while the switcher is open. Reordering the list under the user's
@@ -22,11 +27,13 @@ interface TabSwitcherStoreState {
   /** Open (or advance) the switcher. Returns false when there is nothing to switch to. */
   cycle: (delta: number) => boolean;
   select: (index: number) => void;
+  reveal: () => void;
   close: () => void;
 }
 
 export const useTabSwitcherStore = create<TabSwitcherStoreState>()((set, get) => ({
   open: false,
+  visible: false,
   selectedIndex: 0,
   candidates: [],
   setCandidates: (candidates) => {
@@ -44,6 +51,9 @@ export const useTabSwitcherStore = create<TabSwitcherStoreState>()((set, get) =>
     }
     set({
       open: true,
+      // A second press means he is holding the modifier and looking, so show the
+      // list at once rather than waiting out the reveal delay.
+      visible: state.open ? true : state.visible,
       selectedIndex: cycleIndex(state.open ? state.selectedIndex : 0, delta, length),
     });
     return true;
@@ -55,11 +65,17 @@ export const useTabSwitcherStore = create<TabSwitcherStoreState>()((set, get) =>
     }
     set({ selectedIndex: index });
   },
+  reveal: () => {
+    if (!get().open || get().visible) {
+      return;
+    }
+    set({ visible: true });
+  },
   close: () => {
     if (!get().open) {
       return;
     }
-    set({ open: false, selectedIndex: 0 });
+    set({ open: false, visible: false, selectedIndex: 0 });
   },
 }));
 
