@@ -3,6 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
+import { ProjectIconView } from "@/components/project-icon-view";
+import { createProjectIconTarget, type ProjectIconTarget } from "@/projects/icon-target";
+import { useProjectIcons } from "@/projects/icons";
+import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { isWeb } from "@/constants/platform";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
@@ -22,6 +26,9 @@ import { useTabSwitcherMruStore } from "@/tab-switcher/mru-store";
 import { useTabSwitcherStore, type TabSwitcherCandidate } from "@/tab-switcher/tab-switcher-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { shortenPath } from "@/utils/shorten-path";
+
+/** Big enough to recognise a mark at a glance, small enough not to lead the row. */
+const TAB_SWITCHER_ICON_SIZE = 22;
 
 /**
  * Arc-style most-recently-used tab switcher.
@@ -86,17 +93,41 @@ function useCandidateSync(): void {
   const { projects } = useProjects({ enabled: true });
   const setCandidates = useTabSwitcherStore((state) => state.setCandidates);
 
-  const workspaceTitleByKey = useMemo(() => {
+  // One pass over the project tree gives both halves of a row's identity: the
+  // workspace name under the title, and which project's icon belongs beside it.
+  const { workspaceTitleByKey, projectByWorkspaceKey } = useMemo(() => {
     const titles = new Map<string, string>();
+    const projectByWorkspace = new Map<string, { viewKey: string; initial: string }>();
     for (const project of projects) {
+      const identity = {
+        viewKey: project.viewKey,
+        initial: projectIconPlaceholderLabelFromDisplayName(project.projectName),
+      };
       for (const host of project.hosts) {
         for (const workspace of host.workspaces) {
-          titles.set(`${host.serverId}:${workspace.id}`, workspace.title ?? workspace.name);
+          const key = `${host.serverId}:${workspace.id}`;
+          titles.set(key, workspace.title ?? workspace.name);
+          projectByWorkspace.set(key, identity);
         }
       }
     }
-    return titles;
+    return { workspaceTitleByKey: titles, projectByWorkspaceKey: projectByWorkspace };
   }, [projects]);
+
+  const iconTargets = useMemo<ProjectIconTarget[]>(
+    () =>
+      projects.flatMap((project) =>
+        project.hosts.flatMap((host) => {
+          const target = createProjectIconTarget({
+            projectViewKey: project.viewKey,
+            placement: { ...host, iconWorkingDir: host.repoRoot },
+          });
+          return target ? [target] : [];
+        }),
+      ),
+    [projects],
+  );
+  const iconDataByProjectViewKey = useProjectIcons({ projects: iconTargets });
 
   const candidates = useMemo<TabSwitcherCandidate[]>(() => {
     const live = agents.filter((agent) => !agent.archivedAt);
@@ -124,9 +155,9 @@ function useCandidateSync(): void {
       if (!agent) {
         continue;
       }
-      const workspaceTitle = agent.workspaceId
-        ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
-        : undefined;
+      const workspaceKey = agent.workspaceId ? `${agent.serverId}:${agent.workspaceId}` : null;
+      const workspaceTitle = workspaceKey ? workspaceTitleByKey.get(workspaceKey) : undefined;
+      const project = workspaceKey ? projectByWorkspaceKey.get(workspaceKey) : undefined;
       rows.push({
         serverId: agent.serverId,
         agentId: agent.id,
@@ -135,10 +166,13 @@ function useCandidateSync(): void {
         subtitle: workspaceTitle ?? shortenPath(agent.cwd),
         status: agent.status ?? null,
         requiresAttention: Boolean(agent.requiresAttention),
+        iconDataUri: project ? (iconDataByProjectViewKey.get(project.viewKey) ?? null) : null,
+        projectInitial: project?.initial ?? "",
+        projectViewKey: project?.viewKey ?? agent.serverId,
       });
     }
     return rows;
-  }, [agents, history, t, workspaceTitleByKey]);
+  }, [agents, history, iconDataByProjectViewKey, projectByWorkspaceKey, t, workspaceTitleByKey]);
 
   useEffect(() => {
     setCandidates(candidates);
@@ -193,10 +227,14 @@ function TabSwitcherRow({
   const rowStyle = useMemo(() => [styles.row, selected && styles.rowSelected], [selected]);
   return (
     <Pressable style={rowStyle} onHoverIn={onHoverIn} onPress={onPress}>
-      <AgentStatusDot
-        status={candidate.status}
-        requiresAttention={candidate.requiresAttention}
-        showInactive
+      {/* The icon leads the row: a column of project marks is scannable before a
+          word of it is read, which is the whole point of the switcher. */}
+      <ProjectIconView
+        iconDataUri={candidate.iconDataUri}
+        initial={candidate.projectInitial}
+        projectViewKey={candidate.projectViewKey}
+        size={TAB_SWITCHER_ICON_SIZE}
+        textStyle={styles.rowIconFallbackText}
       />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>
@@ -206,6 +244,11 @@ function TabSwitcherRow({
           {candidate.subtitle}
         </Text>
       </View>
+      <AgentStatusDot
+        status={candidate.status}
+        requiresAttention={candidate.requiresAttention}
+        showInactive
+      />
     </Pressable>
   );
 }
@@ -296,7 +339,7 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 1000,
   },
   panel: {
-    minWidth: 360,
+    minWidth: 380,
     maxWidth: 560,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
@@ -322,6 +365,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowSelected: {
     backgroundColor: theme.colors.surface3,
+  },
+  rowIconFallbackText: {
+    fontSize: 11,
   },
   rowText: {
     flex: 1,
