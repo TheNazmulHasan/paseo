@@ -22,6 +22,9 @@ function candidate(agentId: string): TabSwitcherCandidate {
     subtitle: "",
     status: null,
     requiresAttention: false,
+    iconDataUri: null,
+    projectInitial: agentId.slice(0, 1),
+    projectViewKey: "project",
   };
 }
 

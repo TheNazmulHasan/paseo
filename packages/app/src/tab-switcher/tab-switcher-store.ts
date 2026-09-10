@@ -7,6 +7,12 @@ export interface TabSwitcherCandidate extends TabSwitcherVisit {
   subtitle: string;
   status: string | null;
   requiresAttention: boolean;
+  /** The project's icon, so a row is recognisable before it is read. */
+  iconDataUri: string | null;
+  /** Fallback when the project has no icon: its lettered box, same as the sidebar. */
+  projectInitial: string;
+  /** Seeds the fallback box colour — same key the sidebar uses, so colours match. */
+  projectViewKey: string;
 }
 
 interface TabSwitcherStoreState {
