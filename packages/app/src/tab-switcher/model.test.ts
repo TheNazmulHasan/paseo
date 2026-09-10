@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cycleIndex, pruneVisits, recordVisit, type TabSwitcherVisit } from "@/tab-switcher/model";
+import {
+  cycleIndex,
+  mergeRecentOrder,
+  pruneVisits,
+  recordVisit,
+  type TabSwitcherVisit,
+} from "@/tab-switcher/model";
 
 function visit(agentId: string, at = 1): TabSwitcherVisit {
   return { serverId: "srv", agentId, at };
@@ -56,5 +62,21 @@ describe("cycleIndex", () => {
 
   it("stays at 0 for an empty list", () => {
     expect(cycleIndex(0, 1, 0)).toBe(0);
+  });
+});
+
+describe("mergeRecentOrder", () => {
+  it("keeps visit order first and backfills the rest", () => {
+    expect(mergeRecentOrder(["b", "a"], ["a", "c", "d"], 10)).toEqual(["b", "a", "c", "d"]);
+  });
+
+  it("fills the list on a fresh install, when nothing has been visited yet", () => {
+    // The bug this exists for: an empty history left one candidate, so the
+    // switcher refused to open and the key looked dead.
+    expect(mergeRecentOrder([], ["a", "b", "c"], 10)).toEqual(["a", "b", "c"]);
+  });
+
+  it("never repeats a chat and respects the limit", () => {
+    expect(mergeRecentOrder(["a", "a"], ["a", "b", "c"], 2)).toEqual(["a", "b"]);
   });
 });
