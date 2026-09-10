@@ -336,11 +336,20 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
+    // Paseo is often run squeezed into a quarter of the screen (Hyper+; layout
+    // toggle), which on the built-in display is ~378pt. The padding keeps the
+    // panel off the window edges at that width instead of bleeding into them.
+    padding: theme.spacing[4],
     zIndex: 1000,
   },
   panel: {
-    minWidth: 380,
+    // Fluid, never fixed. A hardcoded minWidth wider than the window clipped the
+    // whole panel in squeezed mode — the switcher was unusable exactly where it
+    // is needed most, since a narrow window is where tab bars overflow first.
+    width: "100%",
     maxWidth: 560,
+    maxHeight: "100%",
+    overflow: "hidden",
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     gap: 2,
