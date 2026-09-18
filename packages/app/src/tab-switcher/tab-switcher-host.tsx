@@ -19,6 +19,8 @@ import {
   commitTabSwitcher,
   cycleTabSwitcher,
   handleTabSwitcherKeyEvent,
+  isTabSwitcherPointerSelectionAllowed,
+  noteTabSwitcherPointerMoved,
   selectTabSwitcherIndex,
 } from "@/tab-switcher/controller";
 import { mergeRecentOrder, TAB_SWITCHER_VISIBLE_LIMIT } from "@/tab-switcher/model";
@@ -29,6 +31,9 @@ import { shortenPath } from "@/utils/shorten-path";
 
 /** Big enough to recognise a mark at a glance, small enough not to lead the row. */
 const TAB_SWITCHER_ICON_SIZE = 22;
+
+/** How far the mouse must travel before a hover counts as a deliberate choice. */
+const POINTER_INTENT_THRESHOLD_PX = 6;
 
 /**
  * Arc-style most-recently-used tab switcher.
@@ -219,8 +224,16 @@ function TabSwitcherRow({
   index: number;
   selected: boolean;
 }) {
-  const onHoverIn = useCallback(() => selectTabSwitcherIndex(index), [index]);
+  const onHoverIn = useCallback(() => {
+    // The overlay opens under wherever the cursor is already resting, which fires
+    // a hover for that row and steals the selection from the keyboard. Ignore it
+    // until the mouse has actually moved — see noteTabSwitcherPointerMoved.
+    if (isTabSwitcherPointerSelectionAllowed()) {
+      selectTabSwitcherIndex(index);
+    }
+  }, [index]);
   const onPress = useCallback(() => {
+    // A click is unambiguous intent, so it never waits for the movement gate.
     selectTabSwitcherIndex(index);
     commitTabSwitcher();
   }, [index]);
@@ -316,12 +329,29 @@ function useOverlayKeys(open: boolean): void {
     // A window that loses focus can never deliver the keyup we commit on.
     const onBlur = () => cancelTabSwitcher();
 
+    // Sub-pixel jitter and trackpad noise are not a decision to select a row, so
+    // the pointer only earns its vote after moving a real distance.
+    let origin: { x: number; y: number } | null = null;
+    const onMouseMove = (event: MouseEvent) => {
+      if (!origin) {
+        origin = { x: event.clientX, y: event.clientY };
+        return;
+      }
+      const dx = event.clientX - origin.x;
+      const dy = event.clientY - origin.y;
+      if (Math.hypot(dx, dy) >= POINTER_INTENT_THRESHOLD_PX) {
+        noteTabSwitcherPointerMoved();
+      }
+    };
+
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("keyup", onKeyUp, true);
+    document.addEventListener("mousemove", onMouseMove, true);
     window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("keyup", onKeyUp, true);
+      document.removeEventListener("mousemove", onMouseMove, true);
       window.removeEventListener("blur", onBlur);
     };
   }, [open]);

@@ -8,6 +8,8 @@ vi.mock("@/utils/navigate-to-agent", () => ({
 import {
   cycleTabSwitcher,
   handleTabSwitcherKeyEvent,
+  isTabSwitcherPointerSelectionAllowed,
+  noteTabSwitcherPointerMoved,
   resetTabSwitcherReleaseLearningForTests,
 } from "@/tab-switcher/controller";
 import { TAB_SWITCHER_MODIFIER_GRACE_MS } from "@/tab-switcher/model";
@@ -99,5 +101,48 @@ describe("tab switcher hold-vs-tap", () => {
     expect(useTabSwitcherStore.getState().visible).toBe(false);
     handleTabSwitcherKeyEvent({ type: "keyup", key: "Meta", modifiersHeld: false });
     expect(useTabSwitcherStore.getState().visible).toBe(false);
+  });
+});
+
+describe("a resting mouse must not steal the selection", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    navigateToAgent.mockClear();
+    resetTabSwitcherReleaseLearningForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives the pointer no vote until it actually moves", () => {
+    // The overlay paints under wherever the cursor is already parked, and the web
+    // layer fires a hover for that row. Landing on it would send you to a chat you
+    // never chose — the bug Nazmul hit on 2026-09-18.
+    openSwitcher();
+    expect(isTabSwitcherPointerSelectionAllowed()).toBe(false);
+
+    noteTabSwitcherPointerMoved();
+    expect(isTabSwitcherPointerSelectionAllowed()).toBe(true);
+  });
+
+  it("takes the vote back on the next keypress", () => {
+    // Mouse parked over a row, then he keeps tapping L: the keyboard must win
+    // again without him having to move the mouse away first.
+    openSwitcher();
+    noteTabSwitcherPointerMoved();
+    expect(isTabSwitcherPointerSelectionAllowed()).toBe(true);
+
+    cycleTabSwitcher(1);
+    expect(isTabSwitcherPointerSelectionAllowed()).toBe(false);
+  });
+
+  it("starts each new switch with the pointer silenced", () => {
+    openSwitcher();
+    noteTabSwitcherPointerMoved();
+    handleTabSwitcherKeyEvent({ type: "keyup", key: "Meta", modifiersHeld: false });
+
+    openSwitcher();
+    expect(isTabSwitcherPointerSelectionAllowed()).toBe(false);
   });
 });
