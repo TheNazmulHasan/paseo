@@ -29,6 +29,20 @@ const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
  */
 let releaseCommitProven = false;
 
+/**
+ * Has the mouse actually MOVED since the switcher opened?
+ *
+ * The overlay paints under wherever the cursor already happens to be resting, and
+ * the web layer then fires a hover for whatever row landed beneath it. That hover
+ * silently stole the selection from the keyboard: you tap L to walk the list,
+ * release, and land on the row the cursor was parked over instead of the one you
+ * chose. A stationary cursor is not an intent — until it moves, hover gets no vote.
+ *
+ * Reset on every keypress too, so the keyboard always wins back control: park the
+ * mouse over row 5, press L again, and row 5 cannot re-steal without a real move.
+ */
+let pointerMoved = false;
+
 function clearGraceTimer(): void {
   if (graceTimer !== null) {
     clearTimeout(graceTimer);
@@ -56,6 +70,7 @@ export function cycleTabSwitcher(delta: number): boolean {
     return false;
   }
   clearTimers();
+  pointerMoved = false;
   if (!wasOpen) {
     revealTimer = setTimeout(() => {
       revealTimer = null;
@@ -110,7 +125,17 @@ export function handleTabSwitcherKeyEvent(input: {
   }, TAB_SWITCHER_MODIFIER_GRACE_MS);
 }
 
-/** Move the selection without committing — arrow keys and hover. */
+/** A real mouse movement — from here on the pointer may select rows. */
+export function noteTabSwitcherPointerMoved(): void {
+  pointerMoved = true;
+}
+
+/** Whether hovering a row is allowed to move the selection right now. */
+export function isTabSwitcherPointerSelectionAllowed(): boolean {
+  return pointerMoved;
+}
+
+/** Move the selection without committing — arrow keys, and hover once the mouse has moved. */
 export function selectTabSwitcherIndex(index: number): void {
   if (!useTabSwitcherStore.getState().open) {
     return;
@@ -122,6 +147,7 @@ export function selectTabSwitcherIndex(index: number): void {
 /** Jump to the selected chat and close. */
 export function commitTabSwitcher(): void {
   clearTimers();
+  pointerMoved = false;
   const store = useTabSwitcherStore.getState();
   if (!store.open) {
     return;
@@ -136,11 +162,13 @@ export function commitTabSwitcher(): void {
 /** Close without going anywhere — Escape. */
 export function cancelTabSwitcher(): void {
   clearTimers();
+  pointerMoved = false;
   useTabSwitcherStore.getState().close();
 }
 
 /** Test seam: forget that a modifier release has ever been observed. */
 export function resetTabSwitcherReleaseLearningForTests(): void {
   releaseCommitProven = false;
+  pointerMoved = false;
   clearTimers();
 }
