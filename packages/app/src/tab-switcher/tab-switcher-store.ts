@@ -1,8 +1,11 @@
 import { create } from "zustand";
 import { cycleIndex, type TabSwitcherVisit } from "@/tab-switcher/model";
 
-/** One row in the switcher: a visited chat, resolved against live agent data. */
-export interface TabSwitcherCandidate extends TabSwitcherVisit {
+/**
+ * One row in the switcher: a visited tab resolved against live data — a chat from
+ * the agent directory, or an open file from the workspace layout.
+ */
+export type TabSwitcherCandidate = TabSwitcherVisit & {
   title: string;
   subtitle: string;
   status: string | null;
@@ -13,7 +16,7 @@ export interface TabSwitcherCandidate extends TabSwitcherVisit {
   projectInitial: string;
   /** Seeds the fallback box colour — same key the sidebar uses, so colours match. */
   projectViewKey: string;
-}
+};
 
 interface TabSwitcherStoreState {
   open: boolean;

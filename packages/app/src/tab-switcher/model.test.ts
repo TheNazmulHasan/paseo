@@ -8,17 +8,17 @@ import {
 } from "@/tab-switcher/model";
 
 function visit(agentId: string, at = 1): TabSwitcherVisit {
-  return { serverId: "srv", agentId, at };
+  return { kind: "agent", serverId: "srv", agentId, at };
 }
 
 describe("recordVisit", () => {
   it("moves the visited chat to the front and drops its older entry", () => {
     const history = [visit("a"), visit("b"), visit("c")];
-    expect(recordVisit(history, visit("c", 9)).map((entry) => entry.agentId)).toEqual([
-      "c",
-      "a",
-      "b",
-    ]);
+    expect(
+      recordVisit(history, visit("c", 9)).map((entry) =>
+        entry.kind === "agent" ? entry.agentId : entry.path,
+      ),
+    ).toEqual(["c", "a", "b"]);
   });
 
   it("returns the same array when the chat is already on top", () => {
@@ -29,7 +29,7 @@ describe("recordVisit", () => {
   });
 
   it("keeps the two servers' identically-named agents apart", () => {
-    const history = [{ serverId: "other", agentId: "a", at: 1 }];
+    const history: TabSwitcherVisit[] = [{ kind: "agent", serverId: "other", agentId: "a", at: 1 }];
     const next = recordVisit(history, visit("a", 2));
     expect(next).toHaveLength(2);
   });
@@ -41,14 +41,18 @@ describe("recordVisit", () => {
 
   it("ignores a blank identifier", () => {
     const history = [visit("a")];
-    expect(recordVisit(history, { serverId: "srv", agentId: "  ", at: 2 })).toBe(history);
+    expect(recordVisit(history, { kind: "agent", serverId: "srv", agentId: "  ", at: 2 })).toBe(
+      history,
+    );
   });
 });
 
 describe("pruneVisits", () => {
   it("drops chats that no longer exist and keeps the array when all survive", () => {
     const history = [visit("a"), visit("b")];
-    expect(pruneVisits(history, (entry) => entry.agentId !== "b")).toEqual([visit("a")]);
+    expect(
+      pruneVisits(history, (entry) => entry.kind !== "agent" || entry.agentId !== "b"),
+    ).toEqual([visit("a")]);
     expect(pruneVisits(history, () => true)).toBe(history);
   });
 });
@@ -78,5 +82,41 @@ describe("mergeRecentOrder", () => {
 
   it("never repeats a chat and respects the limit", () => {
     expect(mergeRecentOrder(["a", "a"], ["a", "b", "c"], 2)).toEqual(["a", "b"]);
+  });
+});
+
+describe("files are tabs too", () => {
+  function file(path: string, at = 1): TabSwitcherVisit {
+    return { kind: "file", serverId: "srv", workspaceId: "wks", path, at };
+  }
+
+  it("keeps a chat and a file apart even when the ids collide", () => {
+    // Nazmul's actual working shape: agent on the left, the file it is editing on
+    // the right, flicking between the two. They must be two rows, never one.
+    const history = recordVisit([visit("notes.md")], file("notes.md", 2));
+    expect(history).toHaveLength(2);
+  });
+
+  it("separates the same filename in different workspaces", () => {
+    const other: TabSwitcherVisit = {
+      kind: "file",
+      serverId: "srv",
+      workspaceId: "other",
+      path: "README.md",
+      at: 2,
+    };
+    expect(recordVisit([file("README.md")], other)).toHaveLength(2);
+  });
+
+  it("moves a revisited file back to the front", () => {
+    const history = [file("a.md"), visit("chat"), file("b.md")];
+    const next = recordVisit(history, file("b.md", 9));
+    expect(next[0]).toMatchObject({ kind: "file", path: "b.md" });
+    expect(next).toHaveLength(3);
+  });
+
+  it("ignores a file visit with no path", () => {
+    const history = [file("a.md")];
+    expect(recordVisit(history, file("   ", 2))).toBe(history);
   });
 });

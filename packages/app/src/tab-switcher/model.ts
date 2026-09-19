@@ -1,15 +1,33 @@
 // Pure logic for the Arc-style most-recently-used (MRU) tab switcher.
 //
-// The switcher answers one question: "which chats did I look at last, newest
+// The switcher answers one question: "which tabs did I look at last, newest
 // first?" Everything stateful lives in the stores; this file stays pure so the
 // ordering rules can be tested without a renderer.
+//
+// A "tab" is a chat OR an open file, because that is what sits in Paseo's tab bar
+// and how Nazmul actually works: agent on the left, the markdown file it is
+// editing on the right, flicking between the two. Terminal and browser tabs are
+// deliberately absent — see the note in tab-switcher-host.tsx.
 
-export interface TabSwitcherVisit {
+/** Epoch millis of the most recent visit, on both variants. */
+interface TabSwitcherVisitBase {
   serverId: string;
-  agentId: string;
-  /** Epoch millis of the most recent visit. Kept for debugging and pruning. */
   at: number;
 }
+
+export interface TabSwitcherAgentVisit extends TabSwitcherVisitBase {
+  kind: "agent";
+  agentId: string;
+}
+
+export interface TabSwitcherFileVisit extends TabSwitcherVisitBase {
+  kind: "file";
+  /** A file tab belongs to one workspace's layout, unlike an agent. */
+  workspaceId: string;
+  path: string;
+}
+
+export type TabSwitcherVisit = TabSwitcherAgentVisit | TabSwitcherFileVisit;
 
 /** How many visits are persisted. The overlay shows fewer. */
 export const TAB_SWITCHER_HISTORY_LIMIT = 30;
@@ -37,8 +55,10 @@ export const TAB_SWITCHER_REVEAL_DELAY_MS = 250;
  */
 export const TAB_SWITCHER_MODIFIER_GRACE_MS = 200;
 
-export function visitKey(visit: Pick<TabSwitcherVisit, "serverId" | "agentId">): string {
-  return `${visit.serverId}:${visit.agentId}`;
+export function visitKey(visit: TabSwitcherVisit): string {
+  return visit.kind === "agent"
+    ? `agent:${visit.serverId}:${visit.agentId}`
+    : `file:${visit.serverId}:${visit.workspaceId}:${visit.path}`;
 }
 
 /**
@@ -51,16 +71,15 @@ export function recordVisit(
   visit: TabSwitcherVisit,
   limit: number = TAB_SWITCHER_HISTORY_LIMIT,
 ): readonly TabSwitcherVisit[] {
-  const serverId = visit.serverId.trim();
-  const agentId = visit.agentId.trim();
-  if (!serverId || !agentId) {
+  const normalized = normalizeVisit(visit);
+  if (!normalized) {
     return history;
   }
-  if (history[0]?.serverId === serverId && history[0]?.agentId === agentId) {
+  const key = visitKey(normalized);
+  if (history[0] && visitKey(history[0]) === key) {
     return history;
   }
-  const key = visitKey({ serverId, agentId });
-  const next: TabSwitcherVisit[] = [{ serverId, agentId, at: visit.at }];
+  const next: TabSwitcherVisit[] = [normalized];
   for (const entry of history) {
     if (visitKey(entry) === key) {
       continue;
@@ -71,6 +90,21 @@ export function recordVisit(
     }
   }
   return next;
+}
+
+/** Drop a visit whose identifying fields are blank — it could never be reopened. */
+function normalizeVisit(visit: TabSwitcherVisit): TabSwitcherVisit | null {
+  const serverId = visit.serverId.trim();
+  if (!serverId) {
+    return null;
+  }
+  if (visit.kind === "agent") {
+    const agentId = visit.agentId.trim();
+    return agentId ? { kind: "agent", serverId, agentId, at: visit.at } : null;
+  }
+  const workspaceId = visit.workspaceId.trim();
+  const path = visit.path.trim();
+  return workspaceId && path ? { kind: "file", serverId, workspaceId, path, at: visit.at } : null;
 }
 
 /** Drop history entries whose agent no longer exists. */
