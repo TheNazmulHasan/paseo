@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
+import { MaterialFileIcon } from "@/components/material-file-icon";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { createProjectIconTarget, type ProjectIconTarget } from "@/projects/icon-target";
 import { useProjectIcons } from "@/projects/icons";
@@ -27,10 +28,17 @@ import { mergeRecentOrder, TAB_SWITCHER_VISIBLE_LIMIT } from "@/tab-switcher/mod
 import { useTabSwitcherMruStore } from "@/tab-switcher/mru-store";
 import { useTabSwitcherStore, type TabSwitcherCandidate } from "@/tab-switcher/tab-switcher-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { visitKey, type TabSwitcherVisit } from "@/tab-switcher/model";
 import { shortenPath } from "@/utils/shorten-path";
 
 /** Big enough to recognise a mark at a glance, small enough not to lead the row. */
 const TAB_SWITCHER_ICON_SIZE = 22;
+
+/** Tab bars show a file by its name, not its path — so does the switcher. */
+function fileNameFromPath(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? path;
+}
 
 /** How far the mouse must travel before a hover counts as a deliberate choice. */
 const POINTER_INTENT_THRESHOLD_PX = 6;
@@ -68,22 +76,38 @@ function useVisitRecorder(): void {
   );
   const visit = useTabSwitcherMruStore((state) => state.visit);
 
-  const activeAgentId = useMemo(() => {
-    if (!layout) {
+  const serverId = selection?.serverId ?? null;
+  const workspaceId = selection?.workspaceId ?? null;
+
+  // A chat and an open file are both just tabs in the same bar, and Nazmul works
+  // by flicking between the two, so both are recorded.
+  const activeVisit = useMemo<Omit<TabSwitcherVisit, "at"> | null>(() => {
+    if (!layout || !serverId) {
       return null;
     }
     const paneState = deriveWorkspacePaneState({ layout, tabs: collectAllTabs(layout.root) });
     const target = paneState.activeTab?.descriptor.target ?? null;
-    return target?.kind === "agent" ? target.agentId : null;
-  }, [layout]);
-
-  const serverId = selection?.serverId ?? null;
-  useEffect(() => {
-    if (!serverId || !activeAgentId) {
-      return;
+    if (target?.kind === "agent") {
+      return { kind: "agent", serverId, agentId: target.agentId };
     }
-    visit({ serverId, agentId: activeAgentId });
-  }, [activeAgentId, serverId, visit]);
+    if (target?.kind === "file" && workspaceId) {
+      return { kind: "file", serverId, workspaceId, path: target.path };
+    }
+    return null;
+  }, [layout, serverId, workspaceId]);
+
+  // Identity, not object identity — the memo above rebuilds on every layout tick.
+  const activeVisitKey = activeVisit
+    ? visitKey({ ...activeVisit, at: 0 } as TabSwitcherVisit)
+    : null;
+  const activeVisitRef = useRef(activeVisit);
+  activeVisitRef.current = activeVisit;
+  useEffect(() => {
+    const current = activeVisitRef.current;
+    if (current) {
+      visit(current);
+    }
+  }, [activeVisitKey, visit]);
 }
 
 /**
@@ -97,6 +121,40 @@ function useCandidateSync(): void {
   const { agents } = useAggregatedAgents({ demand: false });
   const { projects } = useProjects({ enabled: true });
   const setCandidates = useTabSwitcherStore((state) => state.setCandidates);
+  const layoutByWorkspace = useWorkspaceLayoutStore((state) => state.layoutByWorkspace);
+
+  /**
+   * Every file tab currently open, across every workspace.
+   *
+   * Unlike an agent there is no directory to ask — a file tab exists only inside
+   * its workspace's layout. That store is global, so one sweep finds them all, and
+   * a tab missing from it is one that was closed and must drop off the list.
+   */
+  const openFileTabs = useMemo(() => {
+    const byKey = new Map<
+      string,
+      { serverId: string; workspaceId: string; path: string; createdAt: number }
+    >();
+    for (const [workspaceKey, layout] of Object.entries(layoutByWorkspace)) {
+      if (!layout) {
+        continue;
+      }
+      const separator = workspaceKey.indexOf(":");
+      if (separator <= 0) {
+        continue;
+      }
+      const serverId = workspaceKey.slice(0, separator);
+      const workspaceId = workspaceKey.slice(separator + 1);
+      for (const tab of collectAllTabs(layout.root)) {
+        if (tab.target.kind !== "file") {
+          continue;
+        }
+        const entry = { serverId, workspaceId, path: tab.target.path, createdAt: tab.createdAt };
+        byKey.set(visitKey({ ...entry, kind: "file", at: 0 }), entry);
+      }
+    }
+    return byKey;
+  }, [layoutByWorkspace]);
 
   // One pass over the project tree gives both halves of a row's identity: the
   // workspace name under the title, and which project's icon belongs beside it.
@@ -136,48 +194,93 @@ function useCandidateSync(): void {
 
   const candidates = useMemo<TabSwitcherCandidate[]>(() => {
     const live = agents.filter((agent) => !agent.archivedAt);
-    const agentByKey = new Map(live.map((agent) => [`${agent.serverId}:${agent.id}`, agent]));
-    const visitedAtByKey = new Map(
-      history.map((entry) => [`${entry.serverId}:${entry.agentId}`, entry.at]),
-    );
-    // Visited chats keep their true visit order; everything else follows by how
-    // recently the agent itself did something, so the list is never one row long.
-    const fallbackKeys = live
-      .slice()
-      .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime())
-      .map((agent) => `${agent.serverId}:${agent.id}`);
+    const agentKey = (serverId: string, agentId: string) =>
+      visitKey({ kind: "agent", serverId, agentId, at: 0 });
+    const agentByKey = new Map(live.map((agent) => [agentKey(agent.serverId, agent.id), agent]));
+    const visitedAtByKey = new Map(history.map((entry) => [visitKey(entry), entry.at]));
+
+    // Visited tabs keep their true visit order; everything else follows so the list
+    // is never one row long — chats by their own last activity, then files by when
+    // they were opened.
+    const fallbackKeys = [
+      ...live
+        .slice()
+        .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime())
+        .map((agent) => agentKey(agent.serverId, agent.id)),
+      ...[...openFileTabs.entries()]
+        .sort(([, left], [, right]) => right.createdAt - left.createdAt)
+        .map(([key]) => key),
+    ];
     const orderedKeys = mergeRecentOrder(
       history
-        .map((entry) => `${entry.serverId}:${entry.agentId}`)
-        .filter((key) => agentByKey.has(key)),
+        .map((entry) => visitKey(entry))
+        .filter((key) => agentByKey.has(key) || openFileTabs.has(key)),
       fallbackKeys,
       TAB_SWITCHER_VISIBLE_LIMIT,
     );
 
+    const describeProject = (workspaceKey: string | null) => {
+      const workspaceTitle = workspaceKey ? workspaceTitleByKey.get(workspaceKey) : undefined;
+      const project = workspaceKey ? projectByWorkspaceKey.get(workspaceKey) : undefined;
+      return {
+        workspaceTitle,
+        iconDataUri: project ? (iconDataByProjectViewKey.get(project.viewKey) ?? null) : null,
+        projectInitial: project?.initial ?? "",
+        projectViewKey: project?.viewKey ?? "",
+      };
+    };
+
     const rows: TabSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
       const agent = agentByKey.get(key);
-      if (!agent) {
+      if (agent) {
+        const workspaceKey = agent.workspaceId ? `${agent.serverId}:${agent.workspaceId}` : null;
+        const project = describeProject(workspaceKey);
+        rows.push({
+          kind: "agent",
+          serverId: agent.serverId,
+          agentId: agent.id,
+          at: visitedAtByKey.get(key) ?? agent.lastActivityAt.getTime(),
+          title: agent.title || t("shell.commandCenter.newAgent"),
+          subtitle: project.workspaceTitle ?? shortenPath(agent.cwd),
+          status: agent.status ?? null,
+          requiresAttention: Boolean(agent.requiresAttention),
+          iconDataUri: project.iconDataUri,
+          projectInitial: project.projectInitial,
+          projectViewKey: project.projectViewKey || agent.serverId,
+        });
         continue;
       }
-      const workspaceKey = agent.workspaceId ? `${agent.serverId}:${agent.workspaceId}` : null;
-      const workspaceTitle = workspaceKey ? workspaceTitleByKey.get(workspaceKey) : undefined;
-      const project = workspaceKey ? projectByWorkspaceKey.get(workspaceKey) : undefined;
+      const file = openFileTabs.get(key);
+      if (!file) {
+        continue;
+      }
+      const project = describeProject(`${file.serverId}:${file.workspaceId}`);
       rows.push({
-        serverId: agent.serverId,
-        agentId: agent.id,
-        at: visitedAtByKey.get(key) ?? agent.lastActivityAt.getTime(),
-        title: agent.title || t("shell.commandCenter.newAgent"),
-        subtitle: workspaceTitle ?? shortenPath(agent.cwd),
-        status: agent.status ?? null,
-        requiresAttention: Boolean(agent.requiresAttention),
-        iconDataUri: project ? (iconDataByProjectViewKey.get(project.viewKey) ?? null) : null,
-        projectInitial: project?.initial ?? "",
-        projectViewKey: project?.viewKey ?? agent.serverId,
+        kind: "file",
+        serverId: file.serverId,
+        workspaceId: file.workspaceId,
+        path: file.path,
+        at: visitedAtByKey.get(key) ?? file.createdAt,
+        title: fileNameFromPath(file.path),
+        subtitle: project.workspaceTitle ?? shortenPath(file.path),
+        status: null,
+        requiresAttention: false,
+        iconDataUri: project.iconDataUri,
+        projectInitial: project.projectInitial,
+        projectViewKey: project.projectViewKey || file.serverId,
       });
     }
     return rows;
-  }, [agents, history, iconDataByProjectViewKey, projectByWorkspaceKey, t, workspaceTitleByKey]);
+  }, [
+    agents,
+    history,
+    iconDataByProjectViewKey,
+    openFileTabs,
+    projectByWorkspaceKey,
+    t,
+    workspaceTitleByKey,
+  ]);
 
   useEffect(() => {
     setCandidates(candidates);
@@ -204,7 +307,7 @@ function TabSwitcherOverlay() {
         </Text>
         {candidates.map((candidate, index) => (
           <TabSwitcherRow
-            key={`${candidate.serverId}:${candidate.agentId}`}
+            key={visitKey(candidate)}
             candidate={candidate}
             index={index}
             selected={index === selectedIndex}
@@ -240,15 +343,23 @@ function TabSwitcherRow({
   const rowStyle = useMemo(() => [styles.row, selected && styles.rowSelected], [selected]);
   return (
     <Pressable style={rowStyle} onHoverIn={onHoverIn} onPress={onPress}>
-      {/* The icon leads the row: a column of project marks is scannable before a
-          word of it is read, which is the whole point of the switcher. */}
-      <ProjectIconView
-        iconDataUri={candidate.iconDataUri}
-        initial={candidate.projectInitial}
-        projectViewKey={candidate.projectViewKey}
-        size={TAB_SWITCHER_ICON_SIZE}
-        textStyle={styles.rowIconFallbackText}
-      />
+      {/* The icon leads the row: a column of marks is scannable before a word of
+          it is read, which is the whole point of the switcher. A file gets its
+          filetype icon rather than its project's, so the two kinds of tab are
+          told apart at a glance — the workspace name is still on the line below. */}
+      {candidate.kind === "file" ? (
+        <View style={styles.rowFileIcon}>
+          <MaterialFileIcon fileName={candidate.title} size={TAB_SWITCHER_ICON_SIZE} />
+        </View>
+      ) : (
+        <ProjectIconView
+          iconDataUri={candidate.iconDataUri}
+          initial={candidate.projectInitial}
+          projectViewKey={candidate.projectViewKey}
+          size={TAB_SWITCHER_ICON_SIZE}
+          textStyle={styles.rowIconFallbackText}
+        />
+      )}
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {candidate.title}
@@ -407,6 +518,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowIconFallbackText: {
     fontSize: 11,
+  },
+  // Matches the project icon's footprint so both kinds of row align on one column.
+  rowFileIcon: {
+    width: TAB_SWITCHER_ICON_SIZE,
+    height: TAB_SWITCHER_ICON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
   },
   rowText: {
     flex: 1,
