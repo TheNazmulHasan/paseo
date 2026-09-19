@@ -1,4 +1,5 @@
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import {
   TAB_SWITCHER_FALLBACK_COMMIT_MS,
   TAB_SWITCHER_MODIFIER_GRACE_MS,
@@ -154,9 +155,20 @@ export function commitTabSwitcher(): void {
   }
   const candidate = getSelectedTabSwitcherCandidate();
   store.close();
-  if (candidate) {
-    navigateToAgent({ serverId: candidate.serverId, agentId: candidate.agentId });
+  if (!candidate) {
+    return;
   }
+  if (candidate.kind === "agent") {
+    navigateToAgent({ serverId: candidate.serverId, agentId: candidate.agentId });
+    return;
+  }
+  // A file tab lives in one workspace's layout, so reaching it may mean changing
+  // workspace first. navigateToWorkspace takes the target and does both.
+  navigateToWorkspace({
+    serverId: candidate.serverId,
+    workspaceId: candidate.workspaceId,
+    target: { kind: "file", path: candidate.path },
+  });
 }
 
 /** Close without going anywhere — Escape. */

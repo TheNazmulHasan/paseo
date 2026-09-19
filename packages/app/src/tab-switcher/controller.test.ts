@@ -17,6 +17,7 @@ import { useTabSwitcherStore, type TabSwitcherCandidate } from "@/tab-switcher/t
 
 function candidate(agentId: string): TabSwitcherCandidate {
   return {
+    kind: "agent",
     serverId: "srv",
     agentId,
     at: 1,
