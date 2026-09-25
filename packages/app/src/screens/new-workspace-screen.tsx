@@ -135,6 +135,7 @@ import {
 } from "./workspace/terminals/state";
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
+import { NewWorkspaceFilesSidebar } from "./new-workspace/files-sidebar";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -2442,17 +2443,25 @@ export function NewWorkspaceScreen({
   );
   return (
     <FileDropZone style={styles.container}>
-      <ScreenHeader left={screenHeaderLeft} borderless />
-      <View style={styles.content}>
-        <TitlebarDragRegion />
-        <NewWorkspaceLayout
-          isCompact={isCompact}
-          title={t("newWorkspace.title")}
-          formStack={formStack}
-        >
-          {composer}
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        </NewWorkspaceLayout>
+      <View style={styles.columns}>
+        <View style={styles.mainColumn}>
+          <ScreenHeader left={screenHeaderLeft} borderless />
+          <View style={styles.content}>
+            <TitlebarDragRegion />
+            <NewWorkspaceLayout
+              isCompact={isCompact}
+              title={t("newWorkspace.title")}
+              formStack={formStack}
+            >
+              {composer}
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            </NewWorkspaceLayout>
+          </View>
+        </View>
+        <NewWorkspaceFilesSidebar
+          serverId={selectedServerId}
+          sourceDirectory={selectedSourceDirectory}
+        />
       </View>
     </FileDropZone>
   );
@@ -2490,6 +2499,15 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
     userSelect: "none",
+  },
+  columns: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: "row",
+  },
+  mainColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   content: {
     position: "relative",
