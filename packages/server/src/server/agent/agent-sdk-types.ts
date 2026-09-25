@@ -645,10 +645,13 @@ export interface AgentCreateSessionOptions {
   persistSession?: boolean;
 }
 
+/** What a resumed session is for: driving the agent, or reading what it already did. */
+export type AgentResumePurpose = "interactive" | "history";
+
 /** Runtime-only intent for a persisted-session resume. Never persist this option. */
 export interface AgentResumeSessionOptions {
   /** Defaults to interactive. History loading may be read-only for archived native sessions. */
-  purpose?: "interactive" | "history";
+  purpose?: AgentResumePurpose;
   /**
    * When purpose is interactive, providers may pause autonomous Goal-style work after
    * resume so daemon restarts do not auto-continue unsupervised runs.
