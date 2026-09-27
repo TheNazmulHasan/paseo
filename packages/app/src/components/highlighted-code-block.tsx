@@ -65,9 +65,10 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   inheritedStyles,
   textStyle,
 }: HighlightedCodeBlockProps) {
-  // Box styles (bg / padding / border / radius / margin) go on the wrapper View
-  // so the absolute copy button positions relative to the visible code area,
-  // not to a parent that includes the Text's own marginVertical.
+  // Box styles (bg / padding / border / radius / margin) go on the wrapper View,
+  // which lays the code and its corner buttons out side by side: the buttons own
+  // their column, so the code wraps before them at any window width instead of
+  // running underneath them.
   const { containerStyle, innerTextStyle } = useMemo(
     () => splitFenceStyle(inheritedStyles, textStyle),
     [inheritedStyles, textStyle],
@@ -216,7 +217,12 @@ interface SplitStyles {
   innerTextStyle: StyleProp<TextStyle>;
 }
 
-const CONTAINER_BASE: ViewStyle = { position: "relative" };
+const CONTAINER_BASE: ViewStyle = {
+  position: "relative",
+  flexDirection: "row",
+  alignItems: "flex-start",
+};
+const CODE_TEXT_FILL: TextStyle = { flex: 1, minWidth: 0 };
 const WEB_SELECTABLE: TextStyle = isWeb ? ({ userSelect: "text" } as TextStyle) : {};
 
 function splitFenceStyle(inheritedStyles: TextStyle, textStyle: TextStyle): SplitStyles {
@@ -228,7 +234,7 @@ function splitFenceStyle(inheritedStyles: TextStyle, textStyle: TextStyle): Spli
   if (color !== undefined) textOnly.color = color;
   return {
     containerStyle: [box as ViewStyle, CONTAINER_BASE],
-    innerTextStyle: [inheritedStyles, textOnly],
+    innerTextStyle: [inheritedStyles, textOnly, CODE_TEXT_FILL],
   };
 }
 
@@ -294,13 +300,16 @@ const CopyButton = React.memo(function CopyButton({ getCode }: CopyButtonProps) 
 });
 
 const copyButtonStyles = StyleSheet.create((theme) => ({
+  // In the row beside the code, not floating over it. The negative margins pull the
+  // buttons' own padding back so the icons sit level with the first line of code.
   actions: {
-    position: "absolute",
-    top: theme.spacing[2],
-    right: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
     gap: theme.spacing[1],
+    marginLeft: theme.spacing[2],
+    marginTop: -theme.spacing[1],
+    marginRight: -theme.spacing[1],
   },
   container: {
     padding: theme.spacing[1],
