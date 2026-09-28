@@ -27,6 +27,7 @@ import { SidebarGroupModeControl } from "@/components/sidebar/sidebar-group-mode
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
 import { SidebarBacklogRow } from "@/components/sidebar/sidebar-backlog-row";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
+import { SidebarAttentionBanner } from "@/components/attention-banner-host";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -786,6 +787,8 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        <SidebarAttentionBanner />
 
         <SidebarFooter
           theme={theme}

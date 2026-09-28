@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -20,23 +20,22 @@ const AUTO_DISMISS_MS = 5000;
 const ThemedEye = withUnistyles(Eye);
 const mutedIconColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-interface PeekedNotification {
-  title: string;
-  body?: string;
-}
-
 /**
- * Center-top attention banner for when the user is in Paseo but on the wrong agent/terminal.
- * Includes a peek action that shows the notification body in a read-only modal without
- * navigating away or marking the underlying agent attention as seen.
+ * Attention banner for when the user is in Paseo but on the wrong agent/terminal.
+ * Desktop: a quiet card at the bottom of the left sidebar, just above the footer
+ * (rendered by `SidebarAttentionBanner`), so it never covers the tab bar. Compact:
+ * the original center-top overlay, since the sidebar is hidden there.
+ * This host owns auto-dismiss and the peek sheet for both placements. Peek shows the
+ * notification body in a read-only modal without navigating away or marking the
+ * underlying agent attention as seen.
  */
 export function AttentionBannerHost() {
   const banner = useAttentionBannerStore((state) => state.banner);
   const dismiss = useAttentionBannerStore((state) => state.dismiss);
-  const router = useRouter();
+  const peeked = useAttentionBannerStore((state) => state.peeked);
+  const closePeek = useAttentionBannerStore((state) => state.closePeek);
   const isCompact = useIsCompactFormFactor();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [peeked, setPeeked] = useState<PeekedNotification | null>(null);
 
   useEffect(() => {
     if (!banner || peeked) {
@@ -61,6 +60,72 @@ export function AttentionBannerHost() {
     };
   }, [banner, dismiss, peeked]);
 
+  const peekHeader = useMemo<SheetHeader>(
+    () => ({
+      title: peeked?.title ?? "Notification",
+      onClose: closePeek,
+    }),
+    [closePeek, peeked?.title],
+  );
+
+  const bannerContent =
+    banner && isCompact ? (
+      <View pointerEvents="box-none" style={styles.host} testID="attention-banner-host">
+        <AttentionBannerCard style={styles.containerCompact} />
+      </View>
+    ) : null;
+
+  const portalBanner =
+    bannerContent && isWeb && typeof document !== "undefined"
+      ? createPortal(bannerContent, getOverlayRoot())
+      : bannerContent;
+
+  return (
+    <>
+      {portalBanner}
+      <AdaptiveModalSheet
+        visible={peeked !== null}
+        onClose={closePeek}
+        header={peekHeader}
+        testID="attention-notification-peek"
+      >
+        <View style={styles.peekBody}>
+          {peeked?.body ? (
+            <Text style={styles.peekBodyText} selectable>
+              {peeked.body}
+            </Text>
+          ) : (
+            <Text style={styles.peekEmptyText}>No additional details.</Text>
+          )}
+          <Button variant="outline" onPress={closePeek} testID="attention-notification-peek-close">
+            Close
+          </Button>
+        </View>
+      </AdaptiveModalSheet>
+    </>
+  );
+}
+
+/** Desktop placement: sits in the left sidebar directly above the Add project footer. */
+export function SidebarAttentionBanner() {
+  const hasBanner = useAttentionBannerStore((state) => state.banner !== null);
+  const isCompact = useIsCompactFormFactor();
+  if (!hasBanner || isCompact) {
+    return null;
+  }
+  return (
+    <View style={styles.sidebarSlot} testID="attention-banner-sidebar">
+      <AttentionBannerCard style={styles.containerSidebar} />
+    </View>
+  );
+}
+
+function AttentionBannerCard({ style }: { style: object }) {
+  const banner = useAttentionBannerStore((state) => state.banner);
+  const dismiss = useAttentionBannerStore((state) => state.dismiss);
+  const peek = useAttentionBannerStore((state) => state.peek);
+  const router = useRouter();
+
   const handleOpen = useCallback(
     (payload: AttentionBannerPayload) => {
       const route = buildNotificationRoute(payload.data);
@@ -77,100 +142,41 @@ export function AttentionBannerHost() {
     handleOpen(banner);
   }, [banner, handleOpen]);
 
-  const handlePeek = useCallback(() => {
-    if (!banner) {
-      return;
-    }
-    // Snapshot content only — do not navigate and do not clear agent attention.
-    setPeeked({
-      title: banner.title,
-      body: banner.body,
-    });
-  }, [banner]);
+  const containerStyle = useMemo(() => [styles.container, style], [style]);
 
-  const handleClosePeek = useCallback(() => {
-    setPeeked(null);
-  }, []);
-
-  const peekHeader = useMemo<SheetHeader>(
-    () => ({
-      title: peeked?.title ?? "Notification",
-      onClose: handleClosePeek,
-    }),
-    [handleClosePeek, peeked?.title],
-  );
-
-  const containerStyle = useMemo(
-    () => [styles.container, isCompact && styles.containerCompact],
-    [isCompact],
-  );
-
-  const bannerContent = banner ? (
-    <View pointerEvents="box-none" style={styles.host} testID="attention-banner-host">
-      <View style={containerStyle} testID="attention-banner">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${banner.title}${banner.extraCount > 0 ? ` +${banner.extraCount}` : ""}`}
-          onPress={handlePress}
-          style={styles.mainPressable}
-          testID="attention-banner-open"
-        >
-          <Text style={styles.title} numberOfLines={1}>
-            {banner.title}
-            {banner.extraCount > 0 ? ` +${banner.extraCount}` : ""}
-          </Text>
-          {banner.body ? (
-            <Text style={styles.body} numberOfLines={2}>
-              {banner.body}
-            </Text>
-          ) : null}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Peek notification"
-          onPress={handlePeek}
-          style={styles.peekButton}
-          hitSlop={8}
-          testID="attention-banner-peek"
-        >
-          <ThemedEye size={16} uniProps={mutedIconColor} />
-        </Pressable>
-      </View>
-    </View>
-  ) : null;
-
-  const portalBanner =
-    bannerContent && isWeb && typeof document !== "undefined"
-      ? createPortal(bannerContent, getOverlayRoot())
-      : bannerContent;
-
+  if (!banner) {
+    return null;
+  }
   return (
-    <>
-      {portalBanner}
-      <AdaptiveModalSheet
-        visible={peeked !== null}
-        onClose={handleClosePeek}
-        header={peekHeader}
-        testID="attention-notification-peek"
+    <View style={containerStyle} testID="attention-banner">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${banner.title}${banner.extraCount > 0 ? ` +${banner.extraCount}` : ""}`}
+        onPress={handlePress}
+        style={styles.mainPressable}
+        testID="attention-banner-open"
       >
-        <View style={styles.peekBody}>
-          {peeked?.body ? (
-            <Text style={styles.peekBodyText} selectable>
-              {peeked.body}
-            </Text>
-          ) : (
-            <Text style={styles.peekEmptyText}>No additional details.</Text>
-          )}
-          <Button
-            variant="outline"
-            onPress={handleClosePeek}
-            testID="attention-notification-peek-close"
-          >
-            Close
-          </Button>
-        </View>
-      </AdaptiveModalSheet>
-    </>
+        <Text style={styles.title} numberOfLines={1}>
+          {banner.title}
+          {banner.extraCount > 0 ? ` +${banner.extraCount}` : ""}
+        </Text>
+        {banner.body ? (
+          <Text style={styles.body} numberOfLines={2}>
+            {banner.body}
+          </Text>
+        ) : null}
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Peek notification"
+        onPress={peek}
+        style={styles.peekButton}
+        hitSlop={8}
+        testID="attention-banner-peek"
+      >
+        <ThemedEye size={16} uniProps={mutedIconColor} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -204,6 +210,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   containerCompact: {
     maxWidth: 360,
+  },
+  sidebarSlot: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+  },
+  containerSidebar: {
+    width: "100%",
+    maxWidth: undefined,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    shadowOpacity: 0,
+    elevation: 0,
   },
   mainPressable: {
     flex: 1,
