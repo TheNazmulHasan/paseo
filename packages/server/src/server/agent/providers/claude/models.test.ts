@@ -72,6 +72,7 @@ describe("getClaudeModels", () => {
   it("returns all claude models", () => {
     const models = getClaudeModels();
     expect(models.map((m) => m.id)).toEqual([
+      "claude-opus-5-5[1m]",
       "claude-opus-5-5",
       "claude-opus-5[1m]",
       "claude-opus-5",
@@ -107,13 +108,14 @@ describe("getClaudeModels", () => {
 
     expect(contextWindows).toEqual(
       new Map([
+        ["claude-opus-5-5[1m]", 1_000_000],
         ["claude-opus-5-5", 1_000_000],
         ["claude-opus-5[1m]", 1_000_000],
         ["claude-opus-5", 200_000],
         ["claude-fable-5-1[1m]", 1_000_000],
         ["claude-fable-5-1", 200_000],
-        ["claude-fable-5[1m]", 1_000_000],
         ["claude-fable-5", 200_000],
+        ["claude-fable-5[1m]", 1_000_000],
         ["claude-opus-4-8[1m]", 1_000_000],
         ["claude-opus-4-8", 200_000],
         ["claude-sonnet-5", 200_000],
@@ -412,8 +414,9 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
   });
 
   it("omits models that require a newer Claude Code version", async () => {
+    const configDir = await createClaudeConfigDir({});
+    vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
     const client = createCatalogClient("2.1.218");
-
     const { models } = await client.fetchCatalog({
       scope: "workspace",
       cwd: os.tmpdir(),
@@ -449,12 +452,10 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       );
     });
     vi.stubGlobal("fetch", fetchImpl);
-    const persistClaudeAdditionalModelLimits = vi.fn();
     const client = new ClaudeAgentClient({
       logger: createTestLogger(),
       configDir,
       resolveVersion: async () => "2.1.219",
-      persistClaudeAdditionalModelLimits,
     });
 
     const { models } = await client.fetchCatalog({
@@ -469,13 +470,6 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
       maxOutputTokens: 65_536,
       metadata: { source: "cliproxyapi", ownedBy: "xai" },
     });
-    expect(persistClaudeAdditionalModelLimits).toHaveBeenCalledWith([
-      {
-        id: "grok-4.5",
-        contextWindowMaxTokens: 500_000,
-        maxOutputTokens: 65_536,
-      },
-    ]);
     expect(fetchImpl).toHaveBeenCalledWith(
       "http://cpa.example/v1/models",
       expect.objectContaining({
@@ -554,6 +548,19 @@ describe("normalizeClaudeRuntimeModelId", () => {
     );
     expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-opus-5-20260724-v1:0")).toBe(
       "claude-opus-5",
+    );
+  });
+
+  // A minor release absent from the manifest must not resolve to the major it extends:
+  // that resolution makes the gateway row look first-party, and cliproxy-models then
+  // drops it from the catalog entirely.
+  it("leaves an unmanifested minor release unresolved instead of folding it onto the major", () => {
+    expect(normalizeClaudeRuntimeModelId("claude-sonnet-5-5")).toBeNull();
+    expect(normalizeClaudeManifestModelId("claude-sonnet-5-5")).toBeNull();
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-5")).toBeNull();
+    // A dated spelling of a known major still folds, so the 8-digit run is exempt.
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-20260101")).toBe(
+      "claude-sonnet-5",
     );
   });
 
@@ -683,6 +690,7 @@ describe("Claude Opus 5.5 catalog", () => {
       .map(({ id, label, contextWindowMaxTokens }) => ({ id, label, contextWindowMaxTokens }));
 
     expect(opus55Models).toEqual([
+      { id: "claude-opus-5-5[1m]", label: "Opus 5.5 1M", contextWindowMaxTokens: 1_000_000 },
       { id: "claude-opus-5-5", label: "Opus 5.5", contextWindowMaxTokens: 1_000_000 },
     ]);
   });
@@ -705,9 +713,9 @@ describe("Claude Opus 5.5 catalog", () => {
   });
 
   it("resolves suffixed and dated Opus 5.5 IDs to the catalog entry", () => {
-    expect(findClaudeModel("claude-opus-5-5[1m]")?.id).toBe("claude-opus-5-5");
+    expect(findClaudeModel("claude-opus-5-5[1m]")?.id).toBe("claude-opus-5-5[1m]");
     expect(findClaudeModel("claude-opus-5-5-20260401")?.id).toBe("claude-opus-5-5");
-    expect(findClaudeModel("claude-opus-5-5-20260401[1m]")?.id).toBe("claude-opus-5-5");
+    expect(findClaudeModel("claude-opus-5-5-20260401[1m]")?.id).toBe("claude-opus-5-5[1m]");
   });
 });
 

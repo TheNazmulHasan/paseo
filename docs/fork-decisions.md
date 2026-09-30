@@ -483,3 +483,144 @@ Mid-session `setModel` to a gateway model (muse-spark-_) failed with "Couldn't c
 ```bash
 npx vitest run packages/server/src/server/agent/providers/claude/models.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts --bail=1
 ```
+
+## gateway-first-party-routing
+
+**one `agents.gateway` routing shared by base claude/codex/opencode**
+
+`agents.gateway` (or `PASEO_GATEWAY_*` env) routes the base providers through CLIProxyAPI without per-provider entries: the registry merges the Gateway env layer under explicit override env for claude/codex and passes the resolved routing to all three clients. Providers with their own routing (Anthropic keys, Z.AI, custom Codex endpoints) and every derived provider are exempt.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/config.test.ts packages/server/src/server/agent/provider-registry.test.ts packages/server/src/server/persisted-config.test.ts --bail=1
+```
+
+## gateway-detection
+
+**Gateway detection without `X-CPA-*` headers plus explicit-routing skip**
+
+Live Gateways omit `X-CPA-*` response headers on `/v1/models`, which silently disabled all discovery. Auto-detect paths now also accept behavioral proof — `claude-fable-5-dd-` listing ids on the Anthropic shape, a `models` envelope on the Codex shape — and first-party routing skips detection outright via `expectGateway`.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/models.test.ts packages/server/src/server/agent/providers/claude/cliproxy-models.test.ts --bail=1
+```
+
+## gateway-claude-launch
+
+**Claude Gateway launch: WebSearch rule, image gating, immediate capacity**
+
+Gateway-routed custom models disallow `WebSearch` (the Gateway does not serve it for non-Anthropic models), gate image blocks on known `inputModalities` with a file-hint fallback, merge auto-persisted limits (now including modalities) into the running client's in-memory models so the first post-discovery session launches with resolved capacity.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/claude/agent.env.test.ts packages/server/src/server/agent/providers/claude/cliproxy-models.test.ts --bail=1
+```
+
+## gateway-codex-discovery
+
+**Codex Gateway discovery with bare-slug ids, context windows, and thread provider routing**
+
+Gateway-routed Codex (first-party or a derived provider pointing at a Gateway) appends Codex-shape catalog rows — hidden skipped, reasoning levels mapped to thinking options, advertised context windows overlaid on base models, bare-slug ids routed by the synthetic `cliproxyapi` thread `model_provider` — to `model/list` results.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/codex-app-server-agent.test.ts --bail=1
+```
+
+## gateway-claude-effort-identity
+
+**Gateway Claude models get their advertised effort levels and their real name**
+
+Gateway-routed Claude models take their effort levels from the Codex-shape catalog instead of one hardcoded set, and Claude Code is told the model's real name and capabilities through `ANTHROPIC_CUSTOM_MODEL_OPTION_*` / `ANTHROPIC_DEFAULT_FABLE_MODEL_*`. A model the catalog does not describe keeps the full set. The capability list uses the same `max_effort` / `xhigh_effort` tokens Claude Code's own model catalog carries.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/claude/cliproxy-effort.test.ts packages/server/src/server/agent/providers/claude/cliproxy-models.test.ts --bail=1
+```
+
+## gateway-codex-cpa-window
+
+**Codex launch and catalog use the CPA window and model catalog**
+
+Gateway-discovered models and base models routed through CLIProxyAPI use their advertised context window instead of being capped to Codex's 272k fallback window (258k usable). The catalog overlays advertised context windows onto existing models, writes a merged `codex-model-catalog.json` for `codex app-server`, passes `model_context_window` in thread configuration, and preserves the full context window in usage tracking.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/codex-catalog.test.ts packages/server/src/server/agent/gateway/models.test.ts --bail=1
+```
+
+## gateway-opencode-provider
+
+**OpenCode Gateway provider injection with a live models map**
+
+Every spawned OpenCode server gets an additive `cliproxyapi` provider record (openai-compatible adapter, options, models map built from live Gateway rows with trusted limits) so Gateway slugs register, list, and run sessions; user-defined `provider.cliproxyapi` wins entirely, and the Paseo catalog appends `cliproxyapi/<slug>` rows with the same trust rules.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/opencode-agent.test.ts packages/server/src/server/agent/providers/opencode/bridge.test.ts packages/server/src/server/agent/providers/opencode-server-manager.test.ts --bail=1
+```
+
+## gateway-omp-litellm
+
+**first-party Gateway routes base OMP through `LITELLM_*` env**
+
+When `agents.gateway` is set and the base omp provider has no `LITELLM_BASE_URL`/`LITELLM_API_KEY` of its own, the registry injects the Gateway endpoint under explicit provider env. The binary exposes it as its `litellm` provider, so Gateway slugs, limits, and thinking levels appear in the OMP catalog as `litellm/<slug>` with no client changes; derived OMP profiles never inherit the routing.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/config.test.ts packages/server/src/server/agent/provider-registry.test.ts --bail=1
+```
+
+## gateway-quota
+
+**per-model Gateway quota in the composer tooltip, hidden when unsupported**
+
+The `gateway.quota.get` RPC (gated on `server_info.features.gatewayQuota`) maps the agent's Paseo model id to a Gateway slug and fetches `/v1/quota`, cached 60 seconds, only for Gateway-routed providers. Old Gateways without the route answer empty-body 404s; those and every other failure return `supported: false` and the tooltip renders nothing instead of an error.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/quota.test.ts packages/server/src/server/session/provider/provider-catalog-session.test.ts packages/protocol/src/messages.test.ts --bail=1
+```
+
+## gateway-claude-cpa-window
+
+**Claude launch uses the CPA window for non-manifest models only**
+
+Non-official CPA rows such as Space Bunny and MiMo advertise their window, but Claude ignored it and launched at 200k. Those rows now use the advertised window. First-party manifest ids are left alone: the 200k row, its `[1m]` variant, and Opus 5.5 at 1M. CPA reports the base id as 1M, which would collapse that pair.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/claude/cliproxy-models.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts --bail=1
+```
+
+## cliproxyapi-config-name
+
+**first-party routing is `agents.cliproxyapi`, not `gateway`**
+
+The config key is `agents.cliproxyapi`. Env is `PASEO_CLIPROXYAPI_*`. The tooltip says CLIProxyAPI quota. The quota RPC is `cliproxyapi.quota.get`, gated on `server_info.features.cliproxyapiQuota`.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/config.test.ts packages/server/src/server/persisted-config.test.ts --bail=1
+```
+
+## gateway-latest-request
+
+**CLIProxyAPI last-request stats in the context-meter tooltip, fetched on hover only**
+
+The `cliproxyapi.stats.get` RPC (gated on `server_info.features.cliproxyapiStats`) reads `/v1/last-request-stats`, and the meter's tooltip renders a "CLIProxyAPI latest request" table next to quota: first token and generating above a rule, then the derived total, throughput, and age. It fetches on open and refetches on every re-open, with no interval: the value describes the _last_ request, so polling would keep asserting a rate for work that stopped. A missing route, an unrun model, and a bad key all hide the section. CLIProxyAPI renamed the route from `/v1/last-request-tps` to `/v1/last-request-stats` in v8.0.902 with the body unchanged and the old path dropped. Because the feature shipped unreleased, Paseo also renamed its own RPC from `cliproxyapi.tps.get` to `cliproxyapi.stats.get` rather than carry a wire alias forever for a name that was never public.
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/stats.test.ts packages/server/src/server/session/provider/provider-catalog-session.test.ts packages/protocol/src/messages.test.ts --bail=1
+cd packages/app && npx vitest run --project unit src/gateway-stats --bail=1
+```
+
+## gateway-unmanifested-minor-release
+
+**a first-party minor release the manifest does not list is a gateway row, not a spelling of the major it extends**
+
+`normalizeClaudeRuntimeModelId` folds `claude-sonnet-5-5` onto `claude-sonnet-5` because the fallback match is unanchored. `appendCliproxyModelsToClaudeCatalog` skips every row that normalizes, so a new Anthropic minor release advertised by the Gateway was silently dropped from the Claude catalog and never reached Claude Code. The fallback match now refuses to fold a trailing 1-2 digit minor; a 3+ digit run stays foldable so dated spellings (`claude-opus-5-20260724-v1:0`) still resolve.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/claude/models.test.ts packages/server/src/server/agent/providers/claude/cliproxy-models.test.ts --bail=1
+```
+
+## gateway-codex-catalog-shape
+
+**Gateway-discovered Codex rows are normalized to the `ModelInfo` shapes Codex parses**
+
+Gateway `/v1/models` rows arrive as `supported_reasoning_levels: [{ effort }]` with no `description` and `visibility: []`. Written verbatim into `codex-model-catalog.json`, Codex's app-server rejects the file (`missing field description`, `invalid type: sequence, expected string or map`) and every Codex spawn exits code 1. `normalizeCodexCatalogModel` fills level descriptions from the effort and maps visibility arrays to `"list"`/`"hide"`; `resolveCodexModelCatalogPath` treats stale pre-normalization files as absent so the next Gateway refresh rebuilds them.
+
+```bash
+npx vitest run packages/server/src/server/agent/providers/codex-catalog.test.ts --bail=1
+```

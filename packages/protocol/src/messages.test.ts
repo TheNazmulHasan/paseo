@@ -309,6 +309,133 @@ describe("provider usage list message contract", () => {
   });
 });
 
+describe("gateway quota message contract", () => {
+  test("accepts the quota get request as a namespaced correlated RPC", () => {
+    const parsed = SessionInboundMessageSchema.parse({
+      type: "cliproxyapi.quota.get.request",
+      requestId: "quota-1",
+      provider: "claude",
+      model: "grok-4.6",
+    });
+
+    expect(parsed).toEqual({
+      type: "cliproxyapi.quota.get.request",
+      requestId: "quota-1",
+      provider: "claude",
+      model: "grok-4.6",
+    });
+  });
+
+  test("accepts quota responses with accounts and windows", () => {
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "cliproxyapi.quota.get.response",
+      payload: {
+        requestId: "quota-2",
+        supported: true,
+        fetchedAt: "2026-09-25T14:00:00.000Z",
+        accounts: [
+          {
+            provider: "xai",
+            name: "xai-a***b.json",
+            type: "oauth",
+            plan: "Pro",
+            inCooldown: false,
+            windowsObservedAt: "2026-09-25T13:51:28Z",
+            windows: [{ name: "5h", usedPct: 51, resetsAt: "2026-09-25T15:00:00Z" }],
+          },
+        ],
+      },
+    });
+
+    expect(parsed.type).toBe("cliproxyapi.quota.get.response");
+    if (parsed.type !== "cliproxyapi.quota.get.response") {
+      throw new Error("Expected gateway quota response");
+    }
+    expect(parsed.payload.accounts[0]?.windows[0]?.usedPct).toBe(51);
+  });
+
+  test("accepts unsupported quota responses with no accounts", () => {
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "cliproxyapi.quota.get.response",
+      payload: {
+        requestId: "quota-3",
+        supported: false,
+        fetchedAt: "2026-09-25T14:00:00.000Z",
+        accounts: [],
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: "cliproxyapi.quota.get.response",
+      payload: {
+        requestId: "quota-3",
+        supported: false,
+        fetchedAt: "2026-09-25T14:00:00.000Z",
+        accounts: [],
+      },
+    });
+  });
+});
+
+describe("gateway throughput message contract", () => {
+  test("accepts the throughput get request as a namespaced correlated RPC", () => {
+    const parsed = SessionInboundMessageSchema.parse({
+      type: "cliproxyapi.stats.get.request",
+      requestId: "tps-1",
+      provider: "claude",
+      model: "grok-4.6",
+    });
+
+    expect(parsed).toEqual({
+      type: "cliproxyapi.stats.get.request",
+      requestId: "tps-1",
+      provider: "claude",
+      model: "grok-4.6",
+    });
+  });
+
+  test("accepts a throughput response carrying one sample", () => {
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "cliproxyapi.stats.get.response",
+      payload: {
+        requestId: "tps-2",
+        supported: true,
+        sample: {
+          model: "grok-4.6",
+          alias: "space-bunny-free",
+          provider: "xai",
+          at: "2026-09-28T10:00:00.000Z",
+          durationMs: 4200,
+          ttftMs: 600,
+          generationMs: 3600,
+          inputTokens: 1200,
+          outputTokens: 900,
+          tps: 250,
+          stream: true,
+        },
+      },
+    });
+
+    expect(parsed.type).toBe("cliproxyapi.stats.get.response");
+    if (parsed.type !== "cliproxyapi.stats.get.response") {
+      throw new Error("Expected gateway throughput response");
+    }
+    expect(parsed.payload.sample?.tps).toBe(250);
+  });
+
+  test("accepts a throughput response with no sample", () => {
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "cliproxyapi.stats.get.response",
+      payload: { requestId: "tps-3", supported: false, sample: null },
+    });
+
+    expect(parsed).toEqual({
+      type: "cliproxyapi.stats.get.response",
+      payload: { requestId: "tps-3", supported: false, sample: null },
+    });
+  });
+});
+
 describe("diagnostics message contract", () => {
   test("accepts the diagnostics request as a simple namespaced RPC", () => {
     const parsed = SessionInboundMessageSchema.parse({

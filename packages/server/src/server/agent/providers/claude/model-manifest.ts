@@ -1,7 +1,7 @@
 import type { AgentModelDefinition, AgentSelectOption } from "../../agent-sdk-types.js";
-import { CLAUDE_DD_MODEL_PREFIX } from "./cliproxy-models.js";
+import { CLAUDE_DD_MODEL_PREFIX } from "../../gateway/models.js";
 
-type ClaudeEffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+export type ClaudeEffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 interface ClaudeModelManifestEntry {
   id: string;
@@ -22,21 +22,24 @@ interface ClaudeModelManifestEntry {
  * full Effort parity with the TUI, including Haiku — restored after upstream
  * collapsed Opus 5 to a single 1M row and stripped Haiku effort).
  */
-const CLAUDE_EFFORT_LEVELS = [
+export const CLAUDE_EFFORT_LEVELS = [
   "low",
   "medium",
   "high",
   "xhigh",
   "max",
 ] as const satisfies readonly ClaudeEffortLevel[];
-
-const CLAUDE_EFFORT_LABELS = {
+export const CLAUDE_EFFORT_LABELS = {
   low: "Low",
   medium: "Medium",
   high: "High",
   xhigh: "Extra High",
   max: "Max",
 } as const satisfies Record<ClaudeEffortLevel, string>;
+
+export function isClaudeEffortLevel(value: unknown): value is ClaudeEffortLevel {
+  return CLAUDE_EFFORT_LEVELS.includes(value as ClaudeEffortLevel);
+}
 
 export const CLAUDE_DEFAULT_THINKING_OPTION_ID = "high";
 
@@ -48,6 +51,16 @@ export const CLAUDE_ULTRACODE_THINKING_OPTION_ID = "ultracode";
  * Upstream collapsed Opus 5 to a single 1M entry; users need both picker rows.
  */
 export const CLAUDE_MODEL_MANIFEST = [
+  {
+    id: "claude-opus-5-5[1m]",
+    label: "Opus 5.5 1M",
+    description: "Opus 5.5 with 1M context window",
+    minimumClaudeCodeVersion: "2.1.280",
+    defaultThinkingOptionId: "medium",
+    contextWindowMaxTokens: 1_000_000,
+    effortLevels: CLAUDE_EFFORT_LEVELS,
+    supportsFastMode: true,
+  },
   {
     id: "claude-opus-5-5",
     label: "Opus 5.5",
@@ -491,8 +504,12 @@ export function normalizeClaudeRuntimeModelId(value: string | null | undefined):
     }
   }
 
+  // The lookahead keeps the provider-prefix tolerance above while refusing to let a minor
+  // release collapse onto the major it extends ("claude-sonnet-5-5" is not Sonnet 5).
+  // Anchoring instead would break the prefixed forms ("us.anthropic.claude-opus-4-8"). A
+  // run of 3+ digits is a dated spelling ("claude-opus-5-20260724-v1:0"), which does fold.
   const singleSegmentMatch = trimmed.match(
-    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)(\[1m\])?/i,
+    /claude[-_ ](fable|opus|sonnet|haiku)[-_ ]+(\d+)(?![-._]\d{1,2}(?!\d))/i,
   );
   if (!singleSegmentMatch) {
     return null;

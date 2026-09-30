@@ -146,7 +146,6 @@ import {
 } from "./agent/tools/paseo-tools.js";
 import type { PaseoToolRuntimeContext } from "./agent/tools/types.js";
 import { createAgentProviderRuntime } from "./agent/provider-runtime.js";
-import { createAdditionalModelLimitsPersistence } from "./agent/additional-model-limits-persister.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import {
@@ -192,6 +191,8 @@ import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
 } from "./agent/provider-launch-config.js";
+import type { GatewayPersistedConfig } from "./agent/gateway/config.js";
+import { resolveGatewayConfig } from "./agent/gateway/config.js";
 import { loadPersistedConfig, type PersistedConfig } from "./persisted-config.js";
 import { createServiceProxySubsystem, type ServiceProxySubsystem } from "./service-proxy.js";
 import { createBrowserPreviewSubsystem } from "./browser-preview/index.js";
@@ -449,6 +450,7 @@ export interface PaseoDaemonConfig {
   dictationFinalTimeoutMs?: number;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
+  agentGateway?: GatewayPersistedConfig;
   providerCatalogRefreshTimeoutMs?: number;
   metadataGeneration?: {
     providers?: Array<{
@@ -578,6 +580,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
       : {}),
     browserTools: { enabled: config.browserToolsEnabled ?? false },
     providers,
+    cliproxyapi: config.agentGateway,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
       customEndpoint: resolveInitialMetadataCustomEndpoint(config.metadataGeneration),
@@ -966,11 +969,11 @@ export async function createPaseoDaemon(
       refreshTimeoutMs: config.providerCatalogRefreshTimeoutMs,
       runtimeSettings: config.agentProviderSettings,
       providerOverrides: config.providerOverrides,
+      gateway: resolveGatewayConfig(config.agentGateway),
       workspaceGitService,
       managedProcesses,
       isDev: config.isDev === true,
       extraClients: config.agentClients,
-      ...createAdditionalModelLimitsPersistence(daemonConfigStore),
     },
   });
   const providerSnapshotManager = agentProviderRuntime.snapshotManager;

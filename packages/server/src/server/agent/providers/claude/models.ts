@@ -10,7 +10,7 @@ import {
   normalizeClaudeManifestModelId,
   normalizeClaudeRuntimeModelId as normalizeClaudeManifestRuntimeModelId,
 } from "./model-manifest.js";
-import { decodeCliproxyClaudeModelId } from "./cliproxy-models.js";
+import { decodeCliproxyClaudeModelId } from "../../gateway/models.js";
 
 const CLAUDE_SETTINGS_MODEL_ENV_KEYS = [
   "ANTHROPIC_MODEL",
@@ -226,6 +226,66 @@ export function applyClaudeCustomModelEnvPins(
   return changed ? next : env;
 }
 
+/**
+ * Claude Code declares what a pinned model supports and what to call it, instead of
+ * guessing from the model id. On a gateway the id is not one Claude Code recognizes,
+ * so without this it falls back to a Fable-branded row: the picker shows Fable and
+ * commit trailers are attributed to Fable rather than the model that answered.
+ *
+ * `_SUPPORTED_CAPABILITIES` also caps effort. An unrecognized id otherwise gets
+ * Claude Code's permissive default, which assumes every level is supported; naming
+ * the capabilities a gateway model lacks is what stops the CLI from offering `max`
+ * to a model that does not have it.
+ */
+export const CLAUDE_MODEL_CAPABILITY_ENV_KEYS = [
+  "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
+  "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
+  "ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES",
+  "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+  "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION",
+  "ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES",
+] as const;
+
+export type ClaudeModelCapabilityEnvKey = (typeof CLAUDE_MODEL_CAPABILITY_ENV_KEYS)[number];
+
+/**
+ * Identity and capability env for a gateway model. Returns the given env unchanged
+ * for a first-party or family model, or when the caller has no gateway label.
+ */
+export function applyClaudeGatewayModelIdentityEnv(
+  env: NodeJS.ProcessEnv,
+  options: { modelId: string | null | undefined; displayName: string; capabilities: string[] },
+): NodeJS.ProcessEnv {
+  if (!isClaudeCustomNonFamilyModel(options.modelId)) {
+    return env;
+  }
+  const name = options.displayName.trim();
+  if (!name) {
+    return env;
+  }
+  const description = `${name} via gateway`;
+  const capabilities = options.capabilities.join(",");
+  const values: Record<ClaudeModelCapabilityEnvKey, string> = {
+    ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: name,
+    ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION: description,
+    ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES: capabilities,
+    ANTHROPIC_DEFAULT_FABLE_MODEL_NAME: name,
+    ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION: description,
+    ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES: capabilities,
+  };
+
+  let changed = false;
+  const next: NodeJS.ProcessEnv = { ...env };
+  for (const key of CLAUDE_MODEL_CAPABILITY_ENV_KEYS) {
+    if (hasNonEmptyEnvValue(next[key])) {
+      continue;
+    }
+    next[key] = values[key];
+    changed = true;
+  }
+  return changed ? next : env;
+}
+
 export const CLAUDE_PROMPT_CACHE_TTL_ENV_KEY = "CLAUDE_CODE_PROMPT_CACHE_TTL";
 export const CLAUDE_MAX_CONTEXT_TOKENS_ENV_KEY = "CLAUDE_CODE_MAX_CONTEXT_TOKENS";
 export const CLAUDE_MAX_OUTPUT_TOKENS_ENV_KEY = "CLAUDE_CODE_MAX_OUTPUT_TOKENS";
@@ -240,6 +300,9 @@ interface ClaudeProfileModelLimits {
   contextWindowMaxTokens?: number;
   maxOutputTokens?: number;
   autoCompactThresholdPercent?: number;
+  inputModalities?: string[];
+  outputModalities?: string[];
+  capabilities?: string[];
 }
 
 /**
@@ -283,6 +346,21 @@ export function resolveClaudeMaxOutputTokens(options: {
     return Math.trunc(profileMatch.maxOutputTokens);
   }
   return undefined;
+}
+/**
+ * Resolve the known input modalities for a selected Claude model.
+ * Only profile/additional model config is used; unknown when unconfigured so
+ * callers keep forwarding images.
+ */
+export function resolveClaudeInputModalities(options: {
+  modelId: string | null | undefined;
+  profileModels?: ClaudeProfileModelLimits[];
+}): string[] | undefined {
+  const profileMatch = findProfileModel(options.modelId, options.profileModels);
+  if (!profileMatch?.inputModalities || profileMatch.inputModalities.length === 0) {
+    return undefined;
+  }
+  return [...profileMatch.inputModalities];
 }
 
 /**

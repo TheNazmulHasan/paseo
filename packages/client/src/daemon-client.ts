@@ -95,6 +95,8 @@ import type {
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
   ProviderUsageResetQuotaResponseMessage,
+  GatewayQuotaGetResponseMessage,
+  GatewayStatsGetResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
@@ -503,6 +505,8 @@ type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type ProviderUsageResetQuotaPayload = ProviderUsageResetQuotaResponseMessage["payload"];
+type GatewayQuotaPayload = GatewayQuotaGetResponseMessage["payload"];
+type GatewayStatsPayload = GatewayStatsGetResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -5844,6 +5848,48 @@ export class DaemonClient {
         providerId: options.providerId,
       },
       timeout: 60_000,
+    });
+  }
+
+  async getGatewayQuota(options: {
+    provider: string;
+    model: string;
+    requestId?: string;
+  }): Promise<GatewayQuotaPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "cliproxyapi.quota.get.request",
+        provider: options.provider,
+        model: options.model,
+      },
+      timeout: 30_000,
+    });
+  }
+
+  async listCliproxyapiQuota(options?: { requestId?: string }): Promise<GatewayQuotaPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "cliproxyapi.quota.get.request",
+      },
+      timeout: 30_000,
+    });
+  }
+
+  async getGatewayStats(options: {
+    provider: string;
+    model: string;
+    requestId?: string;
+  }): Promise<GatewayStatsPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "cliproxyapi.stats.get.request",
+        provider: options.provider,
+        model: options.model,
+      },
+      timeout: 30_000,
     });
   }
 

@@ -205,6 +205,14 @@ const MutableBrowserToolsConfigSchema = z
     enabled: z.boolean().default(false),
   })
   .passthrough();
+
+const CliproxyapiConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    baseUrl: z.string().optional(),
+    apiKey: z.string().optional(),
+  })
+  .passthrough();
 const MutableRelayConfigSchema = z
   .object({
     enabled: z.boolean(),
@@ -239,6 +247,7 @@ export const MutableDaemonConfigSchema = z
     catalogRefreshTimeoutMs: z.number().int().positive().optional(),
     browserTools: MutableBrowserToolsConfigSchema.default({ enabled: false }),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
+    cliproxyapi: CliproxyapiConfigSchema.optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({
       providers: [],
       customEndpoint: {
@@ -285,6 +294,7 @@ export const MutableDaemonConfigPatchSchema = z
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),
+    cliproxyapi: CliproxyapiConfigSchema.optional(),
     removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigPatchSchema.optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
@@ -1935,6 +1945,20 @@ export const ProviderUsageResetQuotaRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const GatewayQuotaGetRequestMessageSchema = z.object({
+  type: z.literal("cliproxyapi.quota.get.request"),
+  requestId: z.string(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+});
+
+export const GatewayStatsGetRequestMessageSchema = z.object({
+  type: z.literal("cliproxyapi.stats.get.request"),
+  requestId: z.string(),
+  provider: z.string(),
+  model: z.string(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -3456,7 +3480,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
   ProviderUsageResetQuotaRequestMessageSchema,
+  GatewayQuotaGetRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
+  GatewayStatsGetRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
   CancelAgentRequestMessageSchema,
@@ -3884,6 +3910,10 @@ export const ServerInfoStatusPayloadSchema = z
         providerUsageResetQuota: z.boolean().optional(),
         // COMPAT(providerUsageForceRefresh): added in v0.1.105, drop the gate when daemon floor >= v0.1.105.
         providerUsageForceRefresh: z.boolean().optional(),
+        // COMPAT(cliproxyapiQuota): added in v0.9.905, drop the gate once daemon floor >= v0.9.905.
+        cliproxyapiQuota: z.boolean().optional(),
+        // COMPAT(cliproxyapiStats): added in v0.9.910, drop the gate once daemon floor >= v0.9.910.
+        cliproxyapiStats: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
@@ -6746,6 +6776,64 @@ export const ProviderUsageResetQuotaResponseMessageSchema = z.object({
   }),
 });
 
+export const GatewayQuotaWindowSchema = z.object({
+  name: z.string(),
+  usedPct: z.number().nullable().optional(),
+  resetsAt: z.string().nullable().optional(),
+  status: z.string().optional(),
+});
+
+export const GatewayQuotaResetCreditSchema = z.object({
+  expiresAt: z.string(),
+});
+
+export const GatewayQuotaAccountSchema = z.object({
+  provider: z.string(),
+  providerName: z.string().optional(),
+  name: z.string().optional(),
+  type: z.enum(["oauth", "api"]),
+  plan: z.string().optional(),
+  inCooldown: z.boolean(),
+  windowsObservedAt: z.string().nullable().optional(),
+  windows: z.array(GatewayQuotaWindowSchema),
+  resetCredits: z.array(GatewayQuotaResetCreditSchema).optional(),
+});
+
+export const GatewayQuotaGetResponseMessageSchema = z.object({
+  type: z.literal("cliproxyapi.quota.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    supported: z.boolean(),
+    fetchedAt: z.string(),
+    accounts: z.array(GatewayQuotaAccountSchema),
+  }),
+});
+
+export const GatewayStatsSampleSchema = z.object({
+  model: z.string(),
+  alias: z.string().optional(),
+  provider: z.string().optional(),
+  at: z.string(),
+  durationMs: z.number(),
+  ttftMs: z.number(),
+  generationMs: z.number(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  tps: z.number(),
+  stream: z.boolean(),
+});
+
+export const GatewayStatsGetResponseMessageSchema = z.object({
+  type: z.literal("cliproxyapi.stats.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    supported: z.boolean(),
+    // Null when the Gateway answered but has no record for this model, and
+    // when `supported` is false. Callers render nothing in both cases.
+    sample: GatewayStatsSampleSchema.nullable(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -7438,6 +7526,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconGetResponseSchema,
   FileDownloadTokenResponseSchema,
   FileUploadResponseSchema,
+  GatewayStatsGetResponseMessageSchema,
   ListProviderModelsResponseMessageSchema,
   ListProviderModesResponseMessageSchema,
   ListProviderFeaturesResponseMessageSchema,
@@ -7448,6 +7537,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ProviderUsageResetQuotaResponseMessageSchema,
+  GatewayQuotaGetResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -7650,6 +7740,11 @@ export type ProviderUsageListResponseMessage = z.infer<
 export type ProviderUsageResetQuotaResponseMessage = z.infer<
   typeof ProviderUsageResetQuotaResponseMessageSchema
 >;
+export type GatewayQuotaWindow = z.infer<typeof GatewayQuotaWindowSchema>;
+export type GatewayQuotaAccount = z.infer<typeof GatewayQuotaAccountSchema>;
+export type GatewayStatsSample = z.infer<typeof GatewayStatsSampleSchema>;
+export type GatewayStatsGetResponseMessage = z.infer<typeof GatewayStatsGetResponseMessageSchema>;
+export type GatewayQuotaGetResponseMessage = z.infer<typeof GatewayQuotaGetResponseMessageSchema>;
 export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
 export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
 export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
