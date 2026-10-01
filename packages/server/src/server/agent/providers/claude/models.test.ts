@@ -61,7 +61,7 @@ async function createClaudeConfigDirWithRawSettings(settings: string): Promise<s
   return configDir;
 }
 
-function createCatalogClient(claudeCodeVersion = "2.1.280"): ClaudeAgentClient {
+function createCatalogClient(claudeCodeVersion = "2.1.284"): ClaudeAgentClient {
   return new ClaudeAgentClient({
     logger: createTestLogger(),
     resolveVersion: async () => claudeCodeVersion,
@@ -82,6 +82,8 @@ describe("getClaudeModels", () => {
       "claude-fable-5",
       "claude-opus-4-8[1m]",
       "claude-opus-4-8",
+      "claude-sonnet-5-5[1m]",
+      "claude-sonnet-5-5",
       "claude-sonnet-5",
       "claude-sonnet-5[1m]",
       "claude-opus-4-7[1m]",
@@ -118,6 +120,8 @@ describe("getClaudeModels", () => {
         ["claude-fable-5[1m]", 1_000_000],
         ["claude-opus-4-8[1m]", 1_000_000],
         ["claude-opus-4-8", 200_000],
+        ["claude-sonnet-5-5[1m]", 1_000_000],
+        ["claude-sonnet-5-5", 1_000_000],
         ["claude-sonnet-5", 200_000],
         ["claude-sonnet-5[1m]", 1_000_000],
         ["claude-opus-4-7[1m]", 1_000_000],
@@ -555,9 +559,9 @@ describe("normalizeClaudeRuntimeModelId", () => {
   // that resolution makes the gateway row look first-party, and cliproxy-models then
   // drops it from the catalog entirely.
   it("leaves an unmanifested minor release unresolved instead of folding it onto the major", () => {
-    expect(normalizeClaudeRuntimeModelId("claude-sonnet-5-5")).toBeNull();
-    expect(normalizeClaudeManifestModelId("claude-sonnet-5-5")).toBeNull();
-    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-5")).toBeNull();
+    expect(normalizeClaudeRuntimeModelId("claude-sonnet-5-7")).toBeNull();
+    expect(normalizeClaudeManifestModelId("claude-sonnet-5-7")).toBeNull();
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-7")).toBeNull();
     // A dated spelling of a known major still folds, so the 8-digit run is exempt.
     expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-20260101")).toBe(
       "claude-sonnet-5",
@@ -716,6 +720,43 @@ describe("Claude Opus 5.5 catalog", () => {
     expect(findClaudeModel("claude-opus-5-5[1m]")?.id).toBe("claude-opus-5-5[1m]");
     expect(findClaudeModel("claude-opus-5-5-20260401")?.id).toBe("claude-opus-5-5");
     expect(findClaudeModel("claude-opus-5-5-20260401[1m]")?.id).toBe("claude-opus-5-5[1m]");
+  });
+
+  it("offers dual Sonnet 5.5 entries, both with a 1M context window", () => {
+    const sonnet55Models = getClaudeModels()
+      .filter((model) => model.id.startsWith("claude-sonnet-5-5"))
+      .map(({ id, label, contextWindowMaxTokens }) => ({ id, label, contextWindowMaxTokens }));
+
+    expect(sonnet55Models).toEqual([
+      { id: "claude-sonnet-5-5[1m]", label: "Sonnet 5.5 1M", contextWindowMaxTokens: 1_000_000 },
+      { id: "claude-sonnet-5-5", label: "Sonnet 5.5", contextWindowMaxTokens: 1_000_000 },
+    ]);
+  });
+
+  it("gates Sonnet 5.5 on Claude Code 2.1.284", () => {
+    expect(getClaudeModels("2.1.283").map((model) => model.id)).not.toContain("claude-sonnet-5-5");
+    expect(getClaudeModels("2.1.284").map((model) => model.id)).toContain("claude-sonnet-5-5");
+  });
+
+  it("offers every effort level except off, because Sonnet 5.5 cannot disable thinking", () => {
+    const sonnet55 = getClaudeModels().find((model) => model.id === "claude-sonnet-5-5");
+
+    expect(sonnet55?.thinkingOptions?.map((option) => option.id)).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      CLAUDE_ULTRACODE_THINKING_OPTION_ID,
+    ]);
+    expect(sonnet55?.defaultThinkingOptionId).toBe("medium");
+  });
+
+  it("resolves suffixed and gateway Sonnet 5.5 IDs without folding onto Sonnet 5", () => {
+    expect(findClaudeModel("claude-sonnet-5-5[1m]")?.id).toBe("claude-sonnet-5-5[1m]");
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-5-20260928-v1:0")).toBe(
+      "claude-sonnet-5-5",
+    );
   });
 });
 
