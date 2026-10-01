@@ -217,6 +217,7 @@ import {
   isAgentMcpRequestAuthorized,
   type DaemonAuthConfig,
 } from "./auth.js";
+import { deleteLocalCredential, writeLocalCredential } from "./local-credential.js";
 import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
@@ -814,8 +815,10 @@ export async function createPaseoDaemon(
   // remain protected.
   mountWebUi(app, config, logger);
 
+  let localCredential: string | null = null;
+  const daemonAuth = { ...config.auth, localCredential: () => localCredential };
   app.use(
-    createRequireBearerMiddleware(config.auth, (context) => {
+    createRequireBearerMiddleware(daemonAuth, (context) => {
       logger.warn(context, "Rejected HTTP request with invalid daemon password");
     }),
   );
@@ -1667,6 +1670,7 @@ export async function createPaseoDaemon(
   const start = async () => {
     let mainStarted = false;
     try {
+      localCredential = await writeLocalCredential(config.paseoHome);
       if (serviceProxyListenTarget) {
         const boundServiceProxyTarget = await serviceProxy.startStandalone({
           listenTarget: serviceProxyListenTarget,
@@ -1760,7 +1764,7 @@ export async function createPaseoDaemon(
                 startPaused: true,
               },
               workspaceAutoName,
-              config.auth,
+              daemonAuth,
               speechService,
               terminalManager,
               {
@@ -1860,6 +1864,8 @@ export async function createPaseoDaemon(
       speechService.start();
       scriptHealthMonitor.start();
     } catch (error) {
+      localCredential = null;
+      await deleteLocalCredential(config.paseoHome);
       unsubscribePluginProviders();
       await pluginRuntime.stopAllPlugins().catch(() => undefined);
       await serviceProxy.stopStandalone().catch(() => undefined);
@@ -1873,6 +1879,8 @@ export async function createPaseoDaemon(
   };
 
   const stop = async (reason?: string) => {
+    localCredential = null;
+    await deleteLocalCredential(config.paseoHome);
     // Stop tracking plugin provider registrations before anything tears plugins
     // down, so plugin shutdown cannot withdraw a provider from under an agent
     // that is still open. Plugins themselves are stopped once every session

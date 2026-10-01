@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import type { Logger } from "pino";
 
@@ -65,7 +64,7 @@ export function findClaudeModel(
 
 export async function getClaudeModelsWithSettings(
   logger: Logger,
-  configDir?: string,
+  configDir: string,
   claudeCodeVersion?: string,
 ): Promise<AgentModelDefinition[]> {
   const hardcodedModels = getClaudeModels(claudeCodeVersion);
@@ -93,9 +92,9 @@ export async function getClaudeModelsWithSettings(
 
 async function readClaudeSettingsModels(
   logger: Logger,
-  configDir?: string,
+  configDir: string,
 ): Promise<AgentModelDefinition[]> {
-  const settingsPath = path.join(resolveClaudeConfigDir(configDir), "settings.json");
+  const settingsPath = path.join(configDir, "settings.json");
 
   let parsed: unknown;
   try {
@@ -128,10 +127,6 @@ async function readClaudeSettingsModels(
   }
 
   return models;
-}
-
-function resolveClaudeConfigDir(configDir?: string): string {
-  return configDir ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
 }
 
 function addSettingsModel(

@@ -71,7 +71,7 @@ export function BrowserDataSection() {
             </Text>
           </View>
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             loading={isClearing}
             disabled={isClearing}

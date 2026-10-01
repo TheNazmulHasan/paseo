@@ -1,5 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -55,8 +55,9 @@ vi.mock("electron-log/main", () => ({
   },
 }));
 
-vi.mock("@getpaseo/server/daemon-control", () => ({
-  resolvePaseoHome: vi.fn(() => mocks.paseoHome),
+vi.mock("@getpaseo/server/daemon-control", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolvePaseoHome: () => mocks.paseoHome,
   spawnProcess: mocks.spawnProcess,
 }));
 
@@ -164,5 +165,26 @@ describe("daemon-manager commands", () => {
     await handlers.desktop_daemon_status();
 
     expect(peekDesktopDaemonServerId()).toBe("local-daemon-1");
+  });
+
+  it("returns a local credential only for its live managed daemon listen", async () => {
+    mkdirSync(mocks.paseoHome);
+    const token = "a".repeat(43);
+    writeFileSync(path.join(mocks.paseoHome, "local-credential"), `${token}\n`, { mode: 0o600 });
+    const lock = {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      hostname: hostname(),
+      uid: process.getuid?.() ?? 0,
+      listen: "127.0.0.1:6799",
+      desktopManaged: true,
+    };
+    const lockPath = path.join(mocks.paseoHome, "paseo.pid");
+    writeFileSync(lockPath, JSON.stringify(lock));
+    const handler = createDaemonCommandHandlers().desktop_local_credential;
+    expect(await handler({ listen: "localhost:6799" })).toBe(token);
+    expect(await handler({ listen: "remote:6799" })).toBeNull();
+    writeFileSync(lockPath, JSON.stringify({ ...lock, desktopManaged: false }));
+    expect(await handler({ listen: "localhost:6799" })).toBeNull();
   });
 });

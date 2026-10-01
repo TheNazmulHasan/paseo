@@ -152,6 +152,9 @@ describe("getClaudeModels", () => {
     );
     expect(getClaudeModels("2.1.280").map((model) => model.id)).toContain("claude-opus-5-5");
     expect(getClaudeModels("2.1.280").find((model) => model.isDefault)?.id).toBe("claude-opus-5-5");
+
+    expect(getClaudeModels("2.1.283").map((model) => model.id)).not.toContain("claude-sonnet-5-5");
+    expect(getClaudeModels("2.1.284").map((model) => model.id)).toContain("claude-sonnet-5-5");
   });
 
   it("derives thinking options from model effort capabilities", () => {
@@ -223,6 +226,8 @@ describe("getClaudeModels", () => {
   it.each([
     ["claude-opus-5-5", false, "medium"],
     ["claude-opus-5-5-20260401", false, "medium"],
+    ["claude-sonnet-5-5", false, "medium"],
+    ["claude-sonnet-5-5-20260928", false, "medium"],
     ["claude-opus-5", true, "high"],
     ["claude-opus-5-20260724", true, "high"],
     ["claude-sonnet-5", true, "high"],
@@ -324,6 +329,25 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     ]);
     expect(models.filter((model) => model.id === "claude-fable-5-1[1M]")).toHaveLength(1);
     expect(models.some((model) => model.id === "claude-fable-5-1")).toBe(true);
+  });
+
+  it("reads settings.json from the provider's own CLAUDE_CONFIG_DIR", async () => {
+    const daemonConfigDir = await createClaudeConfigDir({});
+    const providerConfigDir = await createClaudeConfigDir({ model: "glm-5.1" });
+    vi.stubEnv("CLAUDE_CONFIG_DIR", daemonConfigDir);
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      resolveVersion: async () => "2.1.280",
+      runtimeSettings: { env: { CLAUDE_CONFIG_DIR: providerConfigDir } },
+    });
+
+    const { models } = await client.fetchCatalog({
+      scope: "workspace",
+      cwd: os.tmpdir(),
+      force: true,
+    });
+
+    expect(models.map((model) => model.id)).toContain("glm-5.1");
   });
 
   it("falls back to hardcoded models when settings.json is missing", async () => {
@@ -575,6 +599,16 @@ describe("normalizeClaudeRuntimeModelId", () => {
       normalizeClaudeRuntimeModelId("claude-fable-5-dd-rotubirtnoc-3.1-kraps-esum"),
     ).toBeNull();
   });
+
+  it("does not collapse a prefixed Sonnet 5.5 onto Sonnet 5", () => {
+    expect(normalizeClaudeRuntimeModelId("anthropic/claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-5-20260928-v1:0")).toBe(
+      "claude-sonnet-5-5",
+    );
+    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-20260101-v1:0")).toBe(
+      "claude-sonnet-5",
+    );
+  });
 });
 
 describe("parseClaudeCodeVersion", () => {
@@ -721,7 +755,10 @@ describe("Claude Opus 5.5 catalog", () => {
     expect(findClaudeModel("claude-opus-5-5-20260401")?.id).toBe("claude-opus-5-5");
     expect(findClaudeModel("claude-opus-5-5-20260401[1m]")?.id).toBe("claude-opus-5-5[1m]");
   });
+});
 
+describe("Claude Sonnet 5.5 catalog", () => {
+  // Fork: a [1m] harness row beside the base id, the same pair Opus 5.5 has.
   it("offers dual Sonnet 5.5 entries, both with a 1M context window", () => {
     const sonnet55Models = getClaudeModels()
       .filter((model) => model.id.startsWith("claude-sonnet-5-5"))
@@ -731,11 +768,6 @@ describe("Claude Opus 5.5 catalog", () => {
       { id: "claude-sonnet-5-5[1m]", label: "Sonnet 5.5 1M", contextWindowMaxTokens: 1_000_000 },
       { id: "claude-sonnet-5-5", label: "Sonnet 5.5", contextWindowMaxTokens: 1_000_000 },
     ]);
-  });
-
-  it("gates Sonnet 5.5 on Claude Code 2.1.284", () => {
-    expect(getClaudeModels("2.1.283").map((model) => model.id)).not.toContain("claude-sonnet-5-5");
-    expect(getClaudeModels("2.1.284").map((model) => model.id)).toContain("claude-sonnet-5-5");
   });
 
   it("offers every effort level except off, because Sonnet 5.5 cannot disable thinking", () => {
@@ -750,13 +782,16 @@ describe("Claude Opus 5.5 catalog", () => {
       CLAUDE_ULTRACODE_THINKING_OPTION_ID,
     ]);
     expect(sonnet55?.defaultThinkingOptionId).toBe("medium");
+    expect(
+      sonnet55?.thinkingOptions?.filter((option) => option.isDefault).map((option) => option.id),
+    ).toEqual(["medium"]);
   });
 
-  it("resolves suffixed and gateway Sonnet 5.5 IDs without folding onto Sonnet 5", () => {
+  it("resolves suffixed and dated Sonnet 5.5 IDs to the matching catalog entry", () => {
     expect(findClaudeModel("claude-sonnet-5-5[1m]")?.id).toBe("claude-sonnet-5-5[1m]");
-    expect(normalizeClaudeRuntimeModelId("us.anthropic.claude-sonnet-5-5-20260928-v1:0")).toBe(
-      "claude-sonnet-5-5",
-    );
+    expect(findClaudeModel("claude-sonnet-5-5-20260928")?.id).toBe("claude-sonnet-5-5");
+    expect(findClaudeModel("claude-sonnet-5-5-20260928[1m]")?.id).toBe("claude-sonnet-5-5[1m]");
+    expect(findClaudeModel("claude-sonnet-5-5[1m]")?.contextWindowMaxTokens).toBe(1_000_000);
   });
 });
 
@@ -770,6 +805,7 @@ describe("claudeManifestModelSupportsFastMode", () => {
   it("supports fast mode on Opus 5 but not on other Claude 5 models", () => {
     expect(claudeManifestModelSupportsFastMode("claude-opus-5-5")).toBe(true);
     expect(claudeManifestModelSupportsFastMode("claude-opus-5")).toBe(true);
+    expect(claudeManifestModelSupportsFastMode("claude-sonnet-5-5")).toBe(false);
     expect(claudeManifestModelSupportsFastMode("claude-sonnet-5")).toBe(false);
     expect(claudeManifestModelSupportsFastMode("claude-fable-5")).toBe(false);
     expect(claudeManifestModelSupportsFastMode("claude-fable-5-1")).toBe(false);

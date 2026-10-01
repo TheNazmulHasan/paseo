@@ -280,8 +280,10 @@ interface CodexAppServerAgentDeps {
   gateway?: ResolvedGatewayConfig;
   cliproxyapiAdvertisedIds?: ReadonlySet<string> | null;
   cliproxyapiContextWindows?: ReadonlyMap<string, number> | null;
-  customCodexConfig?: Record<string, unknown> | null;
+  customCodexConfig?: CodexCustomProviderConfig | null;
   modelCatalogPath?: string | null;
+  // The CODEX_HOME the session's app-server runs with; prompts and skills are read from it.
+  codexHome?: string;
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,
@@ -567,8 +569,8 @@ async function checkCodexLaunchAvailable(launch: ResolvedProviderLaunch) {
   });
 }
 
-function resolveCodexHomeDir(): string {
-  return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
+function resolveCodexHomeDir(env: NodeJS.ProcessEnv): string {
+  return env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }
 
 function decodeEscapedChar(next: string): string {
@@ -678,8 +680,7 @@ function parseFrontMatter(markdown: string): {
   return { frontMatter, body };
 }
 
-async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
-  const codexHome = resolveCodexHomeDir();
+async function listCodexCustomPrompts(codexHome: string): Promise<AgentSlashCommand[]> {
   const promptsDir = path.join(codexHome, "prompts");
   let entries: Dirent[];
   try {
@@ -721,6 +722,7 @@ async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
 
 export async function listCodexSkills(
   cwd: string,
+  codexHome: string,
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
 ): Promise<AgentSlashCommand[]> {
   const candidates: string[] = [];
@@ -734,7 +736,7 @@ export async function listCodexSkills(
     candidates.push(path.join(repoRoot, ".codex", "skills"));
   }
 
-  candidates.push(path.join(resolveCodexHomeDir(), "skills"));
+  candidates.push(path.join(codexHome, "skills"));
 
   const candidateReads = await Promise.all(
     candidates.map(async (dir) => {
@@ -941,7 +943,7 @@ const CodexModelListResponseSchema = z.object({
 async function readCodexThreadWindow(
   client: Pick<CodexAppServerClientLike, "request">,
   logger: Logger,
-  window: { limit: number; cwd?: string },
+  window: { limit: number; cwd?: string; modelProviders?: string[] },
 ): Promise<Array<Record<string, unknown>>> {
   // A thread updated while the scan is paging moves under `updated_at` order
   // and can come back on a later page, so identify each one and keep it once.
@@ -957,6 +959,7 @@ async function readCodexThreadWindow(
         // Older Codex builds ignore the unknown key and keep that order.
         sortKey: "updated_at",
         ...(window.cwd ? { cwd: window.cwd } : {}),
+        ...(window.modelProviders ? { modelProviders: window.modelProviders } : {}),
         ...(cursor ? { cursor } : {}),
       }),
     );
@@ -3300,10 +3303,15 @@ function normalizeOpenAICompatibleBaseUrl(value: string): string | null {
   return `${withoutTrailingSlashes}/v1`;
 }
 
+interface CodexCustomProviderConfig {
+  model_provider: string;
+  model_providers: Record<string, Record<string, unknown>>;
+}
+
 function buildCodexCustomProviderConfig(
   runtimeSettings: ProviderRuntimeSettings | undefined,
   customProvider: CodexAppServerAgentDeps["customProvider"],
-): Record<string, unknown> | null {
+): CodexCustomProviderConfig | null {
   if (customProvider?.extends !== CODEX_PROVIDER) {
     return null;
   }
@@ -3390,6 +3398,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly config: AgentSessionConfig;
   private readonly asyncQuestions: CodexAsyncQuestions;
+  private readonly codexHome: string;
   private currentMode: string;
   private hasWorkflowModeOverride: boolean;
   private readonly providerOptions: CodexProviderOptions;
@@ -3504,6 +3513,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.providerOptions = CodexProviderOptionsSchema.parse(config.providerOptions ?? {});
     this.config = config;
     this.asyncQuestions = new CodexAsyncQuestions(resumeHandle?.metadata?.asyncQuestions);
+    this.codexHome = deps.codexHome ?? resolveCodexHomeDir(process.env);
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
       this.serviceTier = "fast";
@@ -4087,8 +4097,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): Promise<CodexPromptInput> {
     if (commandName.startsWith("prompts:")) {
       const promptName = commandName.slice("prompts:".length);
-      const codexHome = resolveCodexHomeDir();
-      const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
+      const promptPath = path.join(this.codexHome, "prompts", `${promptName}.md`);
       const raw = await fs.readFile(promptPath, "utf8");
       const parsed = parseFrontMatter(raw);
       return expandCodexCustomPrompt(parsed.body, args);
@@ -4884,6 +4893,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       cwd: this.config.cwd ?? null,
       model: this.config.model ?? null,
       serviceTier: this.serviceTier,
+      config: this.buildCodexInnerConfig(),
       userMessageTurns: this.codexUserMessageTurns(),
       setThreadId: async (threadId) => {
         this.currentThreadId = threadId;
@@ -4991,7 +5001,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const prompts = await listCodexCustomPrompts();
+    const prompts = await listCodexCustomPrompts(this.codexHome);
     if (this.connectionState === "disconnected") {
       await this.connect();
     } else {
@@ -5005,7 +5015,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }));
     const fallbackSkills =
       this.cachedSkills === null
-        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService)
+        ? await listCodexSkills(this.config.cwd, this.codexHome, this.deps.workspaceGitService)
         : [];
     const builtin: AgentSlashCommand[] = [
       {
@@ -5291,7 +5301,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       Object.assign(
         innerConfig,
         codexConfigForModel(
-          this.deps.customCodexConfig,
+          { ...this.deps.customCodexConfig },
           this.config.model,
           this.deps.cliproxyapiAdvertisedIds,
         ),
@@ -7138,17 +7148,19 @@ export class CodexAppServerAgentClient implements AgentClient {
     }
   }
 
-  private sessionDeps(): CodexAppServerAgentDeps {
+  private sessionDeps(launchEnv: Record<string, string> | undefined): CodexAppServerAgentDeps {
     return {
       ...this.deps,
       cliproxyapiAdvertisedIds: this.cliproxyapiAdvertisedIds,
       cliproxyapiContextWindows: this.cliproxyapiContextWindows,
-      customCodexConfig: buildCodexCustomProviderConfig(
-        this.runtimeSettings,
-        this.deps.customProvider,
-      ),
+      codexHome: resolveCodexHomeDir(buildCodexAppServerEnv(this.runtimeSettings, launchEnv)),
+      customCodexConfig: this.customProviderConfig(),
       modelCatalogPath: this.modelCatalogPath,
     };
+  }
+
+  private customProviderConfig(): CodexCustomProviderConfig | null {
+    return buildCodexCustomProviderConfig(this.runtimeSettings, this.deps.customProvider);
   }
 
   private resolveGoalsEnabled(): Promise<boolean> {
@@ -7302,7 +7314,7 @@ export class CodexAppServerAgentClient implements AgentClient {
           agentId: launchContext?.agentId,
           model: sessionConfig.model,
         }),
-      this.sessionDeps(),
+      this.sessionDeps(launchContext?.env),
       options?.persistSession === false,
       goalsEnabled,
       autoReviewEnabled,
@@ -7345,7 +7357,7 @@ export class CodexAppServerAgentClient implements AgentClient {
           agentId: launchContext?.agentId,
           model: merged.model,
         }),
-      this.sessionDeps(),
+      this.sessionDeps(launchContext?.env),
       false,
       goalsEnabled,
       autoReviewEnabled,
@@ -7375,9 +7387,14 @@ export class CodexAppServerAgentClient implements AgentClient {
       // filtering since most threads will be from other cwds, then keep the
       // local realpath-aware filter for symlink-equivalent workspace paths.
       const listLimit = options?.cwd ? Math.max(scanLimit, 50) : scanLimit;
+      // Codex records each thread under the model provider that ran it and,
+      // unless told otherwise, lists only the provider its own config selects.
+      // A custom provider runs under its own id, so ask for exactly that one.
+      const customProviderConfig = this.customProviderConfig();
       const allThreads = await readCodexThreadWindow(client, this.logger, {
         limit: listLimit,
         cwd: options?.cwd,
+        ...(customProviderConfig ? { modelProviders: [customProviderConfig.model_provider] } : {}),
       });
       const threads = filterCodexThreadsByCwd(allThreads, options?.cwd);
       return threads.slice(0, limit).map((thread) => {
