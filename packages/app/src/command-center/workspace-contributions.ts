@@ -49,12 +49,24 @@ export interface WorkspaceCommandCenterLabels {
   closePane: string;
   toggleFocusMode: string;
   toggleExplorerSidebar: string;
+  // Arrange (fork mod #11)
+  arrangeOnePane: string;
+  arrangeColumns2: string;
+  arrangeColumns3: string;
+  arrangeGrid: string;
+  arrangeWatch: string;
+  arrangeRestore: string;
+  arrangeEqualize: string;
+  arrangeMenu: string;
   // Workspace management actions
   rename: string;
   copyPath: string;
   copyBranchName: string;
   pin: string;
   unpin: string;
+  // Desk (fork mod #12)
+  putOnDesk: string;
+  takeOffDesk: string;
   showSetup: string;
   labelsGroup: string;
 }
@@ -78,11 +90,14 @@ export interface WorkspaceCommandCenterIcons {
   moveTab?: CommandCenterIcon;
   focusMode?: CommandCenterIcon;
   explorerSidebar?: CommandCenterIcon;
+  arrange?: CommandCenterIcon;
   // Workspace management action icons
   copyPath?: CommandCenterIcon;
   copyBranchName?: CommandCenterIcon;
   pin?: CommandCenterIcon;
   unpin?: CommandCenterIcon;
+  putOnDesk?: CommandCenterIcon;
+  takeOffDesk?: CommandCenterIcon;
   showSetup?: CommandCenterIcon;
   toggleFocusMode?: CommandCenterIcon;
   label?: CommandCenterIcon;
@@ -101,7 +116,16 @@ export interface WorkspaceCommandCenterShortcuts {
   closePane?: ShortcutKey[][];
   toggleFocusMode?: ShortcutKey[][];
   toggleExplorerSidebar?: ShortcutKey[][];
+  arrangeOnePane?: ShortcutKey[][];
+  arrangeColumns2?: ShortcutKey[][];
+  arrangeColumns3?: ShortcutKey[][];
+  arrangeGrid?: ShortcutKey[][];
+  arrangeWatch?: ShortcutKey[][];
+  arrangeRestore?: ShortcutKey[][];
+  arrangeEqualize?: ShortcutKey[][];
+  arrangeMenu?: ShortcutKey[][];
   pinWorkspace?: ShortcutKey[][];
+  toggleDesk?: ShortcutKey[][];
 }
 
 export interface WorkspaceCommandCenterSource {
@@ -124,6 +148,8 @@ export interface WorkspaceCommandCenterSource {
   /** Null on a non-git workspace, or before gitRuntime resolves. Omits Copy branch name. */
   currentBranch: string | null;
   isPinned: boolean;
+  /** Fork mod #12: the workspace is in the Desk set (the sidebar working list). */
+  isOnDesk: boolean;
   /**
    * The host's label catalog, each entry told whether the current workspace carries it. Null
    * before the catalog has loaded — omits the whole group rather than showing it empty.
@@ -494,6 +520,78 @@ function buildPaneContributions(source: WorkspaceCommandCenterSource): CommandCe
       shortcutKeys: source.shortcuts.toggleFocusMode,
       action: { id: "workspace.focus.toggle", scope: "workspace" },
     },
+    {
+      id: "pane:arrange-single",
+      rank: 63,
+      title: source.labels.arrangeOnePane,
+      keywords: ["arrange", "layout", "single", "one", "maximize"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeOnePane,
+      action: { id: "workspace.arrange.single", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-columns2",
+      rank: 64,
+      title: source.labels.arrangeColumns2,
+      keywords: ["arrange", "layout", "columns", "two"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeColumns2,
+      action: { id: "workspace.arrange.columns2", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-columns3",
+      rank: 65,
+      title: source.labels.arrangeColumns3,
+      keywords: ["arrange", "layout", "columns", "three"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeColumns3,
+      action: { id: "workspace.arrange.columns3", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-grid",
+      rank: 66,
+      title: source.labels.arrangeGrid,
+      keywords: ["arrange", "layout", "grid", "tile"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeGrid,
+      action: { id: "workspace.arrange.grid", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-watch",
+      rank: 67,
+      title: source.labels.arrangeWatch,
+      keywords: ["arrange", "layout", "watch", "running", "attention"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeWatch,
+      action: { id: "workspace.arrange.watch", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-restore",
+      rank: 68,
+      title: source.labels.arrangeRestore,
+      keywords: ["arrange", "layout", "restore", "undo"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeRestore,
+      action: { id: "workspace.arrange.restore", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-equalize",
+      rank: 69,
+      title: source.labels.arrangeEqualize,
+      keywords: ["arrange", "layout", "equal", "sizes", "balance"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeEqualize,
+      action: { id: "workspace.arrange.equalize", scope: "workspace" },
+    },
+    {
+      id: "pane:arrange-menu",
+      rank: 70,
+      title: source.labels.arrangeMenu,
+      keywords: ["arrange", "layout", "menu"],
+      icon: source.icons.arrange,
+      shortcutKeys: source.shortcuts.arrangeMenu,
+      action: { id: "workspace.arrange.menu", scope: "workspace" },
+    },
   ];
   return paneActions.map((action) => buildQueryAction(source, action));
 }
@@ -602,6 +700,19 @@ export function buildWorkspaceCommandCenterContributions(
       }),
     );
   }
+  contributions.push(
+    buildWorkspaceAction({
+      source,
+      id: "workspace:desk",
+      rank: 21,
+      title: source.isOnDesk ? source.labels.takeOffDesk : source.labels.putOnDesk,
+      keywords: ["desk", "shelf", "working", "set", "bookmark"],
+      icon: source.isOnDesk ? source.icons.takeOffDesk : source.icons.putOnDesk,
+      shortcutKeys: source.shortcuts.toggleDesk,
+      action: { id: "workspace.desk.toggle", scope: "sidebar" },
+      visibility: "always",
+    }),
+  );
 
   contributions.push(
     buildWorkspaceAction({

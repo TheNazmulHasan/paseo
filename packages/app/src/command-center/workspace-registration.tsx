@@ -4,6 +4,8 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
+  BookmarkMinus,
+  BookmarkPlus,
   Columns2,
   Copy,
   Files,
@@ -12,6 +14,7 @@ import {
   GitCompareArrows,
   GitPullRequest,
   Globe,
+  LayoutGrid,
   ListChecks,
   Move,
   PanelRight,
@@ -25,6 +28,7 @@ import {
   X,
 } from "lucide-react-native";
 import { getIsElectron } from "@/constants/platform";
+import { useDeskStore } from "@/desk/desk-store";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { useWorkspaceBrowserAvailability } from "@/desktop/browser/workspace-browser-availability";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
@@ -82,11 +86,14 @@ const WORKSPACE_COMMAND_CENTER_ICONS = {
   moveTab: getCommandCenterIcon(Move),
   focusMode: getCommandCenterIcon(ArrowDownToLine),
   explorerSidebar: getCommandCenterIcon(PanelRight),
+  arrange: getCommandCenterIcon(LayoutGrid),
   // Workspace management action icons
   copyPath: getCommandCenterIcon(Copy),
   copyBranchName: getCommandCenterIcon(GitBranch),
   pin: getCommandCenterIcon(Pin),
   unpin: getCommandCenterIcon(PinOff),
+  putOnDesk: getCommandCenterIcon(BookmarkPlus),
+  takeOffDesk: getCommandCenterIcon(BookmarkMinus),
   showSetup: getCommandCenterIcon(ListChecks),
   toggleFocusMode: getCommandCenterIcon(Focus),
 };
@@ -200,6 +207,9 @@ export function useWorkspaceCommandCenterActions(): void {
     serverId && fields
       ? buildWorkspaceTabPersistenceKey({ serverId, workspaceId: fields.id })
       : null;
+  const isOnDesk = useDeskStore((state) =>
+    persistenceKey ? state.deskKeys.includes(persistenceKey) : false,
+  );
   const canShowSetup = useWorkspaceSetupStore((state) =>
     shouldShowWorkspaceSetup(persistenceKey ? (state.snapshots[persistenceKey] ?? null) : null),
   );
@@ -275,12 +285,22 @@ export function useWorkspaceCommandCenterActions(): void {
           closePane: t("settings.shortcuts.help.closePane"),
           toggleFocusMode: t("settings.shortcuts.help.toggleFocusMode"),
           toggleExplorerSidebar: t("workspace.tabs.explorerSidebar.toggle"),
+          arrangeOnePane: t("settings.shortcuts.help.arrangeOnePane"),
+          arrangeColumns2: t("settings.shortcuts.help.arrangeColumns2"),
+          arrangeColumns3: t("settings.shortcuts.help.arrangeColumns3"),
+          arrangeGrid: t("settings.shortcuts.help.arrangeGrid"),
+          arrangeWatch: t("settings.shortcuts.help.arrangeWatch"),
+          arrangeRestore: t("settings.shortcuts.help.arrangeRestore"),
+          arrangeEqualize: t("settings.shortcuts.help.arrangeEqualize"),
+          arrangeMenu: t("settings.shortcuts.help.arrangeMenu"),
           // Workspace management labels
           rename: t("sidebar.workspace.actions.rename"),
           copyPath: t("workspace.header.actions.copyPath"),
           copyBranchName: t("workspace.header.actions.copyBranchName"),
           pin: t("sidebar.workspace.actions.pin"),
           unpin: t("sidebar.workspace.actions.unpin"),
+          putOnDesk: t("sidebar.desk.putOn"),
+          takeOffDesk: t("sidebar.desk.takeOff"),
           showSetup: t("workspace.header.actions.showSetup"),
           labelsGroup: t("workspaceLabels.title"),
         },
@@ -301,6 +321,7 @@ export function useWorkspaceCommandCenterActions(): void {
         activeTabCount: focusedTabs.length,
         currentBranch,
         isPinned,
+        isOnDesk,
         labelCatalog,
         dispatch: (action) => {
           clearCommandCenterFocusRestoreElement();
@@ -324,6 +345,7 @@ export function useWorkspaceCommandCenterActions(): void {
       hasWorkspaceBrowser,
       isCompact,
       isGit,
+      isOnDesk,
       isPinned,
       keyboardActionDispatcher,
       labelCatalog,

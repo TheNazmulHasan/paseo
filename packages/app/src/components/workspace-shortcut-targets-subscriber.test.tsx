@@ -7,6 +7,7 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useDeskStore } from "@/desk/desk-store";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { seedRuntimeWorkspaces } from "@/test/seed-session";
@@ -81,6 +82,14 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     useKeyboardShortcutsStore.setState({
       sidebarShortcutWorkspaceTargets: [],
     });
+    // Fork mod #12: an empty Desk and an open Shelf keep the upstream expectations below.
+    useDeskStore.setState({
+      deskKeys: [],
+      seenKeys: [],
+      seenHosts: [],
+      seeded: true,
+      shelfCollapsed: false,
+    });
     useSidebarCollapsedSectionsStore.setState({
       collapsedProjectKeys: new Set(),
     });
@@ -135,6 +144,21 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
       { serverId: "srv", workspaceId: "ws-1" },
+      { serverId: "srv", workspaceId: "ws-2" },
+    ]);
+  });
+
+  it("numbers only Pinned and Desk rows while the Shelf is collapsed", async () => {
+    useDeskStore.setState({ deskKeys: ["srv:ws-2"], shelfCollapsed: true });
+    await act(async () => {
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
+    });
+
+    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
       { serverId: "srv", workspaceId: "ws-2" },
     ]);
   });

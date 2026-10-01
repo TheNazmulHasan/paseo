@@ -55,6 +55,7 @@ import { openHostOverview } from "@/navigation/settings-navigation";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import { ShelfTitle } from "@/desk/shelf-title";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
@@ -827,9 +828,7 @@ function WorkspacesSectionHeader() {
   return (
     <View style={styles.workspacesSectionHeader} onLayout={handleHeaderLayout}>
       <View style={styles.workspacesSectionLeading}>
-        <Text style={styles.workspacesSectionTitle} numberOfLines={1}>
-          Workspaces
-        </Text>
+        <ShelfTitle />
         <SidebarGroupModeControl visible={showGroupMode} />
       </View>
       <View style={styles.workspacesSectionActions}>

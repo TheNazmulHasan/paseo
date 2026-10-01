@@ -68,11 +68,21 @@ function source(gitActions: GitActions): {
         closePane: "Close pane",
         toggleFocusMode: "Toggle focus mode",
         toggleExplorerSidebar: "Toggle Explorer sidebar",
+        arrangeOnePane: "Arrange: one pane",
+        arrangeColumns2: "Arrange: 2 columns",
+        arrangeColumns3: "Arrange: 3 columns",
+        arrangeGrid: "Arrange: grid",
+        arrangeWatch: "Arrange: watch mode",
+        arrangeRestore: "Restore layout",
+        arrangeEqualize: "Equalize pane sizes",
+        arrangeMenu: "Open Arrange menu",
         rename: "Rename workspace",
         copyPath: "Copy workspace path",
         copyBranchName: "Copy branch name",
         pin: "Pin to top",
         unpin: "Unpin",
+        putOnDesk: "Put on Desk",
+        takeOffDesk: "Take off Desk",
         showSetup: "Show setup",
         labelsGroup: "Labels",
       },
@@ -90,6 +100,7 @@ function source(gitActions: GitActions): {
       activeTabCount: 0,
       currentBranch: null,
       isPinned: false,
+      isOnDesk: false,
       labelCatalog: null,
       dispatch: (action) => dispatched.push(action),
       runGitAction: (action) => runGitActions.push(action),
@@ -215,6 +226,35 @@ describe("workspace command center contributions", () => {
     ).toBe(true);
   });
 
+  it("offers the eight arrange commands, dispatched to the workspace scope", () => {
+    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
+    const arrange = contributions.filter((item) => item.id.startsWith("pane:arrange-"));
+
+    expect(arrange.map((item) => item.id)).toEqual([
+      "pane:arrange-single",
+      "pane:arrange-columns2",
+      "pane:arrange-columns3",
+      "pane:arrange-grid",
+      "pane:arrange-watch",
+      "pane:arrange-restore",
+      "pane:arrange-equalize",
+      "pane:arrange-menu",
+    ]);
+    for (const item of arrange) item.run();
+    expect(fixture.dispatched.map((action) => action.id)).toEqual([
+      "workspace.arrange.single",
+      "workspace.arrange.columns2",
+      "workspace.arrange.columns3",
+      "workspace.arrange.grid",
+      "workspace.arrange.watch",
+      "workspace.arrange.restore",
+      "workspace.arrange.equalize",
+      "workspace.arrange.menu",
+    ]);
+    expect(fixture.dispatched.every((action) => action.scope === "workspace")).toBe(true);
+  });
+
   it("keeps workspace creation commands available outside Git", () => {
     const fixture = source({ primary: null, secondary: [], menu: [] });
 
@@ -294,6 +334,25 @@ describe("workspace command center contributions", () => {
         (item) => item.id === "workspace:pin",
       ),
     ).toBe(false);
+  });
+
+  it("flips the Desk label on Desk membership and dispatches the toggle action", () => {
+    const off = source({ primary: null, secondary: [], menu: [] });
+    const putOn = buildWorkspaceCommandCenterContributions(off.value).find(
+      (item) => item.id === "workspace:desk",
+    );
+    expect(putOn?.presentation).toMatchObject({ title: "Put on Desk" });
+    expect(putOn?.visibility).toBe("always");
+    putOn?.run();
+    expect(off.dispatched).toEqual([{ id: "workspace.desk.toggle", scope: "sidebar" }]);
+
+    const on = source({ primary: null, secondary: [], menu: [] });
+    on.value.isOnDesk = true;
+    expect(
+      buildWorkspaceCommandCenterContributions(on.value).find(
+        (item) => item.id === "workspace:desk",
+      )?.presentation,
+    ).toMatchObject({ title: "Take off Desk" });
   });
 
   it("lists Show setup only when the workspace has setup to show", () => {

@@ -75,6 +75,9 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
+import { DeskSection } from "@/desk/desk-section";
+import { useDeskStore } from "@/desk/desk-store";
+import { EMPTY_SHELF } from "@/desk/model";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
@@ -154,6 +157,7 @@ export function SidebarStatusWorkspaceList({
   const togglePinnedCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.togglePinnedCollapsed,
   );
+  const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
   const {
     visibleItems: visiblePinnedWorkspaces,
     expanded: pinnedWorkspacesExpanded,
@@ -229,12 +233,13 @@ export function SidebarStatusWorkspaceList({
           )}
         </View>
       ) : null}
+      <DeskSection onWorkspacePress={onWorkspacePress} />
       {listHeaderComponent}
       {sidebarFilterEmpty ? (
         <SidebarFilterEmptyState />
       ) : (
         <StatusGroupList
-          groups={groups}
+          groups={shelfCollapsed ? EMPTY_SHELF : groups}
           collapsedWorkspaceGroupKeys={collapsedWorkspaceGroupKeys}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
           shortcutIndex={statusShortcutIndex}
@@ -386,7 +391,7 @@ interface StatusRowProjectPresentation {
   projectIconDataUri: string | null;
 }
 
-function buildStatusRowProjectPresentation({
+export function buildStatusRowProjectPresentation({
   workspace,
   projectIconByProjectViewKey,
   hostBadgeByServerId,
@@ -490,7 +495,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusBucket }) {
   }
 }
 
-const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
+export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   workspace,
   hostBadge,
   projectName,

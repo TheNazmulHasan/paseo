@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useArrangeViewportReporter } from "@/arrange/viewport";
 import {
   DndContext,
   DragOverlay,
@@ -450,6 +451,7 @@ export function SplitContainer({
     () => [styles.explorerSidebarDock, { width: explorerSidebarWidth }],
     [explorerSidebarWidth],
   );
+  const handleArrangeViewportLayout = useArrangeViewportReporter(workspaceKey);
   const handleWorkspaceShellLayout = useCallback((event: LayoutChangeEvent) => {
     const nextWidth = event.nativeEvent.layout.width;
     setWorkspaceShellWidth((current) => (current === nextWidth ? current : nextWidth));
@@ -655,7 +657,7 @@ export function SplitContainer({
       >
         <View style={styles.workspaceShell} onLayout={handleWorkspaceShellLayout}>
           <WindowChromeRegion corners={mainColumnWindowChromeCorners}>
-            <View style={mainColumnStyle}>
+            <View style={mainColumnStyle} onLayout={handleArrangeViewportLayout}>
               {renderMainHeader?.()}
               {splitRoot.usesFallbackStrip && <WindowChromeSafeArea placement="below" />}
               {renderRoot ? (

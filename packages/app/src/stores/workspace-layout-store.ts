@@ -167,6 +167,12 @@ interface WorkspaceLayoutStore {
   unfocusPane: (workspaceKey: string) => string | null;
   restorePaneFocus: (workspaceKey: string, token: string) => void;
   resizeSplit: (workspaceKey: string, groupId: string, sizes: number[]) => void;
+  /** Arrange: swaps one workspace's whole layout and split-size overrides in a single update. */
+  applyArrangedLayout: (
+    workspaceKey: string,
+    layout: WorkspaceLayout,
+    splitSizes: Record<string, number[]>,
+  ) => void;
   resizeExplorerSidebar: (workspaceKey: string, width: number) => void;
   reorderTabsInPane: (workspaceKey: string, paneId: string, tabIds: string[]) => void;
   unpinAgent: (workspaceKey: string, agentId: string) => void;
@@ -1527,6 +1533,25 @@ export function createWorkspaceLayoutStore(
               },
             },
           }));
+        },
+        applyArrangedLayout: (workspaceKey, layout, splitSizes) => {
+          set((state) => {
+            const explorerId = resolveExplorerSidebarPaneId(
+              layout,
+              state.explorerSidebarPaneIdByWorkspace[workspaceKey],
+            );
+            return {
+              ...withoutFocusRestoration(state, workspaceKey),
+              layoutByWorkspace: {
+                ...state.layoutByWorkspace,
+                [workspaceKey]: keepWorkspaceFocusOutOfExplorerSidebar(
+                  restoreWorkspaceLayout(layout, explorerId, ids.createNodeId),
+                  explorerId,
+                ),
+              },
+              splitSizesByWorkspace: { ...state.splitSizesByWorkspace, [workspaceKey]: splitSizes },
+            };
+          });
         },
         resizeExplorerSidebar: (workspaceKey, width) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);

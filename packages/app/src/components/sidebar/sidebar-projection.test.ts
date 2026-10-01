@@ -174,3 +174,72 @@ describe("buildSidebarProjection", () => {
     ]);
   });
 });
+
+function workspaceIds(rows: readonly { workspaceId: string }[]): string[] {
+  return rows.map((row) => row.workspaceId);
+}
+
+describe("buildSidebarProjection — Desk and Shelf", () => {
+  function deskInput(groupMode: "project" | "status", deskKeys: string[]) {
+    const pinned = makeWorkspace("pinned", "running");
+    const onDesk = makeWorkspace("on-desk", "needs_input");
+    const onShelf = makeWorkspace("on-shelf", "done");
+    return {
+      ...projectionInput({ groupMode }),
+      projects: [makeProject([pinned.placement, onShelf.placement, onDesk.placement])],
+      workspaceEntriesByKey: new Map([
+        [pinned.entry.workspaceKey, pinned.entry],
+        [onDesk.entry.workspaceKey, onDesk.entry],
+        [onShelf.entry.workspaceKey, onShelf.entry],
+      ]),
+      deskKeys: new Set(deskKeys),
+    };
+  }
+
+  for (const groupMode of ["project", "status"] as const) {
+    it(`moves Desk workspaces out of the ${groupMode} Shelf and numbers them after Pinned`, () => {
+      const projection = buildSidebarProjection(deskInput(groupMode, ["srv:on-desk"]));
+
+      expect(workspaceIds(projection.deskGroups.flatMap((group) => group.rows))).toEqual([
+        "on-desk",
+      ]);
+      const shelfIds =
+        groupMode === "project"
+          ? workspaceIds(projection.pinnedGroups.unpinnedProjects.flatMap((p) => p.workspaces))
+          : workspaceIds(projection.workspaceGroups.flatMap((group) => group.rows));
+      expect(shelfIds).toEqual(["on-shelf"]);
+      expect(projection.shelfCount).toBe(1);
+      expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+        "pinned",
+        "on-desk",
+        "on-shelf",
+      ]);
+    });
+  }
+
+  it("keeps a pinned workspace out of the Desk even when it is marked", () => {
+    const projection = buildSidebarProjection(deskInput("project", ["srv:pinned"]));
+
+    expect(projection.deskGroups).toEqual([]);
+    expect(projection.pinnedGroups.pinnedChats.map((w) => w.workspaceId)).toEqual(["pinned"]);
+  });
+
+  it("does not number a folded Shelf, only Pinned and Desk", () => {
+    const projection = buildSidebarProjection({
+      ...deskInput("status", ["srv:on-desk"]),
+      shelfCollapsed: true,
+    });
+
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-desk",
+    ]);
+  });
+
+  it("is the old projection when the Desk is empty", () => {
+    const projection = buildSidebarProjection(deskInput("project", []));
+
+    expect(projection.deskGroups).toEqual([]);
+    expect(projection.shelfCount).toBe(2);
+  });
+});

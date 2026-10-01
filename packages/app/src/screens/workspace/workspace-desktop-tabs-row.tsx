@@ -19,6 +19,7 @@ import {
   RotateCw,
   Columns2,
   Rows2,
+  Check,
   Ellipsis,
   Maximize,
   Minimize,
@@ -56,6 +57,14 @@ import {
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { orderedWorkspaceTabIds, type SelectionGesture } from "@/arrange/selection-helpers";
+import { useArrangeSelectionStore } from "@/arrange/selection-store";
+import {
+  useArrangeSelectionLifecycle,
+  useSelectionPointerGesture,
+} from "@/arrange/use-selection-gestures";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import {
   buildWorkspaceDesktopTabActions,
   type WorkspaceDesktopTabActions,
@@ -128,9 +137,13 @@ const ThemedRows2 = withUnistyles(Rows2);
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedMaximize = withUnistyles(Maximize);
 const ThemedMinimize = withUnistyles(Minimize);
+const ThemedCheck = withUnistyles(Check);
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const extraMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground ?? theme.colors.foreground,
+});
 
 function updateMeasuredWidth(
   setWidth: React.Dispatch<React.SetStateAction<number>>,
@@ -714,6 +727,7 @@ function TabHandleContent({
 
 function TabChip({
   serverId,
+  workspaceKey,
   tab,
   isActive,
   isDragging,
@@ -733,6 +747,8 @@ function TabChip({
   dragHandleProps,
 }: {
   serverId: string;
+  /** Arrange selection scope; null when the workspace has no persistence key. */
+  workspaceKey: string | null;
   tab: WorkspaceTabDescriptor;
   isActive: boolean;
   isDragging: boolean;
@@ -758,6 +774,39 @@ function TabChip({
   );
   const isCompact = useIsCompactFormFactor();
   const [hovered, setHovered] = useState(false);
+  const isSelected = useArrangeSelectionStore((state) =>
+    workspaceKey ? state.byWorkspace[workspaceKey]?.tabIds.includes(tab.tabId) === true : false,
+  );
+  const handleSelectionGesture = useCallback(
+    (gesture: SelectionGesture) => {
+      if (!workspaceKey) {
+        return;
+      }
+      const selection = useArrangeSelectionStore.getState();
+      if (gesture === "toggle") {
+        selection.toggleTab(workspaceKey, tab.tabId);
+        return;
+      }
+      const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
+      selection.selectTabRange(
+        workspaceKey,
+        layout ? orderedWorkspaceTabIds(layout) : [tab.tabId],
+        tab.tabId,
+      );
+    },
+    [tab.tabId, workspaceKey],
+  );
+  // A modifier-click on the close button should still just close.
+  const shouldIgnoreSelectionTarget = useCallback(
+    (target: EventTarget | null) =>
+      target instanceof Element && target.closest(`[data-testid="${closeButtonTestId}"]`) !== null,
+    [closeButtonTestId],
+  );
+  useSelectionPointerGesture(middleClickRef, {
+    allowRange: true,
+    shouldIgnoreTarget: shouldIgnoreSelectionTarget,
+    onGesture: handleSelectionGesture,
+  });
   // An active tab in a pane that does not have focus stays legible but quiet: it keeps the fill of
   // a hovered chip and the muted label, so only one chip in the window reads as the live one.
   const isActiveFocused = isActive && isFocused;
@@ -785,6 +834,7 @@ function TabChip({
       isActiveFocused && styles.tabActive,
       isActive && !isFocused && styles.tabActiveUnfocused,
       !isActive && isHovered && styles.tabHovered,
+      isSelected && styles.tabSelected,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -792,7 +842,7 @@ function TabChip({
         maxWidth: resolvedTabWidth,
       },
     ],
-    [isActive, isActiveFocused, isDragging, isFocused, isHovered, resolvedTabWidth],
+    [isActive, isActiveFocused, isDragging, isFocused, isHovered, isSelected, resolvedTabWidth],
   );
 
   const handleTabPointerEnter = useCallback(() => {
@@ -942,6 +992,15 @@ function TabChip({
           )}
         </ContextMenuContent>
       </ContextMenu>
+      {isSelected ? (
+        <View
+          pointerEvents="none"
+          style={styles.tabSelectedBadge}
+          testID={`workspace-tab-selected-${testIdentity}`}
+        >
+          <ThemedCheck size={9} strokeWidth={3} uniProps={accentForegroundColorMapping} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1038,6 +1097,20 @@ function ResolvedWorkspaceDesktopTabsRow({
   onExitFocusMode,
 }: ResolvedWorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
+  const arrangeWorkspaceKey = buildWorkspaceTabPersistenceKey({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+  });
+  useArrangeSelectionLifecycle({
+    workspaceKey: arrangeWorkspaceKey,
+    handlerId: buildWorkspaceKeyboardHandlerId({
+      name: "workspace-arrange-selection-escape",
+      serverId: normalizedServerId,
+      workspaceId: normalizedWorkspaceId,
+      paneId,
+    }),
+    enabled: isFocused,
+  });
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const [exitFocusModeWidth, setExitFocusModeWidth] = useState<number>(0);
@@ -1266,6 +1339,7 @@ function ResolvedWorkspaceDesktopTabsRow({
         <ResolvedDesktopTabChip
           key={`${item.tab.key}:${item.tab.kind}`}
           serverId={normalizedServerId}
+          workspaceKey={arrangeWorkspaceKey}
           item={item}
           isFocused={isFocused}
           isDragging={isActive}
@@ -1295,6 +1369,7 @@ function ResolvedWorkspaceDesktopTabsRow({
     },
     [
       activeDragTabId,
+      arrangeWorkspaceKey,
       isFocused,
       layout.closeButtonPolicy,
       layout.items,
@@ -1413,6 +1488,7 @@ function ResolvedWorkspaceDesktopTabsRow({
 }
 function ResolvedDesktopTabChip({
   serverId,
+  workspaceKey,
   item,
   isFocused,
   isDragging,
@@ -1439,6 +1515,7 @@ function ResolvedDesktopTabChip({
   showDropIndicatorAfter,
 }: {
   serverId: string;
+  workspaceKey: string | null;
   item: ResolvedWorkspaceDesktopTabRowItem;
   isFocused: boolean;
   isDragging: boolean;
@@ -1520,6 +1597,7 @@ function ResolvedDesktopTabChip({
       ) : null}
       <TabChip
         serverId={serverId}
+        workspaceKey={workspaceKey}
         tab={item.tab}
         isActive={item.isActive}
         isDragging={isDragging}
@@ -1613,6 +1691,22 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabActiveUnfocused: {
     backgroundColor: theme.colors.surface1,
+  },
+  tabSelected: {
+    backgroundColor: theme.colors.surface2,
+  },
+  // Corner badge on the chip, always visible: the selection must read without hovering.
+  tabSelectedBadge: {
+    position: "absolute",
+    top: 1,
+    left: 1,
+    width: 12,
+    height: 12,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
   },
   tabHoverFrame: {
     position: "relative",
