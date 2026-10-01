@@ -437,6 +437,9 @@ export const ru: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "Недавние рабочие пространства",
+    },
     tabSwitcher: {
       title: "Недавние вкладки",
     },
@@ -2437,6 +2440,7 @@ export const ru: TranslationResources = {
         toggleFocusMode: "Переключить режим фокусировки",
         cycleTheme: "Переключить тему",
         switchRecentTabs: "Переключение недавних вкладок",
+        switchRecentWorkspaces: "Переключение недавних рабочих пространств",
         focusMessageInput: "Перейти к полю ввода сообщения",
         cycleAgentMode: "Переключить режим агента",
         toggleVoiceMode: "Переключить голосовой режим",

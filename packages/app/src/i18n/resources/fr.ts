@@ -439,6 +439,9 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "Espaces de travail récents",
+    },
     tabSwitcher: {
       title: "Onglets récents",
     },
@@ -2452,6 +2455,7 @@ export const fr: TranslationResources = {
         toggleFocusMode: "Basculer le mode de mise au point",
         cycleTheme: "Thème du cycle",
         switchRecentTabs: "Changer d'onglet récent",
+        switchRecentWorkspaces: "Changer d'espace de travail récent",
         focusMessageInput: "Saisie du message de focus",
         cycleAgentMode: "Parcourir les modes de l'agent",
         toggleVoiceMode: "Changer le mode vocal",

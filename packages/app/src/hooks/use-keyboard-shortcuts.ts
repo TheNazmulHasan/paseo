@@ -21,6 +21,7 @@ import {
 } from "@/desktop/browser/shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
 import { cycleTabSwitcher } from "@/tab-switcher/controller";
+import { cycleWorkspaceSwitcher } from "@/workspace-switcher/controller";
 import {
   routeKeyboardShortcut,
   type ShortcutAction,
@@ -218,6 +219,8 @@ export function useKeyboardShortcuts({
         return true;
       case "tab-switcher-cycle":
         return cycleTabSwitcher(action.delta);
+      case "workspace-switcher-cycle":
+        return cycleWorkspaceSwitcher(action.delta);
     }
   };
 

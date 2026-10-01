@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const navigateToAgent = vi.fn();
+const { navigateToAgent, navigateToWorkspace } = vi.hoisted(() => ({
+  navigateToAgent: vi.fn(),
+  navigateToWorkspace: vi.fn(),
+}));
 vi.mock("@/utils/navigate-to-agent", () => ({
   navigateToAgent: (input: unknown) => navigateToAgent(input),
+}));
+vi.mock("@/stores/navigation-active-workspace-store", () => ({
+  navigateToWorkspace: (input: unknown) => navigateToWorkspace(input),
 }));
 
 import {

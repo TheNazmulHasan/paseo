@@ -164,6 +164,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   workspaces: [
     "new-agent",
     "new-workspace",
+    "workspace-switcher-recent",
     "workspace-jump-index",
     "workspace-prev",
     "workspace-next",
@@ -244,6 +245,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "toggle-focus": "settings.shortcuts.help.toggleFocusMode",
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
+  "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
@@ -739,6 +741,32 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     combo: "Ctrl+Shift+Tab",
     when: { commandCenter: false },
     payload: { type: "delta", delta: -1 },
+    preventDefault: true,
+  },
+
+  // --- Recent workspace switcher ---
+  // Hyper is Caps Lock -> Cmd+Ctrl+Alt+Shift on Nazmul's Mac. J is deliberately
+  // unused in the machine keymap, and this exact chord is absent from Paseo's
+  // shipped bindings, so the workspace switcher cannot steal another action.
+  {
+    id: "workspace-switcher-cycle-hyper-j-mac",
+    action: "workspace.switcher.cycle",
+    combo: "Cmd+Ctrl+Alt+Shift+J",
+    when: { mac: true, desktop: true, commandCenter: false },
+    payload: { type: "delta", delta: 1 },
+    preventDefault: true,
+    help: {
+      id: "workspace-switcher-recent",
+      section: "workspaces",
+      label: "Switch recent workspaces",
+    },
+  },
+  {
+    id: "workspace-switcher-cycle-ctrl-alt-shift-j-non-mac",
+    action: "workspace.switcher.cycle",
+    combo: "Ctrl+Alt+Shift+J",
+    when: { mac: false, desktop: true, commandCenter: false, terminal: false },
+    payload: { type: "delta", delta: 1 },
     preventDefault: true,
   },
 

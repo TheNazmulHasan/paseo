@@ -438,6 +438,9 @@ export const es: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "Espacios de trabajo recientes",
+    },
     tabSwitcher: {
       title: "Pestañas recientes",
     },
@@ -2448,6 +2451,7 @@ export const es: TranslationResources = {
         toggleFocusMode: "Alternar modo de enfoque",
         cycleTheme: "Tema del ciclo",
         switchRecentTabs: "Cambiar entre pestañas recientes",
+        switchRecentWorkspaces: "Cambiar entre espacios de trabajo recientes",
         focusMessageInput: "Entrada de mensaje de enfoque",
         cycleAgentMode: "Alternar modo del agente",
         toggleVoiceMode: "Alternar modo de voz",

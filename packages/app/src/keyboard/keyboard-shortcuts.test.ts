@@ -104,6 +104,24 @@ function expectNoShortcutResolution(input: {
   expect(result.nextChordState).toEqual(initialChordState());
 }
 
+describe("workspace switcher shortcut isolation", () => {
+  it("maps Hyper+J only to the workspace switcher on mac desktop", () => {
+    expectShortcutResolution({
+      event: {
+        key: "j",
+        code: "KeyJ",
+        metaKey: true,
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+      },
+      context: { isMac: true, isDesktop: true },
+      action: "workspace.switcher.cycle",
+      payload: { delta: 1 },
+    });
+  });
+});
+
 interface MatchingShortcutCase {
   name: string;
   event: Partial<KeyboardShortcutInput>;

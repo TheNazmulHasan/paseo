@@ -438,6 +438,9 @@ export const ja: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "最近のワークスペース",
+    },
     tabSwitcher: {
       title: "最近のタブ",
     },
@@ -2417,6 +2420,7 @@ export const ja: TranslationResources = {
         toggleFocusMode: "フォーカスモードを切り替え",
         cycleTheme: "テーマを順に切り替え",
         switchRecentTabs: "最近のタブを切り替え",
+        switchRecentWorkspaces: "最近のワークスペースを切り替え",
         focusMessageInput: "メッセージ入力にフォーカス",
         cycleAgentMode: "エージェントモードを順に切り替え",
         toggleVoiceMode: "音声モードを切り替え",
