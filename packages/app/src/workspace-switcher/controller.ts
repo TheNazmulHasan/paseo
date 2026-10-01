@@ -1,9 +1,10 @@
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { useTabSwitcherStore } from "@/tab-switcher/tab-switcher-store";
+import { cancelTabSwitcher } from "@/tab-switcher/controller";
 import {
   WORKSPACE_SWITCHER_FALLBACK_COMMIT_MS,
   WORKSPACE_SWITCHER_MODIFIER_GRACE_MS,
   WORKSPACE_SWITCHER_REVEAL_DELAY_MS,
+  workspaceVisitKey,
 } from "@/workspace-switcher/model";
 import {
   getSelectedWorkspaceSwitcherCandidate,
@@ -38,10 +39,13 @@ function clearTimers(): void {
 }
 
 export function cycleWorkspaceSwitcher(delta: number): boolean {
-  useTabSwitcherStore.getState().close();
+  // Cancel, not just close: the other switcher's pending timers must not fire later.
+  cancelTabSwitcher();
   const wasOpen = useWorkspaceSwitcherStore.getState().open;
   const cycled = useWorkspaceSwitcherStore.getState().cycle(delta);
-  if (!cycled) return false;
+  if (!cycled) {
+    return false;
+  }
   clearTimers();
   pointerMoved = false;
   if (!wasOpen) {
@@ -64,12 +68,16 @@ export function handleWorkspaceSwitcherKeyEvent(input: {
   key: string;
   modifiersHeld: boolean;
 }): void {
-  if (!useWorkspaceSwitcherStore.getState().open) return;
+  if (!useWorkspaceSwitcherStore.getState().open) {
+    return;
+  }
   if (input.modifiersHeld) {
     clearGraceTimer();
     return;
   }
-  if (input.type !== "keyup") return;
+  if (input.type !== "keyup") {
+    return;
+  }
   if (MODIFIER_KEYS.has(input.key)) {
     releaseCommitProven = true;
     commitWorkspaceSwitcher();
@@ -91,7 +99,9 @@ export function isWorkspaceSwitcherPointerSelectionAllowed(): boolean {
 }
 
 export function selectWorkspaceSwitcherIndex(index: number): void {
-  if (!useWorkspaceSwitcherStore.getState().open) return;
+  if (!useWorkspaceSwitcherStore.getState().open) {
+    return;
+  }
   useWorkspaceSwitcherStore.getState().select(index);
   useWorkspaceSwitcherStore.getState().reveal();
 }
@@ -100,10 +110,15 @@ export function commitWorkspaceSwitcher(): void {
   clearTimers();
   pointerMoved = false;
   const store = useWorkspaceSwitcherStore.getState();
-  if (!store.open) return;
+  if (!store.open) {
+    return;
+  }
   const candidate = getSelectedWorkspaceSwitcherCandidate();
   store.close();
-  if (!candidate) return;
+  // The list is frozen while open, so the target may have been archived meanwhile.
+  if (!candidate || !store.liveKeys.has(workspaceVisitKey(candidate))) {
+    return;
+  }
   navigateToWorkspace({ serverId: candidate.serverId, workspaceId: candidate.workspaceId });
 }
 

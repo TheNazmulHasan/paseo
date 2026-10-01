@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { z } from "zod";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import {
+  pruneWorkspaceHistory,
   recordWorkspaceVisit,
   WORKSPACE_SWITCHER_HISTORY_LIMIT,
   type WorkspaceSwitcherVisit,
@@ -12,7 +13,8 @@ import {
 interface WorkspaceSwitcherMruStoreState {
   history: readonly WorkspaceSwitcherVisit[];
   visit: (input: Omit<WorkspaceSwitcherVisit, "at">) => void;
-  setHistory: (history: readonly WorkspaceSwitcherVisit[]) => void;
+  /** Drop visits to workspaces that no longer exist, so archived ones stop filling the history. */
+  prune: (liveKeys: ReadonlySet<string>, keepKey: string | null) => void;
 }
 
 const WorkspaceSwitcherPersistedStateSchema = z.strictObject({
@@ -31,7 +33,9 @@ export function migrateWorkspaceSwitcherState(persisted: unknown): {
   history: WorkspaceSwitcherVisit[];
 } {
   const parsed = WorkspaceSwitcherPersistedStateSchema.safeParse(persisted);
-  if (!parsed.success) return { history: [] };
+  if (!parsed.success) {
+    return { history: [] };
+  }
   return { history: (parsed.data.history ?? []).slice(0, WORKSPACE_SWITCHER_HISTORY_LIMIT) };
 }
 
@@ -41,9 +45,16 @@ export const useWorkspaceSwitcherMruStore = create<WorkspaceSwitcherMruStoreStat
       history: [],
       visit: (input) => {
         const next = recordWorkspaceVisit(get().history, { ...input, at: Date.now() });
-        if (next !== get().history) set({ history: next });
+        if (next !== get().history) {
+          set({ history: next });
+        }
       },
-      setHistory: (history) => set({ history: history.slice(0, WORKSPACE_SWITCHER_HISTORY_LIMIT) }),
+      prune: (liveKeys, keepKey) => {
+        const next = pruneWorkspaceHistory(get().history, liveKeys, keepKey);
+        if (next !== get().history) {
+          set({ history: next });
+        }
+      },
     }),
     {
       name: "paseo-workspace-switcher-mru",

@@ -18,6 +18,8 @@ import {
   noteTabSwitcherPointerMoved,
   resetTabSwitcherReleaseLearningForTests,
 } from "@/tab-switcher/controller";
+import { cycleWorkspaceSwitcher } from "@/workspace-switcher/controller";
+import { useWorkspaceSwitcherStore } from "@/workspace-switcher/workspace-switcher-store";
 import { TAB_SWITCHER_MODIFIER_GRACE_MS } from "@/tab-switcher/model";
 import { useTabSwitcherStore, type TabSwitcherCandidate } from "@/tab-switcher/tab-switcher-store";
 
@@ -101,6 +103,35 @@ describe("tab switcher hold-vs-tap", () => {
     vi.advanceTimersByTime(TAB_SWITCHER_MODIFIER_GRACE_MS);
     expect(useTabSwitcherStore.getState().open).toBe(false);
     expect(navigateToAgent).toHaveBeenCalledWith({ serverId: "srv", agentId: "b" });
+  });
+
+  it("cancels the workspace switcher's pending timers when opening", () => {
+    const row = (workspaceId: string) => ({
+      serverId: "srv",
+      workspaceId,
+      at: 1,
+      title: workspaceId,
+      status: null,
+      requiresAttention: false,
+      iconDataUri: null,
+      projectInitial: workspaceId.slice(0, 1),
+      projectViewKey: "project",
+    });
+    useWorkspaceSwitcherStore.setState({
+      open: false,
+      visible: false,
+      selectedIndex: 0,
+      candidates: [row("a"), row("b")],
+      currentKey: "srv:a",
+      liveKeys: new Set(["srv:a", "srv:b"]),
+    });
+    cycleWorkspaceSwitcher(1);
+    expect(useWorkspaceSwitcherStore.getState().open).toBe(true);
+    expect(vi.getTimerCount()).toBe(2);
+    openSwitcher();
+    expect(useWorkspaceSwitcherStore.getState().open).toBe(false);
+    // Only the tab switcher's own reveal + fallback timers remain.
+    expect(vi.getTimerCount()).toBe(2);
   });
 
   it("does not paint the overlay for a tap-and-release switch", () => {

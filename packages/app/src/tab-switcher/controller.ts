@@ -9,7 +9,7 @@ import {
   getSelectedTabSwitcherCandidate,
   useTabSwitcherStore,
 } from "@/tab-switcher/tab-switcher-store";
-import { useWorkspaceSwitcherStore } from "@/workspace-switcher/workspace-switcher-store";
+import { cancelWorkspaceSwitcher } from "@/workspace-switcher/controller";
 
 // The switcher is release-driven, like every Alt+Tab that has ever felt right:
 // the selection lands when the held modifier goes up. Tap and let go and the
@@ -66,7 +66,8 @@ function clearTimers(): void {
 
 /** Open the switcher, or step it by `delta` when already open. */
 export function cycleTabSwitcher(delta: number): boolean {
-  useWorkspaceSwitcherStore.getState().close();
+  // Cancel, not just close: the other switcher's pending timers must not fire later.
+  cancelWorkspaceSwitcher();
   const wasOpen = useTabSwitcherStore.getState().open;
   const cycled = useTabSwitcherStore.getState().cycle(delta);
   if (!cycled) {

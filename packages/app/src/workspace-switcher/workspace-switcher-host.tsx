@@ -98,6 +98,7 @@ function useWorkspaceCandidateSync(): void {
   const selection = useActiveWorkspaceSelection();
   const history = useWorkspaceSwitcherMruStore((state) => state.history);
   const setCandidates = useWorkspaceSwitcherStore((state) => state.setCandidates);
+  const pruneHistory = useWorkspaceSwitcherMruStore((state) => state.prune);
   const { workspacePlacements } = useSidebarWorkspacesList({ enabled: true });
   const { projects } = useProjects({ enabled: true });
   const { agents } = useAggregatedAgents({ demand: false });
@@ -137,6 +138,12 @@ function useWorkspaceCandidateSync(): void {
   );
   const iconDataByProjectViewKey = useProjectIcons({ projects: iconTargets });
 
+  const activeKey = selection ? workspaceVisitKey(selection) : null;
+  const liveKeys = useMemo(
+    () => new Set(workspacePlacements.map((workspace) => workspace.workspaceKey)),
+    [workspacePlacements],
+  );
+
   const candidates = useMemo<WorkspaceSwitcherCandidate[]>(() => {
     const liveAgents = agents.filter((agent) => !agent.archivedAt);
     const agentByKey = new Map(
@@ -146,7 +153,6 @@ function useWorkspaceCandidateSync(): void {
     const placementByKey = new Map(
       workspacePlacements.map((workspace) => [workspace.workspaceKey, workspace] as const),
     );
-    const activeKey = selection ? workspaceVisitKey(selection) : null;
     const validHistoryKeys = history
       .map((visit) => workspaceVisitKey(visit))
       .filter((key) => placementByKey.has(key) && key !== activeKey);
@@ -161,7 +167,9 @@ function useWorkspaceCandidateSync(): void {
     const rows: WorkspaceSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
       const workspace = placementByKey.get(key);
-      if (!workspace) continue;
+      if (!workspace) {
+        continue;
+      }
       const project = projectByWorkspaceKey.get(key) ?? {
         viewKey: workspace.projectViewKey,
         initial: projectIconPlaceholderLabelFromDisplayName(workspace.projectName),
@@ -180,19 +188,24 @@ function useWorkspaceCandidateSync(): void {
     }
     return rows;
   }, [
+    activeKey,
     agents,
     history,
     iconDataByProjectViewKey,
     layoutByWorkspace,
     projectByWorkspaceKey,
-    selection,
     workspacePlacements,
     workspaceTitleByKey,
   ]);
 
   useEffect(() => {
-    setCandidates(candidates);
-  }, [candidates, setCandidates]);
+    setCandidates(candidates, activeKey, liveKeys);
+  }, [activeKey, candidates, liveKeys, setCandidates]);
+
+  // The workspace just opened may not be in the placements yet; never prune it.
+  useEffect(() => {
+    pruneHistory(liveKeys, activeKey);
+  }, [activeKey, liveKeys, pruneHistory]);
 }
 
 function WorkspaceSwitcherOverlay() {
@@ -203,7 +216,9 @@ function WorkspaceSwitcherOverlay() {
   const selectedIndex = useWorkspaceSwitcherStore((state) => state.selectedIndex);
   useOverlayKeys(open);
 
-  if (!open || !visible || candidates.length === 0) return null;
+  if (!open || !visible || candidates.length === 0) {
+    return null;
+  }
   return (
     <View style={styles.backdrop} pointerEvents="box-none">
       <View style={styles.panel}>
@@ -233,7 +248,9 @@ function WorkspaceSwitcherRow({
   selected: boolean;
 }) {
   const onHoverIn = useCallback(() => {
-    if (isWorkspaceSwitcherPointerSelectionAllowed()) selectWorkspaceSwitcherIndex(index);
+    if (isWorkspaceSwitcherPointerSelectionAllowed()) {
+      selectWorkspaceSwitcherIndex(index);
+    }
   }, [index]);
   const onPress = useCallback(() => {
     selectWorkspaceSwitcherIndex(index);
@@ -267,11 +284,15 @@ function useOverlayKeys(open: boolean): void {
   const openRef = useRef(open);
   openRef.current = open;
   useEffect(() => {
-    if (!isWeb || !open || typeof document === "undefined") return;
+    if (!isWeb || !open || typeof document === "undefined") {
+      return;
+    }
     const modifiersHeld = (event: KeyboardEvent) =>
       event.ctrlKey || event.altKey || event.metaKey || event.shiftKey;
     const onKeyUp = (event: KeyboardEvent) => {
-      if (!openRef.current) return;
+      if (!openRef.current) {
+        return;
+      }
       handleWorkspaceSwitcherKeyEvent({
         type: "keyup",
         key: event.key,
@@ -279,7 +300,9 @@ function useOverlayKeys(open: boolean): void {
       });
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!openRef.current) return;
+      if (!openRef.current) {
+        return;
+      }
       handleWorkspaceSwitcherKeyEvent({
         type: "keydown",
         key: event.key,
