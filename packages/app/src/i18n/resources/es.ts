@@ -471,7 +471,7 @@ export const es: TranslationResources = {
       refresh: "Actualizar la vista en vivo",
       paneEmpty: "No hay sesiones en este panel",
       emptyHint:
-        "Aún no hay sesiones. Abre agentes en estos espacios de trabajo o pulsa Ctrl+Cmd+V para dividir espacios de trabajo.",
+        "Aún no hay sesiones. Abre agentes en estos espacios de trabajo o pulsa Ctrl+Cmd+O para dividir espacios de trabajo.",
       notFound: "Esta vista ya no existe",
     },
   },

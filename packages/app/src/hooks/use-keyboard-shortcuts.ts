@@ -31,6 +31,7 @@ import {
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useKeybindingsFileSync } from "@/hooks/use-keybindings-file-sync";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
@@ -78,6 +79,7 @@ export function useKeyboardShortcuts({
   const pathname = usePathname();
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
+  useKeybindingsFileSync();
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
   const isDesktopApp = getIsElectronRuntime();

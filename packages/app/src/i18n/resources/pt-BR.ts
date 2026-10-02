@@ -470,7 +470,7 @@ export const ptBR: TranslationResources = {
       refresh: "Atualizar visualização ao vivo",
       paneEmpty: "Nenhuma sessão neste painel",
       emptyHint:
-        "Ainda não há sessões. Abra agentes nestes espaços de trabalho ou pressione Ctrl+Cmd+V para dividir espaços de trabalho.",
+        "Ainda não há sessões. Abra agentes nestes espaços de trabalho ou pressione Ctrl+Cmd+O para dividir espaços de trabalho.",
       notFound: "Esta visualização não existe mais",
     },
   },

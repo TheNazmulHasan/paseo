@@ -18,6 +18,7 @@ import {
   findBoardTabId,
   focusBoardPaneModel,
   moveBoardTab,
+  openFileBesideModel,
   rebuildLiveBoard,
   removeTabFromBoard,
   resizeBoardSplitModel,
@@ -26,7 +27,13 @@ import {
   type BoardSplitGroup,
   type BoardSplitLayout,
 } from "@/boards/model";
-import { LIVE_BOARD_ID, type Board, type BoardSessionRef, type BoardSummary } from "@/boards/types";
+import {
+  LIVE_BOARD_ID,
+  type Board,
+  type BoardSessionRef,
+  type BoardSummary,
+  type BoardTabOrigin,
+} from "@/boards/types";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
   collectAllTabs,
@@ -38,6 +45,7 @@ import { isWorkspaceRootAgent } from "@/subagents/policies";
 import { isSidebarActiveAgent } from "@/utils/sidebar-agent-state";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import type { WorkspaceFileLocation } from "@/workspace/file-open";
 
 /** A burst of agents starting together should produce one re-arrange, not one each. */
 const LIVE_SYNC_DEBOUNCE_MS = 300;
@@ -152,6 +160,36 @@ export function selectBoardTab(boardId: string, paneId: string, tabId: string): 
 
 export function moveBoardTabToPane(boardId: string, tabId: string, toPaneId: string): void {
   updateBoard(boardId, (board) => moveBoardTab(board, tabId, toPaneId));
+}
+
+/**
+ * Opens a file as a tab in a files pane right of `sourcePaneId`, for the workspace in `origin`
+ * (see openFileBesideModel). False when it could not be placed, so the caller can navigate instead.
+ */
+export function openFileBeside(
+  boardId: string,
+  sourcePaneId: string,
+  origin: Pick<BoardTabOrigin, "serverId" | "workspaceId">,
+  fileTarget: WorkspaceFileLocation,
+): boolean {
+  const board = readBoard(boardId);
+  if (!board) {
+    return false;
+  }
+  const opened = openFileBesideModel(board, { sourcePaneId, origin, location: fileTarget });
+  if (!opened) {
+    return false;
+  }
+  if (opened.board !== board) {
+    boardStore().putBoard(opened.board);
+  }
+  return true;
+}
+
+export function setBoardExplorerOpen(boardId: string, open: boolean): void {
+  updateBoard(boardId, (board) =>
+    Boolean(board.explorerOpen) === open ? board : { ...board, explorerOpen: open },
+  );
 }
 
 export function resizeBoardSplit(boardId: string, groupId: string, sizes: number[]): void {

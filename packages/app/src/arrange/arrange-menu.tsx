@@ -166,7 +166,7 @@ function useArrangeMenuHotkeys(input: {
   }, [open, onCommand]);
 }
 
-/** Fork mod #13 (Boards): the same split picker as Ctrl+Cmd+V. */
+/** Fork mod #13 (Boards): the same split picker as Ctrl+Cmd+O. */
 function SplitWorkspacesItem() {
   const { t } = useTranslation();
   const chord = useShortcutKeys("workspace-board-split");

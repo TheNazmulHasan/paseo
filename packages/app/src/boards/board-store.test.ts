@@ -99,6 +99,18 @@ describe("parseBoardPersistedState", () => {
     ]);
   });
 
+  it("keeps the optional explorerOpen flag and still accepts boards without it", () => {
+    const parsed = parseBoardPersistedState({
+      boards: { on: { ...board("on"), explorerOpen: true }, off: board("off") },
+      order: ["on", "off"],
+      arrangeByBoard: {},
+      splitPairs: {},
+    });
+    expect(parsed.boards.on?.explorerOpen).toBe(true);
+    expect(parsed.boards.off).toBeDefined();
+    expect(parsed.boards.off?.explorerOpen).toBeUndefined();
+  });
+
   it("forces the kind from the id: only the Live id is live", () => {
     const parsed = parseBoardPersistedState({
       boards: {

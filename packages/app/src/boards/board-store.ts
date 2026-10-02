@@ -62,6 +62,7 @@ const BoardSchema = z.strictObject({
       path: z.string().optional(),
     }),
   ),
+  explorerOpen: z.boolean().optional(),
 });
 
 const ArrangeStateSchema = z.strictObject({

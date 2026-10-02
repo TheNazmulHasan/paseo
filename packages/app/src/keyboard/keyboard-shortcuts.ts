@@ -440,9 +440,9 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   // --- Split workspaces into one view (fork mod #13, Boards) ---
   // Same Ctrl+Cmd / Ctrl+Alt family as Arrange and Desk; the non-mac chord skips text fields.
   {
-    id: "workspace-board-split-ctrl-cmd-v-mac",
+    id: "workspace-board-split-ctrl-cmd-o-mac",
     action: "workspace.board.split",
-    combo: "Cmd+Ctrl+V",
+    combo: "Cmd+Ctrl+O",
     when: { mac: true, commandCenter: false },
     help: {
       id: "workspace-board-split",
@@ -451,9 +451,9 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
-    id: "workspace-board-split-ctrl-alt-v-non-mac",
+    id: "workspace-board-split-ctrl-alt-o-non-mac",
     action: "workspace.board.split",
-    combo: "Ctrl+Alt+V",
+    combo: "Ctrl+Alt+O",
     when: { mac: false, commandCenter: false, terminal: false, editable: false },
     help: {
       id: "workspace-board-split",
@@ -1540,7 +1540,38 @@ export const DEFAULT_BINDINGS: readonly ParsedShortcutBinding[] =
 
 export type ShortcutOverrides = Record<string, string | null>;
 
+/**
+ * Extra chords for one binding (from keybindings.json) are keyed
+ * `<bindingId>#<n>`; `buildEffectiveBindings` appends them as help-less clones.
+ */
+export const EXTRA_CHORD_SEPARATOR = "#";
+
 export function buildEffectiveBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
+  return [...buildBaseBindings(overrides), ...buildExtraChordBindings(overrides)];
+}
+
+function buildExtraChordBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
+  const extras: ParsedShortcutBinding[] = [];
+  for (const [key, combo] of Object.entries(overrides)) {
+    const separatorIndex = key.lastIndexOf(EXTRA_CHORD_SEPARATOR);
+    if (separatorIndex < 0 || typeof combo !== "string") continue;
+    const base = DEFAULT_BINDINGS.find((b) => b.id === key.slice(0, separatorIndex));
+    if (!base) continue;
+    let parsedChord: KeyCombo[];
+    try {
+      parsedChord = parseBindingChord(combo);
+    } catch {
+      continue;
+    }
+    const { help: _help, ...rest } = base;
+    const when = withoutDefaultComboGuard(base.when);
+    const { mac: _mac, ...whenWithoutPlatform } = when ?? {};
+    extras.push({ ...rest, id: key, combo, parsedChord, when: whenWithoutPlatform });
+  }
+  return extras;
+}
+
+function buildBaseBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
   return DEFAULT_BINDINGS.map(function (binding) {
     const override = overrides[binding.id];
     if (override === UNASSIGNED_COMBO) {
@@ -1713,7 +1744,7 @@ function resetChordState(input: ChordState): ChordState {
   };
 }
 
-function helpMatchesPlatform(
+export function helpMatchesPlatform(
   when: ShortcutWhen | undefined,
   context: KeyboardShortcutPlatformContext,
 ): boolean {

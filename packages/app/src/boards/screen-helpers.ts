@@ -3,7 +3,7 @@
  * layout maths and the key mapping can be unit tested.
  */
 import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
-import type { BoardTabOrigin } from "@/boards/types";
+import type { Board, BoardTabOrigin } from "@/boards/types";
 import type {
   KeyboardActionDefinition,
   KeyboardActionId,
@@ -205,6 +205,16 @@ export function resolvePaneActiveTabId(pane: SplitPane | null): string | null {
     return pane.focusedTabId;
   }
   return pane.tabIds[0] ?? null;
+}
+
+/** Where the focused pane's shown session lives: what the Files explorer follows. */
+export function resolveFocusedPaneOrigin(
+  board: Pick<Board, "layout" | "origins">,
+): { paneId: string; origin: BoardTabOrigin } | null {
+  const pane = findBoardPane(board.layout.root, board.layout.focusedPaneId);
+  const tabId = resolvePaneActiveTabId(pane);
+  const origin = tabId ? board.origins[tabId] : undefined;
+  return pane && origin ? { paneId: pane.id, origin } : null;
 }
 
 export function resolveAdjacentBoardPaneId(

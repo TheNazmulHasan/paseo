@@ -16,6 +16,7 @@ import {
   resolveBoardGroupSizes,
   resolveBoardKeyCommand,
   resolveBoardViewport,
+  resolveFocusedPaneOrigin,
   resolvePaneActiveTabId,
 } from "@/boards/screen-helpers";
 import { BOARD_ROUTED_ACTION_IDS } from "@/boards/keyboard-contract";
@@ -304,5 +305,28 @@ describe("groupBoardVisibleAgents", () => {
   it("ignores tabs without an origin and empty boards", () => {
     expect(groupBoardVisibleAgents(pane("p", ["nope"]), origins)).toEqual([]);
     expect(groupBoardVisibleAgents(pane("p", []), origins)).toEqual([]);
+  });
+});
+
+describe("resolveFocusedPaneOrigin", () => {
+  const origins: Record<string, BoardTabOrigin> = {
+    t1: { serverId: "s1", workspaceId: "w1", agentId: "a" },
+    t2: { serverId: "s1", workspaceId: "w2", agentId: "b" },
+  };
+  const layout = (focusedPaneId: string | null) => ({
+    root: { kind: "group" as const, group: row("g", [pane("p1", ["t1"]), pane("p2", ["t2"])]) },
+    focusedPaneId,
+  });
+
+  it("is the workspace of the session the focused pane shows", () => {
+    expect(resolveFocusedPaneOrigin({ layout: layout("p2"), origins })).toEqual({
+      paneId: "p2",
+      origin: origins.t2,
+    });
+  });
+
+  it("is null when nothing is focused or the pane is empty", () => {
+    expect(resolveFocusedPaneOrigin({ layout: layout(null), origins })).toBeNull();
+    expect(resolveFocusedPaneOrigin({ layout: layout("p3"), origins })).toBeNull();
   });
 });

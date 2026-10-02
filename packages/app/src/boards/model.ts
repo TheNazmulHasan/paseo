@@ -18,7 +18,9 @@ import {
   closeTabInLayout,
   collectAllPanes,
   findPaneById,
+  findPaneContainingTab,
   focusPaneInLayout,
+  getTreeDepth,
   moveTabToPaneInLayout,
   selectTabInPaneInLayout,
   type SplitNode,
@@ -26,13 +28,22 @@ import {
   type WorkspaceLayout,
 } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
-import { createWorkspaceFileTabTarget } from "@/workspace/file-open";
+import {
+  createWorkspaceFileTabTarget,
+  normalizeWorkspaceFileLocation,
+  type WorkspaceFileLocation,
+} from "@/workspace/file-open";
 
 /** Passed to Arrange's model wherever it asks for the Explorer: a board has none. */
 export const NO_EXPLORER_PANE_ID = "__no_explorer__";
 
 /** Beyond this many panes on one axis the minimum split size (0.1) cannot hold equal widths. */
 const MAX_SPLIT_AXIS = 10;
+
+/** Same ceiling the workspace layout store puts on its split tree. */
+const MAX_BOARD_TREE_DEPTH = 5;
+/** A file pane split off a source pane takes this share of the source's width. */
+const FILE_PANE_SHARE = 0.4;
 
 export type BoardSplitLayout = "columns" | "grid";
 
@@ -491,4 +502,199 @@ export function rebuildLiveBoard(
       splitSizes: {},
     }
   );
+}
+
+// ---------------------------------------------------------------------------
+// Files beside their workspace
+// ---------------------------------------------------------------------------
+
+type WorkspaceRef = Pick<BoardTabOrigin, "serverId" | "workspaceId">;
+
+function sameWorkspace(a: WorkspaceRef, b: WorkspaceRef): boolean {
+  return a.serverId === b.serverId && a.workspaceId === b.workspaceId;
+}
+
+/**
+ * A "files pane" of a workspace: it has tabs, every one a file tab, and every one belongs to
+ * that workspace. An agent tab (or a tab of another workspace) disqualifies the pane for good.
+ */
+export function isFilesPaneOfWorkspace(
+  board: Pick<Board, "origins">,
+  pane: SplitPane,
+  workspace: WorkspaceRef,
+): boolean {
+  const tabs = (pane as PaneWithTabs).tabs;
+  if (!tabs || tabs.length === 0) {
+    return false;
+  }
+  return tabs.every((tab) => {
+    const origin = board.origins[tab.tabId];
+    return tab.target.kind === "file" && origin !== undefined && sameWorkspace(origin, workspace);
+  });
+}
+
+/** The pane directly right of `paneId` in its own horizontal group, when that sibling is a pane. */
+function findRightSiblingPane(root: SplitNode, paneId: string): SplitPane | null {
+  if (root.kind === "pane") {
+    return null;
+  }
+  const { group } = root;
+  const index = group.children.findIndex(
+    (child) => child.kind === "pane" && child.pane.id === paneId,
+  );
+  if (index >= 0) {
+    const next = group.children[index + 1];
+    return group.direction === "horizontal" && next?.kind === "pane" ? next.pane : null;
+  }
+  for (const child of group.children) {
+    const found = findRightSiblingPane(child, paneId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Puts `added` in a new pane right of `sourcePaneId`. Inside a horizontal group the source's
+ * share is split source 60 / new 40; otherwise the source is wrapped in a new horizontal group.
+ * `resizedGroupId` names a group whose child count changed, so a stored size override is stale.
+ */
+function insertPaneRightOf(
+  node: NodeWithTabs,
+  sourcePaneId: string,
+  added: NodeWithTabs,
+  splitSizes: Record<string, number[]>,
+  ids: BoardIds,
+): { node: NodeWithTabs; resizedGroupId: string | null } | null {
+  if (node.kind === "pane") {
+    if (node.pane.id !== sourcePaneId) {
+      return null;
+    }
+    const wrapped = groupNode(ids.createNodeId("group"), "horizontal", [node, added]);
+    if (wrapped.kind === "group") {
+      wrapped.group.sizes = [1 - FILE_PANE_SHARE, FILE_PANE_SHARE];
+    }
+    return { node: wrapped, resizedGroupId: null };
+  }
+  const { group } = node;
+  const index = group.children.findIndex(
+    (child) => child.kind === "pane" && child.pane.id === sourcePaneId,
+  );
+  if (index >= 0 && group.direction === "horizontal") {
+    const override = splitSizes[group.id];
+    const current = override?.length === group.children.length ? override : group.sizes;
+    const share = current[index] ?? 1 / group.children.length;
+    const sizes = current.slice();
+    sizes.splice(index, 1, share * (1 - FILE_PANE_SHARE), share * FILE_PANE_SHARE);
+    const children = group.children.slice();
+    children.splice(index + 1, 0, added);
+    return {
+      node: { kind: "group", group: { ...group, children, sizes } },
+      resizedGroupId: group.id,
+    };
+  }
+  for (let i = 0; i < group.children.length; i += 1) {
+    const child = group.children[i];
+    const result = child ? insertPaneRightOf(child, sourcePaneId, added, splitSizes, ids) : null;
+    if (result) {
+      const children = group.children.slice();
+      children[i] = result.node;
+      return {
+        node: { kind: "group", group: { ...group, children } },
+        resizedGroupId: result.resizedGroupId,
+      };
+    }
+  }
+  return null;
+}
+
+/** Selects a tab inside its pane without moving pane focus (the source pane keeps it). */
+function selectTabKeepingFocus(board: Board, paneId: string, tabId: string): Board {
+  const layout = selectTabInPaneInLayout({ layout: board.layout, paneId, tabId });
+  return layout ? { ...board, layout } : board;
+}
+
+/**
+ * Opens a file as a tab beside the pane it was asked from, belonging to the same workspace.
+ * Order: the file is already on the board (select it); the source pane is itself that
+ * workspace's files pane (add there); the pane to the right is that workspace's files pane (add
+ * there); else split a new pane right of the source (60/40). Agent panes never receive files.
+ * Returns null when nothing fits (unknown pane, bad path, or the split tree is too deep), so
+ * the caller can fall back to the workspace screen.
+ */
+export function openFileBesideModel(
+  board: Board,
+  input: { sourcePaneId: string; origin: WorkspaceRef; location: WorkspaceFileLocation },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; tabId: string; paneId: string } | null {
+  const location = normalizeWorkspaceFileLocation(input.location);
+  const source = findPaneById(board.layout.root, input.sourcePaneId);
+  if (!location || !source) {
+    return null;
+  }
+  const workspace: WorkspaceRef = {
+    serverId: input.origin.serverId,
+    workspaceId: input.origin.workspaceId,
+  };
+  const ref: BoardSessionRef = { ...workspace, path: location.path };
+
+  const existingTabId = findBoardTabId(board, ref);
+  const existingPane = existingTabId
+    ? findPaneContainingTab(board.layout.root, existingTabId)
+    : null;
+  if (existingTabId && existingPane) {
+    return {
+      board: selectTabKeepingFocus(board, existingPane.id, existingTabId),
+      tabId: existingTabId,
+      paneId: existingPane.id,
+    };
+  }
+
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: createWorkspaceFileTabTarget(location),
+    createdAt: ids.now(),
+  };
+  const origins = { ...board.origins, [tab.tabId]: originOf(ref) };
+
+  const host = isFilesPaneOfWorkspace(board, source, workspace)
+    ? source
+    : findRightSiblingPane(board.layout.root, source.id);
+  if (host && isFilesPaneOfWorkspace(board, host, workspace)) {
+    const root = updatePane(board.layout.root as NodeWithTabs, host.id, (pane) =>
+      makePane(pane.id, [...pane.tabs, tab], tab.tabId),
+    );
+    return {
+      board: { ...board, origins, layout: { ...board.layout, root: asLayoutRoot(root) } },
+      tabId: tab.tabId,
+      paneId: host.id,
+    };
+  }
+
+  const newPaneId = ids.createNodeId("pane");
+  const inserted = insertPaneRightOf(
+    board.layout.root as NodeWithTabs,
+    source.id,
+    paneNode(newPaneId, [tab]),
+    board.splitSizes,
+    ids,
+  );
+  if (!inserted || getTreeDepth(asLayoutRoot(inserted.node)) > MAX_BOARD_TREE_DEPTH) {
+    return null;
+  }
+  const splitSizes = { ...board.splitSizes };
+  if (inserted.resizedGroupId) {
+    delete splitSizes[inserted.resizedGroupId];
+  }
+  return {
+    board: {
+      ...board,
+      origins,
+      splitSizes,
+      layout: { ...board.layout, root: asLayoutRoot(inserted.node) },
+    },
+    tabId: tab.tabId,
+    paneId: newPaneId,
+  };
 }

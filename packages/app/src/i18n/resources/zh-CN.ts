@@ -465,7 +465,7 @@ export const zhCN: TranslationResources = {
       live: "实时",
       refresh: "刷新实时视图",
       paneEmpty: "此窗格中没有会话",
-      emptyHint: "这里还没有会话。请在这些工作区中打开一些智能体，或按 Ctrl+Cmd+V 拆分工作区。",
+      emptyHint: "这里还没有会话。请在这些工作区中打开一些智能体，或按 Ctrl+Cmd+O 拆分工作区。",
       notFound: "此视图已不存在",
     },
   },

@@ -54,6 +54,11 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
       });
     },
   },
+  keybindings: {
+    get: () => ipcRenderer.invoke("paseo:keybindings:get") as Promise<{ entries: unknown[] }>,
+    writeDefaults: (content: string) =>
+      ipcRenderer.invoke("paseo:keybindings:write-defaults", content) as Promise<void>,
+  },
   window: {
     openNew: (options?: { pendingOpenProjectPath?: string | null }) =>
       ipcRenderer.invoke("paseo:window:openNew", options),

@@ -29,12 +29,14 @@ import {
   focusBoardPane,
   getBoard,
   moveBoardTabToPane,
+  openFileBeside,
   refreshLiveBoard,
   removeBoardTab,
   renameBoard,
   resizeBoardSplit,
   restoreBoardArrangement,
   selectBoardTab,
+  setBoardExplorerOpen,
   splitWorkspaces,
   useBoard,
   useBoards,
@@ -345,6 +347,71 @@ describe("board basics", () => {
     }
     resizeBoardSplit(id, root.group.id, [3, 1]);
     expect(mustBoard(id).splitSizes[root.group.id]).toEqual([0.75, 0.25]);
+  });
+});
+
+describe("openFileBeside", () => {
+  const W1 = { serverId: "s1", workspaceId: "w1" };
+
+  function twoWorkspaceBoard(): { board: Board; left: string } {
+    const board = mustBoard(
+      createBoard(
+        "Two",
+        [ref("a"), ref("b")].map((r, i) => ({
+          serverId: r.serverId,
+          agentId: r.agentId,
+          workspaceId: `w${i + 1}`,
+        })),
+      ),
+    );
+    // One pane holds both agents; arrange columns so each workspace has its own pane.
+    arrangeBoard({ boardId: board.id, preset: "columns-2", viewport: VIEWPORT });
+    const arranged = mustBoard(board.id);
+    return { board: arranged, left: collectAllPanes(arranged.layout.root)[0]!.id };
+  }
+
+  it("opens a file as a tab in a new pane right of the source and keeps the source focused", () => {
+    const { board, left } = twoWorkspaceBoard();
+    expect(openFileBeside(board.id, left, W1, { path: "src/a.ts" })).toBe(true);
+    const next = mustBoard(board.id);
+    const panes = collectAllPanes(next.layout.root);
+    expect(panes).toHaveLength(3);
+    const filePane = panes[1]!;
+    const tab = collectAllTabs(next.layout.root).find((t) => t.tabId === filePane.tabIds[0]);
+    expect(tab?.target).toMatchObject({ kind: "file", path: "src/a.ts" });
+    expect(next.origins[filePane.tabIds[0]!]).toEqual({ ...W1, path: "src/a.ts" });
+    expect(next.layout.focusedPaneId).toBe(board.layout.focusedPaneId);
+  });
+
+  it("reuses that pane for the next file and does not duplicate an open one", () => {
+    const { board, left } = twoWorkspaceBoard();
+    openFileBeside(board.id, left, W1, { path: "a.ts" });
+    openFileBeside(board.id, left, W1, { path: "b.ts" });
+    openFileBeside(board.id, left, W1, { path: "a.ts" });
+    const next = mustBoard(board.id);
+    expect(collectAllPanes(next.layout.root)).toHaveLength(3);
+    expect(listBoardTabs(next.layout)).toHaveLength(4);
+    const filePane = collectAllPanes(next.layout.root)[1]!;
+    expect(filePane.tabIds).toHaveLength(2);
+    const first = filePane.tabIds[0]!;
+    expect(filePane.focusedTabId).toBe(first);
+  });
+
+  it("returns false and leaves the board alone for an unknown board or pane", () => {
+    const { board } = twoWorkspaceBoard();
+    const before = mustBoard(board.id);
+    expect(openFileBeside("ghost", "pane1", W1, { path: "a.ts" })).toBe(false);
+    expect(openFileBeside(board.id, "ghost", W1, { path: "a.ts" })).toBe(false);
+    expect(mustBoard(board.id)).toBe(before);
+  });
+
+  it("remembers the Files explorer per board, off by default", () => {
+    const id = createBoard("One")!;
+    expect(mustBoard(id).explorerOpen).toBeUndefined();
+    setBoardExplorerOpen(id, true);
+    expect(mustBoard(id).explorerOpen).toBe(true);
+    setBoardExplorerOpen(id, false);
+    expect(mustBoard(id).explorerOpen).toBe(false);
   });
 });
 

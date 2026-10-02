@@ -8,7 +8,7 @@ import type { ArrangeViewport } from "@/arrange/types";
 import { BoardContainer } from "@/boards/board-container";
 import { useBoardMruStore } from "@/boards/board-mru-store";
 import { BoardIconButton } from "@/boards/board-pane";
-import { refreshLiveBoard, useBoard } from "@/boards/controller";
+import { refreshLiveBoard, setBoardExplorerOpen, useBoard } from "@/boards/controller";
 import { goBackFromBoard } from "@/boards/navigation";
 import {
   countVisibleBoardTabs,
@@ -17,6 +17,7 @@ import {
   resolvePaneActiveTabId,
 } from "@/boards/screen-helpers";
 import type { Board } from "@/boards/types";
+import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useBoardKeyboard } from "@/boards/use-board-keyboard";
 import { useBoardVisibleAgents } from "@/boards/use-board-visible-agents";
 import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspace-cache";
@@ -24,11 +25,13 @@ import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
+import { WorkspaceExplorerToggle } from "@/screens/workspace/workspace-explorer-toggle";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 
 const ThemedRefreshCw = withUnistyles(RefreshCw);
 
 const REFRESH_ICON_SIZE = 14;
+const NO_SHORTCUT_KEYS: ShortcutKey[] = [];
 
 interface BoardScreenProps {
   boardId: string;
@@ -147,21 +150,42 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   const handleRefresh = useCallback(() => refreshLiveBoard(getViewport()), [getViewport]);
 
   const isLive = board.kind === "live";
+  const explorerOpen = Boolean(board.explorerOpen);
+  const handleToggleExplorer = useCallback(
+    () => setBoardExplorerOpen(boardId, !explorerOpen),
+    [boardId, explorerOpen],
+  );
+  const explorerAccessibilityState = useMemo(() => ({ expanded: explorerOpen }), [explorerOpen]);
   const headerRight = useMemo(
-    () =>
-      isLive ? (
-        <View style={styles.headerRight}>
-          <LiveBadge />
-          <BoardIconButton
-            label={t("boards.screen.refresh")}
-            onPress={handleRefresh}
-            testID="board-refresh"
-          >
-            <ThemedRefreshCw size={REFRESH_ICON_SIZE} uniProps={mutedIconColorMapping} />
-          </BoardIconButton>
-        </View>
-      ) : undefined,
-    [handleRefresh, isLive, t],
+    () => (
+      <View style={styles.headerRight}>
+        {isLive ? (
+          <>
+            <LiveBadge />
+            <BoardIconButton
+              label={t("boards.screen.refresh")}
+              onPress={handleRefresh}
+              testID="board-refresh"
+            >
+              <ThemedRefreshCw size={REFRESH_ICON_SIZE} uniProps={mutedIconColorMapping} />
+            </BoardIconButton>
+          </>
+        ) : null}
+        <WorkspaceExplorerToggle
+          onPress={handleToggleExplorer}
+          label={t(
+            explorerOpen
+              ? "workspace.tabs.explorerSidebar.close"
+              : "workspace.tabs.explorerSidebar.open",
+          )}
+          tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+          tooltipKeys={NO_SHORTCUT_KEYS}
+          accessibilityState={explorerAccessibilityState}
+          mobile={false}
+        />
+      </View>
+    ),
+    [explorerAccessibilityState, explorerOpen, handleRefresh, handleToggleExplorer, isLive, t],
   );
 
   const hasTabs = countVisibleBoardTabs(board.layout.root) > 0;

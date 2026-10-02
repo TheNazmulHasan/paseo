@@ -467,7 +467,7 @@ export const ko: TranslationResources = {
       refresh: "라이브 보기 새로 고침",
       paneEmpty: "이 창에는 세션이 없습니다",
       emptyHint:
-        "아직 세션이 없습니다. 이 워크스페이스에서 에이전트를 열거나 Ctrl+Cmd+V를 눌러 워크스페이스를 분할하세요.",
+        "아직 세션이 없습니다. 이 워크스페이스에서 에이전트를 열거나 Ctrl+Cmd+O를 눌러 워크스페이스를 분할하세요.",
       notFound: "이 보기는 더 이상 존재하지 않습니다",
     },
   },

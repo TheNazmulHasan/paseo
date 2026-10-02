@@ -473,7 +473,7 @@ export const fr: TranslationResources = {
       refresh: "Actualiser la vue en direct",
       paneEmpty: "Aucune session dans ce panneau",
       emptyHint:
-        "Aucune session pour l’instant. Ouvrez des agents dans ces espaces de travail, ou appuyez sur Ctrl+Cmd+V pour diviser les espaces de travail.",
+        "Aucune session pour l’instant. Ouvrez des agents dans ces espaces de travail, ou appuyez sur Ctrl+Cmd+O pour diviser les espaces de travail.",
       notFound: "Cette vue n’existe plus",
     },
   },

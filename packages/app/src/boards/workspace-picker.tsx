@@ -128,7 +128,7 @@ const PickerRow = memo(function PickerRow({
 /**
  * "Split workspaces": check two or more workspaces (the current one starts checked), then lay
  * them side by side as columns or as a grid. Each becomes one pane of a view holding that
- * workspace's sessions. Opened by Ctrl+Cmd+V, the Arrange menu and the Command Center.
+ * workspace's sessions. Opened by Ctrl+Cmd+O, the Arrange menu and the Command Center.
  */
 export function WorkspacePicker() {
   const { t } = useTranslation();

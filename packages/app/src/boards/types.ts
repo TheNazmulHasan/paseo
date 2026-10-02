@@ -26,6 +26,8 @@ export interface Board {
   /** Split-size overrides by group id, like the workspace store's splitSizesByWorkspace. */
   splitSizes: Record<string, number[]>;
   origins: Record<string, BoardTabOrigin>;
+  /** The Files explorer on the right edge; follows the focused pane's workspace. Off when absent. */
+  explorerOpen?: boolean;
 }
 
 export interface BoardSummary {

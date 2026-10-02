@@ -305,24 +305,24 @@ describe("workspace desk toggle shortcut", () => {
 });
 
 describe("workspace board split shortcut", () => {
-  it("maps Ctrl+Cmd+V on mac to workspace.board.split, even while typing", () => {
+  it("maps Ctrl+Cmd+O on mac to workspace.board.split, even while typing", () => {
     for (const focusScope of ["other", "message-input", "terminal"] as const) {
       expectShortcutResolution({
-        event: { key: "v", code: "KeyV", ctrlKey: true, metaKey: true },
+        event: { key: "o", code: "KeyO", ctrlKey: true, metaKey: true },
         context: { isMac: true, isDesktop: true, focusScope },
         action: "workspace.board.split",
       });
     }
   });
 
-  it("maps Ctrl+Alt+V on non-mac to workspace.board.split, but not while typing", () => {
+  it("maps Ctrl+Alt+O on non-mac to workspace.board.split, but not while typing", () => {
     expectShortcutResolution({
-      event: { key: "v", code: "KeyV", ctrlKey: true, altKey: true },
+      event: { key: "o", code: "KeyO", ctrlKey: true, altKey: true },
       context: { isMac: false, isDesktop: true, focusScope: "other" },
       action: "workspace.board.split",
     });
     expectNoShortcutResolution({
-      event: { key: "v", code: "KeyV", ctrlKey: true, altKey: true },
+      event: { key: "o", code: "KeyO", ctrlKey: true, altKey: true },
       context: { isMac: false, isDesktop: true, focusScope: "message-input" },
     });
   });

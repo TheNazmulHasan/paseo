@@ -6,18 +6,23 @@ import { StyleSheet } from "react-native-unistyles";
 import { BoardPane } from "@/boards/board-pane";
 import {
   focusBoardPane,
+  openFileBeside,
   removeBoardTab,
   resizeBoardSplit,
   selectBoardTab,
 } from "@/boards/controller";
+import { BoardFilesExplorer } from "@/boards/board-files-explorer";
 import {
+  boardWorkspaceKey,
   isBoardNodeHidden,
   resolveBoardGroupFlex,
   resolveBoardGroupSizes,
+  resolveFocusedPaneOrigin,
 } from "@/boards/screen-helpers";
 import { boardTabTarget } from "@/boards/model";
 import type { Board, BoardTabOrigin } from "@/boards/types";
 import {
+  fallbackBoardWorkspaceIdentity,
   useBoardWorkspaceIdentities,
   type BoardWorkspaceIdentityMap,
 } from "@/boards/use-board-workspace-identity";
@@ -68,6 +73,26 @@ function openInOriginWorkspace(origin: BoardTabOrigin, target?: WorkspaceTabTarg
 }
 
 /**
+ * A file asked for from inside a view opens as a tab beside the pane it came from (that
+ * workspace's files pane); only when the board cannot place it does it go to the workspace.
+ * Everything else still opens in the session's own workspace.
+ */
+function openTargetFromPane(
+  boardId: string,
+  paneId: string,
+  origin: BoardTabOrigin,
+  target?: WorkspaceTabTarget,
+) {
+  if (target?.kind === "file") {
+    const { kind: _kind, ...location } = target;
+    if (openFileBeside(boardId, paneId, origin, location)) {
+      return;
+    }
+  }
+  openInOriginWorkspace(origin, target);
+}
+
+/**
  * The board layout tree, rendered with the workspace's own pieces (resize handle, panel host,
  * AgentPanel) but none of its single-workspace coupling: every tab carries its own host and
  * workspace through `board.origins`.
@@ -100,11 +125,11 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
   );
 
   const buildPaneContentModel = useCallback<BuildPaneContentModel>(
-    ({ tab }) => {
+    ({ paneId, tab }) => {
       // The pane drops tabs without an origin before mounting, so this is always set.
       const origin = origins[tab.tabId] ?? { serverId: "", workspaceId: "" };
       const openInWorkspace = (target?: WorkspaceTabTarget) =>
-        openInOriginWorkspace(origin, target);
+        openTargetFromPane(boardId, paneId, origin, target);
       return buildWorkspacePaneContentModel({
         tab,
         normalizedServerId: origin.serverId,
@@ -125,20 +150,47 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
     [boardId, origins],
   );
 
+  // The explorer shows the workspace of the focused pane's session and follows focus.
+  const explorerSource = board.explorerOpen ? resolveFocusedPaneOrigin(board) : null;
+  const explorerPaneId = explorerSource?.paneId ?? null;
+  const explorerOrigin = explorerSource?.origin ?? null;
+  const handleExplorerOpen = useCallback(
+    (target: WorkspaceTabTarget) => {
+      if (explorerPaneId && explorerOrigin) {
+        openTargetFromPane(boardId, explorerPaneId, explorerOrigin, target);
+      }
+    },
+    [boardId, explorerOrigin, explorerPaneId],
+  );
+
   return (
-    <View style={styles.container} onLayout={handleLayout} testID={`board-container-${boardId}`}>
-      <BoardNodeView
-        node={board.layout.root}
-        board={board}
-        allTabs={allTabs}
-        identities={identities}
-        isScreenFocused={isScreenFocused}
-        onFocusPane={handleFocusPane}
-        onSelectTab={handleSelectTab}
-        onCloseTab={handleCloseTab}
-        onOpenInWorkspace={handleOpenInWorkspace}
-        buildPaneContentModel={buildPaneContentModel}
-      />
+    <View style={styles.row} testID={`board-container-${boardId}`}>
+      <View style={styles.container} onLayout={handleLayout}>
+        <BoardNodeView
+          node={board.layout.root}
+          board={board}
+          allTabs={allTabs}
+          identities={identities}
+          isScreenFocused={isScreenFocused}
+          onFocusPane={handleFocusPane}
+          onSelectTab={handleSelectTab}
+          onCloseTab={handleCloseTab}
+          onOpenInWorkspace={handleOpenInWorkspace}
+          buildPaneContentModel={buildPaneContentModel}
+        />
+      </View>
+      {explorerOrigin ? (
+        <BoardFilesExplorer
+          key={boardWorkspaceKey(explorerOrigin)}
+          origin={explorerOrigin}
+          identity={
+            identities.get(boardWorkspaceKey(explorerOrigin)) ??
+            fallbackBoardWorkspaceIdentity(explorerOrigin.workspaceId)
+          }
+          isScreenFocused={isScreenFocused}
+          onOpenTarget={handleExplorerOpen}
+        />
+      ) : null}
     </View>
   );
 }
@@ -291,6 +343,12 @@ function BoardGroupView(
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flex: 1,
+    flexDirection: "row",
+    minWidth: 0,
+    minHeight: 0,
+  },
   container: {
     flex: 1,
     minWidth: 0,

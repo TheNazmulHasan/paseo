@@ -463,7 +463,7 @@ export const en = {
       refresh: "Refresh Live view",
       paneEmpty: "No sessions in this pane",
       emptyHint:
-        "No sessions here yet. Open some agents in these workspaces, or press Ctrl+Cmd+V to split workspaces.",
+        "No sessions here yet. Open some agents in these workspaces, or press Ctrl+Cmd+O to split workspaces.",
       notFound: "This view no longer exists",
     },
   },

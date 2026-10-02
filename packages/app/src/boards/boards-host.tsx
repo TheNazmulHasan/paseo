@@ -14,7 +14,7 @@ const SPLIT_ACTIONS: readonly KeyboardActionId[] = ["workspace.board.split"];
 
 /**
  * Everything Boards needs mounted once at app level (fork mod #13): the Live view keeps itself in
- * step with running agents, Ctrl+Cmd+V and the Command Center open the split picker (on a view
+ * step with running agents, Ctrl+Cmd+O and the Command Center open the split picker (on a view
  * the same key goes back to the workspace instead, Esc being the agents'), and the Command
  * Center lists the views. One element in the root layout instead of four.
  */
