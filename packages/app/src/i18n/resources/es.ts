@@ -437,6 +437,43 @@ export const es: TranslationResources = {
       importing: "Importador...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "Vistas",
+      live: "En vivo",
+      split: "Dividir espacios de trabajo…",
+      rename: "Cambiar nombre de la vista",
+      delete: "Eliminar vista",
+      namePlaceholder: "Nombre de la vista",
+      deleteTitle: "Eliminar vista",
+      deleteMessage: "¿Eliminar «{{name}}»? Las sesiones que contiene no se ven afectadas.",
+    },
+    menu: {
+      splitWith: "Dividir con espacios de trabajo…",
+      splitWorkspaces: "Dividir espacios de trabajo…",
+      openLive: "Abrir la vista en vivo",
+      openView: "Abrir vista: {{name}}",
+    },
+    picker: {
+      title: "Dividir espacios de trabajo",
+      searchPlaceholder: "Buscar espacios de trabajo…",
+      columns: "Columnas",
+      grid: "Cuadrícula",
+      needTwo: "Marca al menos dos espacios de trabajo. Espacio marca, las flechas mueven.",
+      hint: "{{count}} marcados. Intro: columnas. Mayús+Intro: cuadrícula.",
+      empty: "Ningún espacio de trabajo coincide",
+    },
+    screen: {
+      openInWorkspace: "Abrir en el espacio de trabajo",
+      closeTab: "Quitar de la vista",
+      live: "En vivo",
+      refresh: "Actualizar la vista en vivo",
+      paneEmpty: "No hay sesiones en este panel",
+      emptyHint:
+        "Aún no hay sesiones. Abre agentes en estos espacios de trabajo o pulsa Ctrl+Cmd+V para dividir espacios de trabajo.",
+      notFound: "Esta vista ya no existe",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "Espacios de trabajo recientes",
@@ -2498,6 +2535,7 @@ export const es: TranslationResources = {
         switchRecentTabs: "Cambiar entre pestañas recientes",
         switchRecentWorkspaces: "Cambiar entre espacios de trabajo recientes",
         toggleDesk: "Poner en / quitar del escritorio",
+        splitWorkspaces: "Dividir espacios de trabajo",
         arrangeOnePane: "Organizar: un panel",
         arrangeColumns2: "Organizar: 2 columnas",
         arrangeColumns3: "Organizar: 3 columnas",

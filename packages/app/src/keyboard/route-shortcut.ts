@@ -1,3 +1,4 @@
+import { BOARD_ROUTED_ACTION_IDS, parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import type { KeyboardShortcutPayload, MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { buildSettingsRoute, parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
@@ -24,7 +25,8 @@ export type ShortcutCallbackName = "toggle-agent-list" | "toggle-both-sidebars" 
 
 export type ShortcutAction =
   | { kind: "none" }
-  | { kind: "dispatch"; action: KeyboardActionDefinition }
+  /** `boardId` (Boards, fork mod #13): deliver to that board screen's handler instead of offering it to all. */
+  | { kind: "dispatch"; action: KeyboardActionDefinition; boardId?: string }
   | { kind: "navigate-workspace"; serverId: string; workspaceId: string }
   | { kind: "navigate-last-workspace" }
   | { kind: "router-replace"; route: string }
@@ -53,6 +55,7 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.archive": { id: "workspace.archive", scope: "sidebar" },
   "workspace.pin": { id: "workspace.pin", scope: "sidebar" },
   "workspace.desk.toggle": { id: "workspace.desk.toggle", scope: "sidebar" },
+  "workspace.board.split": { id: "workspace.board.split", scope: "sidebar" },
   "worktree.new": { id: "worktree.new", scope: "sidebar" },
   "workspace.terminal.new": { id: "workspace.terminal.new", scope: "workspace" },
   "workspace.tab.close.current": { id: "workspace.tab.close-current", scope: "workspace" },
@@ -195,6 +198,24 @@ function routeSettingsToggle(ctx: ShortcutRoutingContext): ShortcutAction {
 }
 
 export function routeKeyboardShortcut(
+  input: ShortcutRoutingInput,
+  ctx: ShortcutRoutingContext,
+): ShortcutAction {
+  const routed = routeWorkspaceShortcut(input, ctx);
+  // On `/boards/<id>` no workspace screen is focused, so its handlers are disabled and a workspace
+  // key would be dropped. The ids the board screen supports (payload and all) are addressed to its
+  // own handler instead; every other id routes exactly as before.
+  if (routed.kind !== "dispatch") {
+    return routed;
+  }
+  const boardId = parseBoardIdFromPathname(ctx.pathname);
+  if (boardId && (BOARD_ROUTED_ACTION_IDS as readonly string[]).includes(input.action)) {
+    return { ...routed, boardId };
+  }
+  return routed;
+}
+
+function routeWorkspaceShortcut(
   input: ShortcutRoutingInput,
   ctx: ShortcutRoutingContext,
 ): ShortcutAction {

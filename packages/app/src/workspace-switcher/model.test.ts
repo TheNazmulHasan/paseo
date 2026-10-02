@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardRowKey,
   cycleWorkspaceIndex,
+  insertBoardKeys,
   initialWorkspaceSelectionIndex,
   mergeWorkspaceOrder,
   pruneWorkspaceHistory,
@@ -70,5 +72,47 @@ describe("workspace switcher model", () => {
       visit("b"),
       visit("x", "other"),
     ]);
+  });
+});
+
+describe("board rows in the switcher order", () => {
+  const desk = new Set(["w3", "w4"]);
+
+  it("keys a board under a pseudo host so it can never collide with a workspace", () => {
+    expect(boardRowKey("live")).toBe("board:live");
+    expect(workspaceVisitKey({ serverId: "board", workspaceId: "live" })).toBe(boardRowKey("live"));
+  });
+
+  it("puts boards right after the head and the Desk workspaces", () => {
+    // head = current + just left; then Desk (w3, w4); then the rest.
+    expect(
+      insertBoardKeys(["w1", "w2", "w3", "w4", "w5"], ["board:live", "board:b1"], desk, 2),
+    ).toEqual(["w1", "w2", "w3", "w4", "board:live", "board:b1", "w5"]);
+  });
+
+  it("puts boards right after the head when the Desk is empty", () => {
+    expect(insertBoardKeys(["w1", "w2", "w5"], ["board:live"], new Set(), 2)).toEqual([
+      "w1",
+      "w2",
+      "board:live",
+      "w5",
+    ]);
+  });
+
+  it("works when the head is a single row (off a workspace route)", () => {
+    expect(insertBoardKeys(["w1", "w3"], ["board:live"], desk, 1)).toEqual([
+      "w1",
+      "w3",
+      "board:live",
+    ]);
+  });
+
+  it("returns the same array when there are no boards", () => {
+    const keys = ["w1", "w2"];
+    expect(insertBoardKeys(keys, [], desk, 2)).toBe(keys);
+  });
+
+  it("appends when everything is head or Desk", () => {
+    expect(insertBoardKeys(["w1"], ["board:live"], desk, 2)).toEqual(["w1", "board:live"]);
   });
 });

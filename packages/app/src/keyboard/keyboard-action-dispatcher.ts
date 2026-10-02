@@ -63,6 +63,7 @@ export type KeyboardActionId =
   | "workspace.archive"
   | "workspace.pin"
   | "workspace.desk.toggle"
+  | "workspace.board.split"
   // Command-center only: no keybind, so these are absent from route-shortcut.ts.
   | "workspace.rename"
   | "workspace.setup.show";
@@ -132,6 +133,7 @@ export type KeyboardActionDefinition =
   | { id: "workspace.archive"; scope: KeyboardActionScope }
   | { id: "workspace.pin"; scope: KeyboardActionScope }
   | { id: "workspace.desk.toggle"; scope: KeyboardActionScope }
+  | { id: "workspace.board.split"; scope: KeyboardActionScope }
   | { id: "workspace.rename"; scope: KeyboardActionScope }
   | { id: "workspace.setup.show"; scope: KeyboardActionScope };
 
@@ -188,6 +190,22 @@ export function createKeyboardActionDispatcher() {
       }
 
       return false;
+    },
+
+    /**
+     * Hands the action to ONE handler by id (Boards, fork mod #13: a board screen is not a
+     * workspace, so its keys are addressed to it rather than offered to every handler).
+     * Same enabled/active gates as dispatch; false when that handler is not registered.
+     */
+    dispatchToHandler(handlerId: string, action: KeyboardActionDefinition): boolean {
+      const handler = handlers.get(handlerId);
+      if (!handler || !handler.enabled) {
+        return false;
+      }
+      if (handler.isActive && !handler.isActive()) {
+        return false;
+      }
+      return handler.handle(action);
     },
   };
 }

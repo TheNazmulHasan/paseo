@@ -1,0 +1,477 @@
+// Pure board math. No stores, no React: every rule here is tested against plain boards, and
+// the controller only wires results into the store. A board's layout is a normal
+// WorkspaceLayout with no Explorer, so Arrange's own model runs on it unchanged.
+import {
+  arrangeLayoutTabs,
+  collectArrangeTabs,
+  computeGridShape,
+  equalizeLayout,
+  pruneSplitSizes,
+  reconcileSnapshot,
+} from "@/arrange/model";
+import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
+import type { Board, BoardSessionRef, BoardTabOrigin } from "@/boards/types";
+import { defaultWorkspaceLayoutIds } from "@/stores/workspace-layout-ids";
+import type { WorkspaceLayoutNodeIdPrefix } from "@/stores/workspace-layout-ids";
+import {
+  clampNormalizedSizes,
+  closeTabInLayout,
+  collectAllPanes,
+  findPaneById,
+  focusPaneInLayout,
+  moveTabToPaneInLayout,
+  selectTabInPaneInLayout,
+  type SplitNode,
+  type SplitPane,
+  type WorkspaceLayout,
+} from "@/stores/workspace-layout-actions";
+import type { WorkspaceTab } from "@/workspace-tabs/model";
+
+/** Passed to Arrange's model wherever it asks for the Explorer: a board has none. */
+export const NO_EXPLORER_PANE_ID = "__no_explorer__";
+
+/** Beyond this many panes on one axis the minimum split size (0.1) cannot hold equal widths. */
+const MAX_SPLIT_AXIS = 10;
+
+export type BoardSplitLayout = "columns" | "grid";
+
+export interface BoardIds {
+  createTabId: () => string;
+  createNodeId: (prefix: WorkspaceLayoutNodeIdPrefix) => string;
+  now: () => number;
+}
+
+export const DEFAULT_BOARD_IDS: BoardIds = {
+  createTabId: () => `boardtab_${defaultWorkspaceLayoutIds.createNodeId("pane").slice(5)}`,
+  createNodeId: defaultWorkspaceLayoutIds.createNodeId,
+  now: () => Date.now(),
+};
+
+interface PaneWithTabs extends SplitPane {
+  tabs: WorkspaceTab[];
+}
+
+type NodeWithTabs =
+  | { kind: "pane"; pane: PaneWithTabs }
+  | {
+      kind: "group";
+      group: {
+        id: string;
+        direction: "horizontal" | "vertical";
+        children: NodeWithTabs[];
+        sizes: number[];
+      };
+    };
+
+/** Two sessions are the same board entry when host and agent both match. */
+export function boardSessionKey(ref: { serverId: string; agentId: string }): string {
+  return `${ref.serverId}\n${ref.agentId}`;
+}
+
+function equalSizes(count: number): number[] {
+  return Array.from({ length: count }, () => 1 / count);
+}
+
+function makePane(id: string, tabs: WorkspaceTab[], focusedTabId?: string | null): PaneWithTabs {
+  const tabIds = tabs.map((tab) => tab.tabId);
+  return {
+    id,
+    tabs,
+    tabIds,
+    focusedTabId:
+      focusedTabId && tabIds.includes(focusedTabId) ? focusedTabId : (tabIds[0] ?? null),
+  };
+}
+
+function paneNode(id: string, tabs: WorkspaceTab[], focusedTabId?: string | null): NodeWithTabs {
+  return { kind: "pane", pane: makePane(id, tabs, focusedTabId) };
+}
+
+function groupNode(
+  id: string,
+  direction: "horizontal" | "vertical",
+  children: NodeWithTabs[],
+): NodeWithTabs {
+  return { kind: "group", group: { id, direction, children, sizes: equalSizes(children.length) } };
+}
+
+function asLayoutRoot(node: NodeWithTabs): SplitNode {
+  return node as SplitNode;
+}
+
+function firstPaneId(root: NodeWithTabs): string | null {
+  if (root.kind === "pane") {
+    return root.pane.id;
+  }
+  for (const child of root.group.children) {
+    const found = firstPaneId(child);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** One pane, no tabs: what a new board starts as. */
+export function createEmptyBoardLayout(ids: BoardIds = DEFAULT_BOARD_IDS): WorkspaceLayout {
+  const pane = paneNode(ids.createNodeId("pane"), []);
+  return { root: asLayoutRoot(pane), focusedPaneId: firstPaneId(pane) };
+}
+
+/** Every tab on the board, in on-screen order. */
+export function listBoardTabs(layout: WorkspaceLayout): WorkspaceTab[] {
+  return collectArrangeTabs(layout, NO_EXPLORER_PANE_ID);
+}
+
+export function countBoardSessions(board: Board): number {
+  return listBoardTabs(board.layout).length;
+}
+
+export function findBoardTabId(board: Board, ref: BoardSessionRef): string | null {
+  const key = boardSessionKey(ref);
+  for (const [tabId, origin] of Object.entries(board.origins)) {
+    if (boardSessionKey(origin) === key) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function updatePane(
+  node: NodeWithTabs,
+  paneId: string,
+  update: (pane: PaneWithTabs) => PaneWithTabs,
+): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node.pane.id === paneId ? { kind: "pane", pane: update(node.pane) } : node;
+  }
+  return {
+    kind: "group",
+    group: {
+      ...node.group,
+      children: node.group.children.map((child) => updatePane(child, paneId, update)),
+    },
+  };
+}
+
+function resolveLandingPane(layout: WorkspaceLayout): SplitPane | null {
+  const visible = collectAllPanes(layout.root);
+  return (
+    visible.find((pane) => pane.id === layout.focusedPaneId) ??
+    visible[0] ??
+    findPaneById(layout.root, layout.focusedPaneId)
+  );
+}
+
+/**
+ * Adds sessions as agent tabs at the end of the focused pane (the last one added becomes the
+ * selected tab). Sessions already on the board, or repeated in `sessions`, are skipped.
+ */
+export function addSessionsToBoardModel(
+  board: Board,
+  sessions: readonly BoardSessionRef[],
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; addedTabIds: string[] } {
+  const known = new Set(Object.values(board.origins).map(boardSessionKey));
+  const origins = { ...board.origins };
+  const added: WorkspaceTab[] = [];
+  for (const session of sessions) {
+    const key = boardSessionKey(session);
+    if (known.has(key)) {
+      continue;
+    }
+    known.add(key);
+    const tab: WorkspaceTab = {
+      tabId: ids.createTabId(),
+      target: { kind: "agent", agentId: session.agentId },
+      createdAt: ids.now(),
+    };
+    added.push(tab);
+    origins[tab.tabId] = {
+      serverId: session.serverId,
+      workspaceId: session.workspaceId,
+      agentId: session.agentId,
+    };
+  }
+  const landing = resolveLandingPane(board.layout);
+  if (added.length === 0 || !landing) {
+    return { board, addedTabIds: [] };
+  }
+  const root = updatePane(board.layout.root as NodeWithTabs, landing.id, (pane) =>
+    makePane(pane.id, [...pane.tabs, ...added], added[added.length - 1]?.tabId),
+  );
+  return {
+    board: {
+      ...board,
+      origins,
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: landing.id },
+    },
+    addedTabIds: added.map((tab) => tab.tabId),
+  };
+}
+
+function dropNewTabs(node: NodeWithTabs): NodeWithTabs {
+  if (node.kind === "group") {
+    return {
+      kind: "group",
+      group: { ...node.group, children: node.group.children.map(dropNewTabs) },
+    };
+  }
+  const tabs = node.pane.tabs.filter((tab) => tab.target.kind !== "new_tab");
+  return tabs.length === node.pane.tabs.length
+    ? node
+    : paneNode(node.pane.id, tabs, node.pane.focusedTabId);
+}
+
+/** Closes a tab, forgets its origin, and collapses a pane it empties (never the last pane). */
+export function removeTabFromBoard(board: Board, tabId: string): Board {
+  const closed = closeTabInLayout({ layout: board.layout, tabId, explorerSidebarPaneId: null });
+  if (!closed) {
+    return board;
+  }
+  // The workspace layout refills its last pane with a "new tab" placeholder; a board has no
+  // such tab (every tab is an agent), so the pane is left empty instead.
+  const layout = { ...closed, root: asLayoutRoot(dropNewTabs(closed.root as NodeWithTabs)) };
+  const { [tabId]: _removed, ...origins } = board.origins;
+  return { ...board, layout, origins };
+}
+
+export function moveBoardTab(board: Board, tabId: string, toPaneId: string): Board {
+  const layout = moveTabToPaneInLayout({ layout: board.layout, tabId, toPaneId });
+  return layout ? { ...board, layout } : board;
+}
+
+export function focusBoardPaneModel(board: Board, paneId: string): Board {
+  const layout = focusPaneInLayout({ layout: board.layout, paneId });
+  return layout ? { ...board, layout } : board;
+}
+
+/** Selects the tab in its pane and makes that pane the focused one, like clicking it. */
+export function selectBoardTabModel(board: Board, paneId: string, tabId: string): Board {
+  const selected = selectTabInPaneInLayout({ layout: board.layout, paneId, tabId });
+  const focused = focusPaneInLayout({ layout: selected ?? board.layout, paneId });
+  const layout = focused ?? selected;
+  return layout ? { ...board, layout } : board;
+}
+
+function findGroupChildCount(node: SplitNode, groupId: string): number | null {
+  if (node.kind === "pane") {
+    return null;
+  }
+  if (node.group.id === groupId) {
+    return node.group.children.length;
+  }
+  for (const child of node.group.children) {
+    const found = findGroupChildCount(child, groupId);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** Stores a dragged divider as an override, clamped like the workspace store does. */
+export function resizeBoardSplitModel(board: Board, groupId: string, sizes: number[]): Board {
+  if (findGroupChildCount(board.layout.root, groupId) !== sizes.length) {
+    return board;
+  }
+  return { ...board, splitSizes: { ...board.splitSizes, [groupId]: clampNormalizedSizes(sizes) } };
+}
+
+/** Re-arranges the board's sessions (all of them, in on-screen order unless `tabIds` says otherwise). */
+export function arrangeBoardTabs(
+  board: Board,
+  input: { preset: ArrangePreset; viewport: ArrangeViewport; tabIds?: readonly string[] },
+): Board | null {
+  const tabIds = input.tabIds ?? listBoardTabs(board.layout).map((tab) => tab.tabId);
+  const layout = arrangeLayoutTabs(board.layout, {
+    tabIds,
+    preset: input.preset,
+    viewport: input.viewport,
+    explorerPaneId: NO_EXPLORER_PANE_ID,
+  });
+  return layout ? { ...board, layout, splitSizes: {} } : null;
+}
+
+export function equalizeBoardLayout(board: Board): Board {
+  // Dragged dividers live in split-size overrides; clearing them is what makes it equal.
+  return {
+    ...board,
+    layout: equalizeLayout(board.layout, NO_EXPLORER_PANE_ID),
+    splitSizes: {},
+  };
+}
+
+/** Puts a saved layout back, minus tabs closed since and plus tabs opened since. */
+export function restoreBoardLayout(
+  board: Board,
+  snapshot: { layout: WorkspaceLayout; splitSizes: Record<string, number[]> },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board {
+  const layout = reconcileSnapshot(snapshot.layout, listBoardTabs(board.layout), {
+    explorerPaneId: NO_EXPLORER_PANE_ID,
+    currentExplorerPane: null,
+    createNodeId: ids.createNodeId,
+  });
+  return { ...board, layout, splitSizes: pruneSplitSizes(layout, snapshot.splitSizes) };
+}
+
+/**
+ * Deals groups onto `cells` panes: one each, then the overflow round-robin as extra tabs.
+ * A pane keeps the focused tab of the group that owns the cell.
+ */
+function dealIntoCells(
+  groups: ReadonlyArray<{ tabs: WorkspaceTab[]; focusedAgentId: string | null }>,
+  cells: number,
+): Array<{ tabs: WorkspaceTab[]; focusedTabId: string | null }> {
+  const panes = Array.from({ length: Math.min(cells, groups.length) }, () => ({
+    tabs: [] as WorkspaceTab[],
+    focusedTabId: null as string | null,
+  }));
+  groups.forEach((group, index) => {
+    const pane = panes[index < panes.length ? index : (index - panes.length) % panes.length];
+    if (!pane) {
+      return;
+    }
+    pane.tabs.push(...group.tabs);
+    if (index < panes.length) {
+      pane.focusedTabId =
+        group.tabs.find(
+          (tab) => tab.target.kind === "agent" && tab.target.agentId === group.focusedAgentId,
+        )?.tabId ?? null;
+    }
+  });
+  return panes;
+}
+
+/** One pane's worth of sessions; `focusedAgentId` is the tab that shows (default: the first). */
+export interface BoardSplitGroup {
+  sessions: readonly BoardSessionRef[];
+  focusedAgentId?: string | null;
+}
+
+/**
+ * One pane per group of sessions, each pane a tab strip. "columns" puts the panes side by
+ * side with equal widths; "grid" lays them out like Arrange's grid for this viewport.
+ * `keepTabIds` (session key → tab id) lets a rebuild keep the tabs that already exist, so
+ * their agent panels do not remount.
+ */
+export function buildWorkspaceSplit(input: {
+  groups: readonly BoardSplitGroup[];
+  layout: BoardSplitLayout;
+  viewport: ArrangeViewport;
+  keepTabIds?: ReadonlyMap<string, string>;
+  ids?: BoardIds;
+}): { layout: WorkspaceLayout; origins: Record<string, BoardTabOrigin> } {
+  const ids = input.ids ?? DEFAULT_BOARD_IDS;
+  const origins: Record<string, BoardTabOrigin> = {};
+  const seen = new Set<string>();
+  const tabGroups = input.groups.map((group) => ({
+    focusedAgentId: group.focusedAgentId ?? null,
+    tabs: group.sessions.flatMap((session) => {
+      const key = boardSessionKey(session);
+      if (seen.has(key)) {
+        return [];
+      }
+      seen.add(key);
+      const tab: WorkspaceTab = {
+        tabId: input.keepTabIds?.get(key) ?? ids.createTabId(),
+        target: { kind: "agent", agentId: session.agentId },
+        createdAt: ids.now(),
+      };
+      origins[tab.tabId] = {
+        serverId: session.serverId,
+        workspaceId: session.workspaceId,
+        agentId: session.agentId,
+      };
+      return [tab];
+    }),
+  }));
+  if (tabGroups.length === 0) {
+    return { layout: createEmptyBoardLayout(ids), origins };
+  }
+
+  const shape =
+    input.layout === "grid"
+      ? computeGridShape(tabGroups.length, input.viewport).rowCounts
+      : [Math.min(tabGroups.length, MAX_SPLIT_AXIS)];
+  const cells = shape.reduce((sum, count) => sum + count, 0);
+  const panes = dealIntoCells(tabGroups, cells).map(({ tabs, focusedTabId }) =>
+    paneNode(ids.createNodeId("pane"), tabs, focusedTabId),
+  );
+
+  let cursor = 0;
+  const rows = shape.map((count) => {
+    const rowPanes = panes.slice(cursor, cursor + count);
+    cursor += count;
+    return rowPanes.length === 1 && rowPanes[0]
+      ? rowPanes[0]
+      : groupNode(ids.createNodeId("group"), "horizontal", rowPanes);
+  });
+  const root =
+    rows.length === 1 && rows[0] ? rows[0] : groupNode(ids.createNodeId("group"), "vertical", rows);
+  return {
+    layout: { root: asLayoutRoot(root), focusedPaneId: firstPaneId(root) },
+    origins,
+  };
+}
+
+/**
+ * The Live board's growth step: newly active sessions join and the board is re-gridded over
+ * (current tabs in order + the newcomers). Nothing is ever removed here; finished sessions
+ * stay until a refresh. Returns null when nobody is new.
+ */
+export function appendActiveSessions(
+  board: Board,
+  active: readonly BoardSessionRef[],
+  viewport: ArrangeViewport,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  const current = listBoardTabs(board.layout).map((tab) => tab.tabId);
+  const { board: grown, addedTabIds } = addSessionsToBoardModel(board, active, ids);
+  if (addedTabIds.length === 0) {
+    return null;
+  }
+  return (
+    arrangeBoardTabs(grown, { preset: "grid", viewport, tabIds: [...current, ...addedTabIds] }) ??
+    grown
+  );
+}
+
+/**
+ * The Live board's reset: a grid of exactly `active`. Sessions that were already on the board
+ * keep their tab (and on-screen order); the rest follow in the order given.
+ */
+export function rebuildLiveBoard(
+  board: Board,
+  active: readonly BoardSessionRef[],
+  viewport: ArrangeViewport,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board {
+  const wanted = new Map(active.map((session) => [boardSessionKey(session), session]));
+  const kept: BoardSessionRef[] = [];
+  const keepTabIds = new Map<string, string>();
+  for (const tab of listBoardTabs(board.layout)) {
+    const origin = board.origins[tab.tabId];
+    const key = origin ? boardSessionKey(origin) : null;
+    if (origin && key && wanted.has(key) && !keepTabIds.has(key)) {
+      keepTabIds.set(key, tab.tabId);
+      kept.push(origin);
+    }
+  }
+  const ordered = [...kept, ...active];
+  const grouped = buildWorkspaceSplit({
+    groups: [{ sessions: ordered }],
+    layout: "columns",
+    viewport,
+    keepTabIds,
+    ids,
+  });
+  const single: Board = { ...board, layout: grouped.layout, origins: grouped.origins };
+  return (
+    arrangeBoardTabs({ ...single, splitSizes: {} }, { preset: "grid", viewport }) ?? {
+      ...single,
+      splitSizes: {},
+    }
+  );
+}

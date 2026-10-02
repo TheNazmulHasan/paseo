@@ -16,6 +16,11 @@ export type TabSwitcherCandidate = TabSwitcherVisit & {
   projectInitial: string;
   /** Seeds the fallback box colour — same key the sidebar uses, so colours match. */
   projectViewKey: string;
+  /**
+   * Boards (fork mod #13): when set, committing runs this instead of navigating, so the
+   * switcher can act inside a board pane without leaving the board.
+   */
+  commit?: () => void;
 };
 
 interface TabSwitcherStoreState {

@@ -184,3 +184,34 @@ describe("a resting mouse must not steal the selection", () => {
     expect(isTabSwitcherPointerSelectionAllowed()).toBe(false);
   });
 });
+
+describe("tab switcher inside a board pane", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    navigateToAgent.mockClear();
+    navigateToWorkspace.mockClear();
+    resetTabSwitcherReleaseLearningForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("runs the candidate's own commit and does not navigate away", () => {
+    const commit = vi.fn();
+    useTabSwitcherStore.setState({
+      open: false,
+      visible: false,
+      selectedIndex: 0,
+      candidates: [candidate("a"), { ...candidate("b"), commit }],
+    });
+    cycleTabSwitcher(1);
+    handleTabSwitcherKeyEvent({ type: "keydown", key: "Meta", modifiersHeld: true });
+    handleTabSwitcherKeyEvent({ type: "keyup", key: "Meta", modifiersHeld: false });
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(navigateToAgent).not.toHaveBeenCalled();
+    expect(navigateToWorkspace).not.toHaveBeenCalled();
+    expect(useTabSwitcherStore.getState().open).toBe(false);
+  });
+});

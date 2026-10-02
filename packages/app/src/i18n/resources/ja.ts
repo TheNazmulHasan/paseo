@@ -437,6 +437,43 @@ export const ja: TranslationResources = {
       importing: "インポート中...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "ビュー",
+      live: "ライブ",
+      split: "ワークスペースを分割…",
+      rename: "ビューの名前を変更",
+      delete: "ビューを削除",
+      namePlaceholder: "ビュー名",
+      deleteTitle: "ビューを削除",
+      deleteMessage: "「{{name}}」を削除しますか？中のセッションには影響しません。",
+    },
+    menu: {
+      splitWith: "ワークスペースと分割…",
+      splitWorkspaces: "ワークスペースを分割…",
+      openLive: "ライブビューを開く",
+      openView: "ビューを開く: {{name}}",
+    },
+    picker: {
+      title: "ワークスペースを分割",
+      searchPlaceholder: "ワークスペースを検索…",
+      columns: "列",
+      grid: "グリッド",
+      needTwo: "ワークスペースを2つ以上選んでください。スペースで選択、矢印キーで移動します。",
+      hint: "{{count}} 件選択中。Enter: 列、Shift+Enter: グリッド。",
+      empty: "一致するワークスペースがありません",
+    },
+    screen: {
+      openInWorkspace: "ワークスペースで開く",
+      closeTab: "ビューから削除",
+      live: "ライブ",
+      refresh: "ライブビューを更新",
+      paneEmpty: "このペインにセッションはありません",
+      emptyHint:
+        "まだセッションがありません。これらのワークスペースでエージェントを開くか、Ctrl+Cmd+V でワークスペースを分割してください。",
+      notFound: "このビューは存在しなくなりました",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "最近のワークスペース",
@@ -2467,6 +2504,7 @@ export const ja: TranslationResources = {
         switchRecentTabs: "最近のタブを切り替え",
         switchRecentWorkspaces: "最近のワークスペースを切り替え",
         toggleDesk: "デスクに置く / 外す",
+        splitWorkspaces: "ワークスペースを分割",
         arrangeOnePane: "整列: 1ペイン",
         arrangeColumns2: "整列: 2列",
         arrangeColumns3: "整列: 3列",

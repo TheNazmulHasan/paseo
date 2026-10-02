@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
+import {
+  useBoardSwitcherCandidateSync,
+  useIsBoardRoute,
+} from "@/boards/use-board-switcher-candidates";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -55,6 +59,7 @@ const POINTER_INTENT_THRESHOLD_PX = 6;
 export function TabSwitcherHost() {
   useVisitRecorder();
   useCandidateSync();
+  useBoardSwitcherCandidateSync();
   return <TabSwitcherOverlay />;
 }
 
@@ -117,6 +122,8 @@ function useVisitRecorder(): void {
  */
 function useCandidateSync(): void {
   const { t } = useTranslation();
+  // On a board route the board owns the candidates (see useBoardSwitcherCandidateSync).
+  const isBoardRoute = useIsBoardRoute();
   const history = useTabSwitcherMruStore((state) => state.history);
   const { agents } = useAggregatedAgents({ demand: false });
   const { projects } = useProjects({ enabled: true });
@@ -283,8 +290,11 @@ function useCandidateSync(): void {
   ]);
 
   useEffect(() => {
+    if (isBoardRoute) {
+      return;
+    }
     setCandidates(candidates);
-  }, [candidates, setCandidates]);
+  }, [candidates, isBoardRoute, setCandidates]);
 }
 
 function TabSwitcherOverlay() {

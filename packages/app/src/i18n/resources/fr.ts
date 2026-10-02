@@ -438,6 +438,44 @@ export const fr: TranslationResources = {
       importing: "Importation...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "Vues",
+      live: "En direct",
+      split: "Diviser des espaces de travail…",
+      rename: "Renommer la vue",
+      delete: "Supprimer la vue",
+      namePlaceholder: "Nom de la vue",
+      deleteTitle: "Supprimer la vue",
+      deleteMessage:
+        "Supprimer « {{name}} » ? Les sessions qu’elle contient ne sont pas affectées.",
+    },
+    menu: {
+      splitWith: "Diviser avec des espaces de travail…",
+      splitWorkspaces: "Diviser des espaces de travail…",
+      openLive: "Ouvrir la vue en direct",
+      openView: "Ouvrir la vue : {{name}}",
+    },
+    picker: {
+      title: "Diviser des espaces de travail",
+      searchPlaceholder: "Rechercher des espaces de travail…",
+      columns: "Colonnes",
+      grid: "Grille",
+      needTwo: "Cochez au moins deux espaces de travail. Espace coche, les flèches déplacent.",
+      hint: "{{count}} cochés. Entrée : colonnes. Maj+Entrée : grille.",
+      empty: "Aucun espace de travail ne correspond",
+    },
+    screen: {
+      openInWorkspace: "Ouvrir dans l’espace de travail",
+      closeTab: "Retirer de la vue",
+      live: "En direct",
+      refresh: "Actualiser la vue en direct",
+      paneEmpty: "Aucune session dans ce panneau",
+      emptyHint:
+        "Aucune session pour l’instant. Ouvrez des agents dans ces espaces de travail, ou appuyez sur Ctrl+Cmd+V pour diviser les espaces de travail.",
+      notFound: "Cette vue n’existe plus",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "Espaces de travail récents",
@@ -2502,6 +2540,7 @@ export const fr: TranslationResources = {
         switchRecentTabs: "Changer d'onglet récent",
         switchRecentWorkspaces: "Changer d'espace de travail récent",
         toggleDesk: "Mettre sur / retirer du bureau",
+        splitWorkspaces: "Diviser des espaces de travail",
         arrangeOnePane: "Organiser : un seul panneau",
         arrangeColumns2: "Organiser : 2 colonnes",
         arrangeColumns3: "Organiser : 3 colonnes",

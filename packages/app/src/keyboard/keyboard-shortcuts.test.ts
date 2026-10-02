@@ -304,6 +304,50 @@ describe("workspace desk toggle shortcut", () => {
   });
 });
 
+describe("workspace board split shortcut", () => {
+  it("maps Ctrl+Cmd+V on mac to workspace.board.split, even while typing", () => {
+    for (const focusScope of ["other", "message-input", "terminal"] as const) {
+      expectShortcutResolution({
+        event: { key: "v", code: "KeyV", ctrlKey: true, metaKey: true },
+        context: { isMac: true, isDesktop: true, focusScope },
+        action: "workspace.board.split",
+      });
+    }
+  });
+
+  it("maps Ctrl+Alt+V on non-mac to workspace.board.split, but not while typing", () => {
+    expectShortcutResolution({
+      event: { key: "v", code: "KeyV", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "other" },
+      action: "workspace.board.split",
+    });
+    expectNoShortcutResolution({
+      event: { key: "v", code: "KeyV", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "message-input" },
+    });
+  });
+
+  it("shares its default chords with no other binding", () => {
+    const combos = new Set(
+      DEFAULT_BINDINGS.filter((binding) => binding.action === "workspace.board.split").map(
+        (binding) => binding.combo,
+      ),
+    );
+    expect(combos.size).toBe(2);
+    expect(
+      DEFAULT_BINDINGS.filter(
+        (binding) => binding.action !== "workspace.board.split" && combos.has(binding.combo),
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists the action in the workspaces help section", () => {
+    const sections = buildKeyboardShortcutHelpSections({ isMac: true, isDesktop: true });
+    const rows = sections.find((section) => section.id === "workspaces")?.rows ?? [];
+    expect(rows.some((row) => row.id === "workspace-board-split")).toBe(true);
+  });
+});
+
 interface MatchingShortcutCase {
   name: string;
   event: Partial<KeyboardShortcutInput>;

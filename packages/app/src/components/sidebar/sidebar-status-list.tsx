@@ -75,6 +75,7 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
+import { BoardsSection } from "@/boards/boards-section";
 import { DeskSection } from "@/desk/desk-section";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
@@ -233,6 +234,7 @@ export function SidebarStatusWorkspaceList({
           )}
         </View>
       ) : null}
+      <BoardsSection onWorkspacePress={onWorkspacePress} />
       <DeskSection onWorkspacePress={onWorkspacePress} />
       {listHeaderComponent}
       {sidebarFilterEmpty ? (

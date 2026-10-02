@@ -433,6 +433,43 @@ export const ko: TranslationResources = {
       importing: "가져오는 중...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "보기",
+      live: "라이브",
+      split: "워크스페이스 분할…",
+      rename: "보기 이름 바꾸기",
+      delete: "보기 삭제",
+      namePlaceholder: "보기 이름",
+      deleteTitle: "보기 삭제",
+      deleteMessage: "“{{name}}”을(를) 삭제할까요? 안에 있는 세션은 영향을 받지 않습니다.",
+    },
+    menu: {
+      splitWith: "워크스페이스와 분할…",
+      splitWorkspaces: "워크스페이스 분할…",
+      openLive: "라이브 보기 열기",
+      openView: "보기 열기: {{name}}",
+    },
+    picker: {
+      title: "워크스페이스 분할",
+      searchPlaceholder: "워크스페이스 검색…",
+      columns: "열",
+      grid: "격자",
+      needTwo: "워크스페이스를 두 개 이상 선택하세요. 스페이스로 선택하고 방향키로 이동합니다.",
+      hint: "{{count}}개 선택됨. Enter: 열, Shift+Enter: 격자.",
+      empty: "일치하는 워크스페이스가 없습니다",
+    },
+    screen: {
+      openInWorkspace: "워크스페이스에서 열기",
+      closeTab: "보기에서 제거",
+      live: "라이브",
+      refresh: "라이브 보기 새로 고침",
+      paneEmpty: "이 창에는 세션이 없습니다",
+      emptyHint:
+        "아직 세션이 없습니다. 이 워크스페이스에서 에이전트를 열거나 Ctrl+Cmd+V를 눌러 워크스페이스를 분할하세요.",
+      notFound: "이 보기는 더 이상 존재하지 않습니다",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "최근 워크스페이스",
@@ -2457,6 +2494,7 @@ export const ko: TranslationResources = {
         switchRecentTabs: "최근 탭 전환",
         switchRecentWorkspaces: "최근 워크스페이스 전환",
         toggleDesk: "데스크에 올리기 / 내리기",
+        splitWorkspaces: "워크스페이스 분할",
         arrangeOnePane: "정렬: 창 하나",
         arrangeColumns2: "정렬: 2열",
         arrangeColumns3: "정렬: 3열",

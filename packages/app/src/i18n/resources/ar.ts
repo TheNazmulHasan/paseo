@@ -432,6 +432,43 @@ export const ar: TranslationResources = {
       importing: "جارٍ الاستيراد...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "العروض",
+      live: "مباشر",
+      split: "تقسيم مساحات العمل…",
+      rename: "إعادة تسمية العرض",
+      delete: "حذف العرض",
+      namePlaceholder: "اسم العرض",
+      deleteTitle: "حذف العرض",
+      deleteMessage: "حذف «{{name}}»؟ لن تتأثر الجلسات الموجودة فيه.",
+    },
+    menu: {
+      splitWith: "تقسيم مع مساحات العمل…",
+      splitWorkspaces: "تقسيم مساحات العمل…",
+      openLive: "فتح العرض المباشر",
+      openView: "فتح العرض: {{name}}",
+    },
+    picker: {
+      title: "تقسيم مساحات العمل",
+      searchPlaceholder: "ابحث في مساحات العمل…",
+      columns: "أعمدة",
+      grid: "شبكة",
+      needTwo: "حدّد مساحتَي عمل على الأقل. مفتاح المسافة للتحديد والأسهم للتنقل.",
+      hint: "تم تحديد {{count}}. Enter: أعمدة. Shift+Enter: شبكة.",
+      empty: "لا توجد مساحات عمل مطابقة",
+    },
+    screen: {
+      openInWorkspace: "فتح في مساحة العمل",
+      closeTab: "إزالة من العرض",
+      live: "مباشر",
+      refresh: "تحديث العرض المباشر",
+      paneEmpty: "لا توجد جلسات في هذه اللوحة",
+      emptyHint:
+        "لا توجد جلسات هنا بعد. افتح بعض الوكلاء في مساحات العمل هذه، أو اضغط Ctrl+Cmd+V لتقسيم مساحات العمل.",
+      notFound: "هذا العرض لم يعد موجودًا",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "مساحات العمل الأخيرة",
@@ -2446,6 +2483,7 @@ export const ar: TranslationResources = {
         switchRecentTabs: "التبديل بين علامات التبويب الأخيرة",
         switchRecentWorkspaces: "التبديل بين مساحات العمل الأخيرة",
         toggleDesk: "وضع على المكتب / إزالة منه",
+        splitWorkspaces: "تقسيم مساحات العمل",
         arrangeOnePane: "ترتيب: لوح واحد",
         arrangeColumns2: "ترتيب: عمودان",
         arrangeColumns3: "ترتيب: 3 أعمدة",

@@ -5,6 +5,7 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { getResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import { boardKeyboardHandlerId } from "@/boards/keyboard-contract";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
   type ChordState,
@@ -43,6 +44,18 @@ import {
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
+
+type KeyboardActionDispatcher = ReturnType<typeof useKeyboardActionDispatcher>;
+
+// Boards (fork mod #13): on a board route the action is addressed to the board screen's handler.
+function dispatchShortcutAction(
+  dispatcher: KeyboardActionDispatcher,
+  { action, boardId }: Extract<ShortcutAction, { kind: "dispatch" }>,
+): boolean {
+  return boardId
+    ? dispatcher.dispatchToHandler(boardKeyboardHandlerId(boardId), action)
+    : dispatcher.dispatch(action);
+}
 
 export function useKeyboardShortcuts({
   enabled,
@@ -172,7 +185,7 @@ export function useKeyboardShortcuts({
       case "none":
         return false;
       case "dispatch":
-        return keyboardActionDispatcher.dispatch(action.action);
+        return dispatchShortcutAction(keyboardActionDispatcher, action);
       case "navigate-workspace":
         keyboardWorkspaceSelectionRef.current = {
           serverId: action.serverId,

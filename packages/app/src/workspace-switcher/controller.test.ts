@@ -1,6 +1,13 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-const { navigateToWorkspace } = vi.hoisted(() => ({ navigateToWorkspace: vi.fn() }));
+const { navigateToWorkspace, navigateToBoard } = vi.hoisted(() => ({
+  navigateToWorkspace: vi.fn(),
+  navigateToBoard: vi.fn(),
+}));
+
+vi.mock("@/boards/navigation", () => ({
+  navigateToBoard: (boardId: string) => navigateToBoard(boardId),
+}));
 
 vi.mock("@/stores/navigation-active-workspace-store", () => ({
   navigateToWorkspace: (input: unknown) => navigateToWorkspace(input),
@@ -77,6 +84,7 @@ describe("workspace switcher controller", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     navigateToWorkspace.mockClear();
+    navigateToBoard.mockClear();
     resetWorkspaceSwitcherReleaseLearningForTests();
     useTabSwitcherStore.setState({ open: false, visible: false, selectedIndex: 0 });
     useWorkspaceSwitcherStore.getState().close();
@@ -176,5 +184,56 @@ describe("workspace switcher controller", () => {
     expect(useTabSwitcherStore.getState().open).toBe(false);
     // Only the workspace switcher's own reveal + fallback timers remain.
     expect(vi.getTimerCount()).toBe(2);
+  });
+  describe("board rows (fork mod #13)", () => {
+    function seedWithBoard(liveKeys: ReadonlySet<string>) {
+      useWorkspaceSwitcherStore.setState({
+        open: false,
+        visible: false,
+        selectedIndex: 0,
+        candidates: [
+          candidate("a"),
+          candidate("b"),
+          {
+            ...candidate("live"),
+            serverId: "board",
+            title: "Live",
+            boardId: "live",
+            boardKind: "live" as const,
+            boardSessionCount: 2,
+          },
+          candidate("c"),
+        ],
+        currentKey: "srv:a",
+        liveKeys,
+      });
+    }
+
+    it("opens the board, not a workspace, when a board row is committed", () => {
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      cycleWorkspaceSwitcher(1);
+      cycleWorkspaceSwitcher(1);
+      expect(useWorkspaceSwitcherStore.getState().selectedIndex).toBe(2);
+      commitWorkspaceSwitcher();
+      expect(navigateToBoard).toHaveBeenCalledWith("live");
+      expect(navigateToWorkspace).not.toHaveBeenCalled();
+    });
+
+    it("still taps through to the previous workspace with boards in the list", () => {
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      cycleWorkspaceSwitcher(1);
+      commitWorkspaceSwitcher();
+      expect(navigateToWorkspace).toHaveBeenCalledWith({ serverId: "srv", workspaceId: "b" });
+      expect(navigateToBoard).not.toHaveBeenCalled();
+    });
+
+    it("cancels when the board was deleted while the switcher was open", () => {
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      cycleWorkspaceSwitcher(1);
+      cycleWorkspaceSwitcher(1);
+      useWorkspaceSwitcherStore.setState({ liveKeys: new Set(["srv:a", "srv:b", "srv:c"]) });
+      commitWorkspaceSwitcher();
+      expect(navigateToBoard).not.toHaveBeenCalled();
+    });
   });
 });

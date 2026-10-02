@@ -436,6 +436,43 @@ export const ptBR: TranslationResources = {
       importing: "Importando...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "Visualizações",
+      live: "Ao vivo",
+      split: "Dividir espaços de trabalho…",
+      rename: "Renomear visualização",
+      delete: "Excluir visualização",
+      namePlaceholder: "Nome da visualização",
+      deleteTitle: "Excluir visualização",
+      deleteMessage: "Excluir “{{name}}”? As sessões dentro dela não são afetadas.",
+    },
+    menu: {
+      splitWith: "Dividir com espaços de trabalho…",
+      splitWorkspaces: "Dividir espaços de trabalho…",
+      openLive: "Abrir a visualização ao vivo",
+      openView: "Abrir visualização: {{name}}",
+    },
+    picker: {
+      title: "Dividir espaços de trabalho",
+      searchPlaceholder: "Pesquisar espaços de trabalho…",
+      columns: "Colunas",
+      grid: "Grade",
+      needTwo: "Marque pelo menos dois espaços de trabalho. Espaço marca, as setas movem.",
+      hint: "{{count}} marcados. Enter: colunas. Shift+Enter: grade.",
+      empty: "Nenhum espaço de trabalho corresponde",
+    },
+    screen: {
+      openInWorkspace: "Abrir no espaço de trabalho",
+      closeTab: "Remover da visualização",
+      live: "Ao vivo",
+      refresh: "Atualizar visualização ao vivo",
+      paneEmpty: "Nenhuma sessão neste painel",
+      emptyHint:
+        "Ainda não há sessões. Abra agentes nestes espaços de trabalho ou pressione Ctrl+Cmd+V para dividir espaços de trabalho.",
+      notFound: "Esta visualização não existe mais",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "Workspaces recentes",
@@ -2479,6 +2516,7 @@ export const ptBR: TranslationResources = {
         switchRecentTabs: "Alternar abas recentes",
         switchRecentWorkspaces: "Alternar workspaces recentes",
         toggleDesk: "Pôr na / tirar da mesa",
+        splitWorkspaces: "Dividir espaços de trabalho",
         arrangeOnePane: "Organizar: um painel",
         arrangeColumns2: "Organizar: 2 colunas",
         arrangeColumns3: "Organizar: 3 colunas",

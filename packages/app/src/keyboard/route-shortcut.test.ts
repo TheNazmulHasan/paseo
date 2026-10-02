@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BOARD_ROUTED_ACTION_IDS } from "@/boards/keyboard-contract";
 import {
   routeKeyboardShortcut,
   type ShortcutAction,
@@ -39,6 +40,7 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.archive", { id: "workspace.archive", scope: "sidebar" }],
     ["workspace.pin", { id: "workspace.pin", scope: "sidebar" }],
     ["workspace.desk.toggle", { id: "workspace.desk.toggle", scope: "sidebar" }],
+    ["workspace.board.split", { id: "workspace.board.split", scope: "sidebar" }],
     ["worktree.new", { id: "worktree.new", scope: "sidebar" }],
     ["workspace.terminal.new", { id: "workspace.terminal.new", scope: "workspace" }],
     ["workspace.tab.close.current", { id: "workspace.tab.close-current", scope: "workspace" }],
@@ -462,5 +464,125 @@ describe("routeKeyboardShortcut — unknown actions", () => {
     expect(
       routeKeyboardShortcut({ action: "totally.made.up", payload: null }, makeCtx()),
     ).toEqual<ShortcutAction>({ kind: "none" });
+  });
+});
+
+describe("routeKeyboardShortcut — board routes (fork mod #13)", () => {
+  const boardCtx = () => makeCtx({ pathname: "/boards/abc" });
+  const ARRANGE_AND_PANE_IDS = [
+    "workspace.arrange.single",
+    "workspace.arrange.columns2",
+    "workspace.arrange.columns3",
+    "workspace.arrange.grid",
+    "workspace.arrange.watch",
+    "workspace.arrange.restore",
+    "workspace.arrange.equalize",
+    "workspace.pane.focus.left",
+    "workspace.pane.focus.right",
+    "workspace.pane.focus.up",
+    "workspace.pane.focus.down",
+  ] as const;
+
+  it.each(ARRANGE_AND_PANE_IDS)("%s on /boards/abc goes to the board handler", (action) => {
+    expect(routeKeyboardShortcut({ action, payload: null }, boardCtx())).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      boardId: "abc",
+      action: { id: action, scope: "workspace" },
+    });
+  });
+
+  it("routes tab close to the board with the dispatcher's close-current id", () => {
+    expect(
+      routeKeyboardShortcut({ action: "workspace.tab.close.current", payload: null }, boardCtx()),
+    ).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      boardId: "abc",
+      action: { id: "workspace.tab.close-current", scope: "workspace" },
+    });
+  });
+
+  it("delivers tab navigation to the board handler with its payload, as a workspace would", () => {
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.tab.navigate.relative", payload: { delta: -1 } },
+        boardCtx(),
+      ),
+    ).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      boardId: "abc",
+      action: { id: "workspace.tab.navigate-relative", scope: "workspace", delta: -1 },
+    });
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.tab.navigate.index", payload: { index: 3 } },
+        boardCtx(),
+      ),
+    ).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      boardId: "abc",
+      action: { id: "workspace.tab.navigate-index", scope: "workspace", index: 3 },
+    });
+  });
+
+  it("still drops a tab navigation that has no payload", () => {
+    expect(
+      routeKeyboardShortcut({ action: "workspace.tab.navigate.index", payload: null }, boardCtx()),
+    ).toEqual<ShortcutAction>({ kind: "none" });
+  });
+
+  it("covers every id the board contract lists", () => {
+    const payloads: Record<string, unknown> = {
+      "workspace.tab.navigate.index": { index: 1 },
+      "workspace.tab.navigate.relative": { delta: 1 },
+    };
+    for (const action of BOARD_ROUTED_ACTION_IDS) {
+      const payload = (payloads[action] ?? null) as Parameters<
+        typeof routeKeyboardShortcut
+      >[0]["payload"];
+      expect(routeKeyboardShortcut({ action, payload }, boardCtx())).toMatchObject({
+        kind: "dispatch",
+        boardId: "abc",
+      });
+      expect(routeKeyboardShortcut({ action, payload }, makeCtx())).not.toHaveProperty("boardId");
+    }
+  });
+
+  it("decodes the board id from the pathname", () => {
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.arrange.grid", payload: null },
+        makeCtx({ pathname: "/boards/live" }),
+      ),
+    ).toMatchObject({ kind: "dispatch", boardId: "live" });
+  });
+
+  it("keeps the arrange and pane ids as plain dispatches on a workspace route", () => {
+    for (const action of ARRANGE_AND_PANE_IDS) {
+      expect(routeKeyboardShortcut({ action, payload: null }, makeCtx())).toEqual({
+        kind: "dispatch",
+        action: { id: action, scope: "workspace" },
+      });
+    }
+  });
+
+  it("does not route other ids to the board handler", () => {
+    for (const action of [
+      "workspace.pane.split.right",
+      "workspace.arrange.menu",
+      "workspace.arrange.select-tab",
+      "workspace.terminal.new",
+      "workspace.board.split",
+      "agent.interrupt",
+    ]) {
+      expect(routeKeyboardShortcut({ action, payload: null }, boardCtx())).not.toHaveProperty(
+        "boardId",
+      );
+    }
+  });
+
+  it("leaves non-passthrough routing alone on a board route", () => {
+    expect(
+      routeKeyboardShortcut({ action: "command-center.toggle", payload: null }, boardCtx()),
+    ).toEqual<ShortcutAction>({ kind: "command-center-toggle", nextOpen: true });
   });
 });

@@ -170,6 +170,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-next",
     "pin-workspace",
     "desk-toggle",
+    "workspace-board-split",
     "archive-workspace",
   ],
   "tabs-panes": [
@@ -265,6 +266,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
   "desk-toggle": "settings.shortcuts.help.toggleDesk",
+  "workspace-board-split": "settings.shortcuts.help.splitWorkspaces",
   "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
@@ -432,6 +434,31 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "desk-toggle",
       section: "workspaces",
       label: "Put on / take off Desk",
+    },
+  },
+
+  // --- Split workspaces into one view (fork mod #13, Boards) ---
+  // Same Ctrl+Cmd / Ctrl+Alt family as Arrange and Desk; the non-mac chord skips text fields.
+  {
+    id: "workspace-board-split-ctrl-cmd-v-mac",
+    action: "workspace.board.split",
+    combo: "Cmd+Ctrl+V",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-board-split",
+      section: "workspaces",
+      label: "Split workspaces",
+    },
+  },
+  {
+    id: "workspace-board-split-ctrl-alt-v-non-mac",
+    action: "workspace.board.split",
+    combo: "Ctrl+Alt+V",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-board-split",
+      section: "workspaces",
+      label: "Split workspaces",
     },
   },
 

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet } from "react-native-unistyles";
+import { LayoutGrid, Radio } from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { ProjectIconView } from "@/components/project-icon-view";
+import { useBoards } from "@/boards/controller";
+import { LIVE_BOARD_ID } from "@/boards/types";
 import { useDeskStore } from "@/desk/desk-store";
 import { orderKeysDeskFirst, toKeySet } from "@/desk/model";
 import { isWeb } from "@/constants/platform";
@@ -19,6 +22,7 @@ import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-sta
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { collectAllTabs } from "@/stores/workspace-layout-actions";
 import { useWorkspaceLayoutStore, type WorkspaceLayout } from "@/stores/workspace-layout-store";
+import type { Theme } from "@/styles/theme";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
   cancelWorkspaceSwitcher,
@@ -30,6 +34,9 @@ import {
   selectWorkspaceSwitcherIndex,
 } from "@/workspace-switcher/controller";
 import {
+  BOARD_ROW_SERVER_ID,
+  boardRowKey,
+  insertBoardKeys,
   mergeWorkspaceOrder,
   WORKSPACE_SWITCHER_VISIBLE_LIMIT,
   workspaceVisitKey,
@@ -39,6 +46,10 @@ import {
   useWorkspaceSwitcherStore,
   type WorkspaceSwitcherCandidate,
 } from "@/workspace-switcher/workspace-switcher-store";
+
+const ThemedLayoutGrid = withUnistyles(LayoutGrid);
+const ThemedRadio = withUnistyles(Radio);
+const boardIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const WORKSPACE_SWITCHER_ICON_SIZE = 22;
 const POINTER_INTENT_THRESHOLD_PX = 6;
@@ -97,6 +108,7 @@ function createWorkspaceCandidate(input: {
 }
 
 function useWorkspaceCandidateSync(): void {
+  const { t } = useTranslation();
   const selection = useActiveWorkspaceSelection();
   const history = useWorkspaceSwitcherMruStore((state) => state.history);
   const setCandidates = useWorkspaceSwitcherStore((state) => state.setCandidates);
@@ -107,6 +119,7 @@ function useWorkspaceCandidateSync(): void {
   const layoutByWorkspace = useWorkspaceLayoutStore((state) => state.layoutByWorkspace);
   const deskKeyList = useDeskStore((state) => state.deskKeys);
   const deskKeys = useMemo(() => toKeySet(deskKeyList), [deskKeyList]);
+  const boards = useBoards();
 
   const { workspaceTitleByKey, projectByWorkspaceKey } = useMemo(() => {
     const titles = new Map<string, string>();
@@ -148,6 +161,16 @@ function useWorkspaceCandidateSync(): void {
     [workspacePlacements],
   );
 
+  // Fork mod #13: the Live view and saved splits sit in the list as rows of their own.
+  const boardByKey = useMemo(
+    () => new Map(boards.map((board) => [boardRowKey(board.id), board] as const)),
+    [boards],
+  );
+  const switcherLiveKeys = useMemo(
+    () => new Set([...liveKeys, ...boardByKey.keys()]),
+    [boardByKey, liveKeys],
+  );
+
   const candidates = useMemo<WorkspaceSwitcherCandidate[]>(() => {
     const liveAgents = agents.filter((agent) => !agent.archivedAt);
     const agentByKey = new Map(
@@ -163,18 +186,42 @@ function useWorkspaceCandidateSync(): void {
     const rowZeroIsCurrent = Boolean(activeKey && placementByKey.has(activeKey));
     // Desk first (fork mod #12), after row 0 and the workspace just left, which stay put so a
     // quick tap still lands on it. The cut to the visible limit comes after the reorder.
-    const orderedKeys = orderKeysDeskFirst(
-      mergeWorkspaceOrder(
-        rowZeroIsCurrent && activeKey ? [activeKey, ...validHistoryKeys] : validHistoryKeys,
-        workspacePlacements.map((workspace) => workspace.workspaceKey),
-        Number.POSITIVE_INFINITY,
+    const headCount = rowZeroIsCurrent ? 2 : 1;
+    const orderedKeys = insertBoardKeys(
+      orderKeysDeskFirst(
+        mergeWorkspaceOrder(
+          rowZeroIsCurrent && activeKey ? [activeKey, ...validHistoryKeys] : validHistoryKeys,
+          workspacePlacements.map((workspace) => workspace.workspaceKey),
+          Number.POSITIVE_INFINITY,
+        ),
+        deskKeys,
+        headCount,
       ),
+      [...boardByKey.keys()],
       deskKeys,
-      rowZeroIsCurrent ? 2 : 1,
+      headCount,
     ).slice(0, WORKSPACE_SWITCHER_VISIBLE_LIMIT);
 
     const rows: WorkspaceSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
+      const board = boardByKey.get(key);
+      if (board) {
+        rows.push({
+          serverId: BOARD_ROW_SERVER_ID,
+          workspaceId: board.id,
+          at: 0,
+          title: board.id === LIVE_BOARD_ID ? t("boards.sidebar.live") : board.name,
+          status: null,
+          requiresAttention: false,
+          iconDataUri: null,
+          projectInitial: "",
+          projectViewKey: key,
+          boardId: board.id,
+          boardKind: board.kind,
+          boardSessionCount: board.sessionCount,
+        });
+        continue;
+      }
       const workspace = placementByKey.get(key);
       if (!workspace) {
         continue;
@@ -199,18 +246,20 @@ function useWorkspaceCandidateSync(): void {
   }, [
     activeKey,
     agents,
+    boardByKey,
     deskKeys,
     history,
     iconDataByProjectViewKey,
     layoutByWorkspace,
     projectByWorkspaceKey,
+    t,
     workspacePlacements,
     workspaceTitleByKey,
   ]);
 
   useEffect(() => {
-    setCandidates(candidates, activeKey, liveKeys);
-  }, [activeKey, candidates, liveKeys, setCandidates]);
+    setCandidates(candidates, activeKey, switcherLiveKeys);
+  }, [activeKey, candidates, setCandidates, switcherLiveKeys]);
 
   // The workspace just opened may not be in the placements yet; never prune it.
   useEffect(() => {
@@ -269,23 +318,37 @@ function WorkspaceSwitcherRow({
   const rowStyle = useMemo(() => [styles.row, selected && styles.rowSelected], [selected]);
   return (
     <Pressable style={rowStyle} onHoverIn={onHoverIn} onPress={onPress}>
-      <ProjectIconView
-        iconDataUri={candidate.iconDataUri}
-        initial={candidate.projectInitial}
-        projectViewKey={candidate.projectViewKey}
-        size={WORKSPACE_SWITCHER_ICON_SIZE}
-        textStyle={styles.rowIconFallbackText}
-      />
+      {candidate.boardId ? (
+        <View style={styles.boardIcon} testID="workspace-switcher-board-icon">
+          {candidate.boardKind === "live" ? (
+            <ThemedRadio size={16} uniProps={boardIconColorMapping} />
+          ) : (
+            <ThemedLayoutGrid size={16} uniProps={boardIconColorMapping} />
+          )}
+        </View>
+      ) : (
+        <ProjectIconView
+          iconDataUri={candidate.iconDataUri}
+          initial={candidate.projectInitial}
+          projectViewKey={candidate.projectViewKey}
+          size={WORKSPACE_SWITCHER_ICON_SIZE}
+          textStyle={styles.rowIconFallbackText}
+        />
+      )}
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {candidate.title}
         </Text>
       </View>
-      <AgentStatusDot
-        status={candidate.status}
-        requiresAttention={candidate.requiresAttention}
-        showInactive
-      />
+      {candidate.boardId ? (
+        <Text style={styles.boardCount}>{candidate.boardSessionCount ?? 0}</Text>
+      ) : (
+        <AgentStatusDot
+          status={candidate.status}
+          requiresAttention={candidate.requiresAttention}
+          showInactive
+        />
+      )}
     </Pressable>
   );
 }
@@ -400,6 +463,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowSelected: { backgroundColor: theme.colors.surface3 },
   rowIconFallbackText: { fontSize: 11 },
+  boardIcon: {
+    width: WORKSPACE_SWITCHER_ICON_SIZE,
+    height: WORKSPACE_SWITCHER_ICON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  boardCount: { fontSize: theme.fontSize.sm, color: theme.colors.foregroundMuted },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: theme.fontSize.base, color: theme.colors.foreground },
 }));

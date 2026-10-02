@@ -429,6 +429,43 @@ export const en = {
       importing: "Importing...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "Views",
+      live: "Live",
+      split: "Split workspaces…",
+      rename: "Rename view",
+      delete: "Delete view",
+      namePlaceholder: "View name",
+      deleteTitle: "Delete view",
+      deleteMessage: "Delete “{{name}}”? The sessions in it are not affected.",
+    },
+    menu: {
+      splitWith: "Split with workspaces…",
+      splitWorkspaces: "Split workspaces…",
+      openLive: "Open Live view",
+      openView: "Open view: {{name}}",
+    },
+    picker: {
+      title: "Split workspaces",
+      searchPlaceholder: "Search workspaces…",
+      columns: "Columns",
+      grid: "Grid",
+      needTwo: "Check at least two workspaces. Space checks, arrow keys move.",
+      hint: "{{count}} checked. Enter: columns. Shift+Enter: grid.",
+      empty: "No workspaces match",
+    },
+    screen: {
+      openInWorkspace: "Open in workspace",
+      closeTab: "Remove from view",
+      live: "Live",
+      refresh: "Refresh Live view",
+      paneEmpty: "No sessions in this pane",
+      emptyHint:
+        "No sessions here yet. Open some agents in these workspaces, or press Ctrl+Cmd+V to split workspaces.",
+      notFound: "This view no longer exists",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "Recent workspaces",
@@ -2567,6 +2604,7 @@ export const en = {
         switchRecentTabs: "Switch recent tabs",
         switchRecentWorkspaces: "Switch recent workspaces",
         toggleDesk: "Put on / take off Desk",
+        splitWorkspaces: "Split workspaces",
         arrangeOnePane: "Arrange: one pane",
         arrangeColumns2: "Arrange: 2 columns",
         arrangeColumns3: "Arrange: 3 columns",

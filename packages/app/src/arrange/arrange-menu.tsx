@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Save,
   Square,
+  SquareSplitHorizontal,
   Trash2,
   Undo2,
 } from "lucide-react-native";
@@ -28,6 +29,7 @@ import {
   type ArrangeCommand,
 } from "@/arrange/run-command";
 import { useArrangeSelection, useArrangeSelectionStore } from "@/arrange/selection-store";
+import { openSplitPicker } from "@/boards/split-picker-store";
 import type { ArrangeViewport, NamedLayoutSummary } from "@/arrange/types";
 import {
   DropdownMenu,
@@ -47,6 +49,7 @@ import { MenuTextField, menuRowContentInset } from "@/components/ui/menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { getIsElectron, isWeb } from "@/constants/platform";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
@@ -59,6 +62,7 @@ const ThemedEye = withUnistyles(Eye);
 const ThemedUndo2 = withUnistyles(Undo2);
 const ThemedEqual = withUnistyles(Equal);
 const ThemedSave = withUnistyles(Save);
+const ThemedSquareSplitHorizontal = withUnistyles(SquareSplitHorizontal);
 const ThemedTrash2 = withUnistyles(Trash2);
 
 const ICON_SIZE = 16;
@@ -70,6 +74,9 @@ const WATCH_ICON = <ThemedEye size={ICON_SIZE} uniProps={mutedIconColorMapping} 
 const RESTORE_ICON = <ThemedUndo2 size={ICON_SIZE} uniProps={mutedIconColorMapping} />;
 const EQUALIZE_ICON = <ThemedEqual size={ICON_SIZE} uniProps={mutedIconColorMapping} />;
 const SAVE_ICON = <ThemedSave size={ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const SPLIT_WORKSPACES_ICON = (
+  <ThemedSquareSplitHorizontal size={ICON_SIZE} uniProps={mutedIconColorMapping} />
+);
 
 const SHORTCUT_HELP_IDS: Record<ArrangeCommand | "menu", string> = {
   single: "workspace-arrange-single",
@@ -157,6 +164,26 @@ function useArrangeMenuHotkeys(input: {
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [open, onCommand]);
+}
+
+/** Fork mod #13 (Boards): the same split picker as Ctrl+Cmd+V. */
+function SplitWorkspacesItem() {
+  const { t } = useTranslation();
+  const chord = useShortcutKeys("workspace-board-split");
+  // The menu closes on select; let it finish before the dialog opens over it.
+  const handleSplit = useCallback(() => {
+    requestAnimationFrame(openSplitPicker);
+  }, []);
+  return (
+    <DropdownMenuItem
+      testID="arrange-menu-split-workspaces"
+      leading={SPLIT_WORKSPACES_ICON}
+      trailing={chordTrailing(chord)}
+      onSelect={handleSplit}
+    >
+      {t("boards.menu.splitWith")}
+    </DropdownMenuItem>
+  );
 }
 
 function SelectionLine({ workspaceKey }: { workspaceKey: string }) {
@@ -416,6 +443,8 @@ export function ArrangeMenu({ workspaceKey, getViewport }: ArrangeMenuProps): Re
           </>
         ) : null}
         <SaveLayoutForm workspaceKey={workspaceKey} onSaved={handleSaved} />
+        <DropdownMenuSeparator />
+        <SplitWorkspacesItem />
       </DropdownMenuContent>
     </DropdownMenu>
   );

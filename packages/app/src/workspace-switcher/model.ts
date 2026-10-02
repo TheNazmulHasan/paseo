@@ -16,6 +16,36 @@ export function workspaceVisitKey(
   return `${visit.serverId}:${visit.workspaceId}`;
 }
 
+/**
+ * Boards (fork mod #13) share the switcher's rows. A board row is keyed like a workspace row, under
+ * a pseudo host, so freezing, pruning and selecting need no second code path.
+ */
+export const BOARD_ROW_SERVER_ID = "board";
+
+export function boardRowKey(boardId: string): string {
+  return `${BOARD_ROW_SERVER_ID}:${boardId}`;
+}
+
+/**
+ * Puts the board rows after the head (current + the workspace just left) and the Desk workspaces
+ * that follow it, ahead of everything else. Same array when there are no boards.
+ */
+export function insertBoardKeys(
+  keys: readonly string[],
+  boardKeys: readonly string[],
+  deskKeys: ReadonlySet<string>,
+  headCount: number,
+): readonly string[] {
+  if (boardKeys.length === 0) {
+    return keys;
+  }
+  let at = Math.min(headCount, keys.length);
+  while (at < keys.length && deskKeys.has(keys[at])) {
+    at += 1;
+  }
+  return [...keys.slice(0, at), ...boardKeys, ...keys.slice(at)];
+}
+
 export function recordWorkspaceVisit(
   history: readonly WorkspaceSwitcherVisit[],
   visit: WorkspaceSwitcherVisit,

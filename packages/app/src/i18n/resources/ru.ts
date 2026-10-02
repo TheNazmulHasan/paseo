@@ -436,6 +436,43 @@ export const ru: TranslationResources = {
       importing: "Импортируется...",
     },
   },
+  boards: {
+    sidebar: {
+      title: "Виды",
+      live: "Прямой эфир",
+      split: "Разделить рабочие пространства…",
+      rename: "Переименовать вид",
+      delete: "Удалить вид",
+      namePlaceholder: "Название вида",
+      deleteTitle: "Удалить вид",
+      deleteMessage: "Удалить «{{name}}»? Сессии внутри не затрагиваются.",
+    },
+    menu: {
+      splitWith: "Разделить с рабочими пространствами…",
+      splitWorkspaces: "Разделить рабочие пространства…",
+      openLive: "Открыть вид «Прямой эфир»",
+      openView: "Открыть вид: {{name}}",
+    },
+    picker: {
+      title: "Разделить рабочие пространства",
+      searchPlaceholder: "Поиск рабочих пространств…",
+      columns: "Столбцы",
+      grid: "Сетка",
+      needTwo: "Отметьте не менее двух рабочих пространств. Пробел отмечает, стрелки перемещают.",
+      hint: "Отмечено: {{count}}. Enter: столбцы. Shift+Enter: сетка.",
+      empty: "Нет подходящих рабочих пространств",
+    },
+    screen: {
+      openInWorkspace: "Открыть в рабочем пространстве",
+      closeTab: "Убрать из вида",
+      live: "Прямой эфир",
+      refresh: "Обновить вид «Прямой эфир»",
+      paneEmpty: "В этой панели нет сессий",
+      emptyHint:
+        "Сессий пока нет. Откройте агентов в этих рабочих пространствах или нажмите Ctrl+Cmd+V, чтобы разделить рабочие пространства.",
+      notFound: "Этот вид больше не существует",
+    },
+  },
   workspace: {
     workspaceSwitcher: {
       title: "Недавние рабочие пространства",
@@ -2487,6 +2524,7 @@ export const ru: TranslationResources = {
         switchRecentTabs: "Переключение недавних вкладок",
         switchRecentWorkspaces: "Переключение недавних рабочих пространств",
         toggleDesk: "Положить на стол / убрать со стола",
+        splitWorkspaces: "Разделить рабочие пространства",
         arrangeOnePane: "Расположение: одна панель",
         arrangeColumns2: "Расположение: 2 колонки",
         arrangeColumns3: "Расположение: 3 колонки",
