@@ -463,6 +463,7 @@ export const ru: TranslationResources = {
       empty: "Нет подходящих рабочих пространств",
     },
     screen: {
+      back: "Назад в рабочее пространство",
       openInWorkspace: "Открыть в рабочем пространстве",
       closeTab: "Убрать из вида",
       live: "Прямой эфир",

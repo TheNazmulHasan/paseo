@@ -140,6 +140,19 @@ function focusWorkspaceAgent(serverId: string, workspaceId: string, agentId: str
   });
 }
 
+function openWorkspaceFile(
+  serverId: string,
+  workspaceId: string,
+  path: string,
+  intent: "background" | "reveal" = "background",
+): void {
+  useWorkspaceLayoutStore.getState().openTab({
+    workspaceKey: wsKey(serverId, workspaceId),
+    target: { kind: "file", path },
+    intent,
+  });
+}
+
 function mustBoard(boardId: string | null): Board {
   const board = boardId ? getBoard(boardId) : null;
   if (!board) {
@@ -151,6 +164,21 @@ function mustBoard(boardId: string | null): Board {
 function agentOf(board: Board, tabId: string | null | undefined): string | null {
   const origin = tabId ? board.origins[tabId] : undefined;
   return origin?.agentId ?? null;
+}
+
+/** "a1" for an agent tab, "file:<path>" for a file tab; "?" for anything else. */
+function entryOf(board: Board, tabId: string | null | undefined): string | null {
+  const origin = tabId ? board.origins[tabId] : undefined;
+  if (!origin) {
+    return null;
+  }
+  return origin.agentId ?? (origin.path ? `file:${origin.path}` : "?");
+}
+
+function paneEntries(board: Board): string[][] {
+  return collectAllPanes(board.layout.root).map((pane) =>
+    pane.tabIds.map((tabId) => entryOf(board, tabId) ?? "?"),
+  );
 }
 
 /** Agent ids per pane in tree order. */
@@ -433,6 +461,67 @@ describe("splitWorkspaces", () => {
         ["s1", "w2", "b1"],
       ]),
     );
+  });
+
+  it("carries the workspace's open file tabs too, in the workspace's own tab order", () => {
+    setWorld({ s1: { a1: {}, a2: {}, b1: {} } });
+    openWorkspaceAgents("s1", "w1", ["a1"]);
+    openWorkspaceFile("s1", "w1", "src/app.ts");
+    useWorkspaceLayoutStore.getState().openTab({
+      workspaceKey: wsKey("s1", "w1"),
+      target: { kind: "agent", agentId: "a2" },
+      intent: "background",
+    });
+    openWorkspaceAgents("s1", "w2", ["b1"]);
+    const board = mustBoard(split(["w1", "w2"]));
+    expect(paneEntries(board)).toEqual([["a1", "file:src/app.ts", "a2"], ["b1"]]);
+    const fileOrigin = Object.values(board.origins).find((o) => o.path === "src/app.ts");
+    expect(fileOrigin).toEqual({ serverId: "s1", workspaceId: "w1", path: "src/app.ts" });
+    const fileTab = listBoardTabs(board.layout).find((tab) => tab.target.kind === "file");
+    expect(fileTab?.target).toMatchObject({ kind: "file", path: "src/app.ts" });
+  });
+
+  it("opens the pane on a file when the workspace had a file focused", () => {
+    setWorld({ s1: { a1: {}, b1: {} } });
+    openWorkspaceAgents("s1", "w1", ["a1"]);
+    openWorkspaceFile("s1", "w1", "README.md", "reveal");
+    openWorkspaceAgents("s1", "w2", ["b1"]);
+    const board = mustBoard(split(["w1", "w2"]));
+    const shown = collectAllPanes(board.layout.root).map((pane) =>
+      entryOf(board, pane.focusedTabId),
+    );
+    expect(shown).toEqual(["file:README.md", "b1"]);
+  });
+
+  it("keeps the same file path in two workspaces (a file belongs to one workspace)", () => {
+    setWorld({ s1: {} });
+    openWorkspaceAgents("s1", "w1", []);
+    openWorkspaceAgents("s1", "w2", []);
+    openWorkspaceFile("s1", "w1", "notes.md");
+    openWorkspaceFile("s1", "w2", "notes.md");
+    const board = mustBoard(split(["w1", "w2"]));
+    expect(paneEntries(board)).toEqual([["file:notes.md"], ["file:notes.md"]]);
+    expect(
+      Object.values(board.origins)
+        .map((o) => o.workspaceId)
+        .sort(),
+    ).toEqual(["w1", "w2"]);
+  });
+
+  it("refresh keeps a file tab's id and brings newly opened files in", () => {
+    setWorld({ s1: { a1: {}, b1: {} } });
+    openWorkspaceAgents("s1", "w1", ["a1"]);
+    openWorkspaceFile("s1", "w1", "one.ts");
+    openWorkspaceAgents("s1", "w2", ["b1"]);
+    const id = split(["w1", "w2"])!;
+    const fileTabId = Object.entries(mustBoard(id).origins).find(
+      ([, o]) => o.path === "one.ts",
+    )![0];
+    openWorkspaceFile("s1", "w1", "two.ts");
+    expect(split(["w1", "w2"])).toBe(id);
+    const after = mustBoard(id);
+    expect(paneEntries(after)).toEqual([["a1", "file:one.ts", "file:two.ts"], ["b1"]]);
+    expect(after.origins[fileTabId]?.path).toBe("one.ts");
   });
 
   it("works across hosts and ignores non-agent tabs", () => {

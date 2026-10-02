@@ -26,7 +26,7 @@ export function useIsBoardRoute(): boolean {
 
 /**
  * Board scope for the recent-tabs switcher (Boards, fork mod #13). On a board route the rows
- * are the agent tabs of the FOCUSED pane only, most recently used first with the tab on screen
+ * are the agent and file tabs of the FOCUSED pane only, most recently used first with the tab on screen
  * as row 0, and committing selects the tab in that pane instead of navigating away.
  * Off a board route this does nothing, and the global candidates stay in charge.
  */
@@ -62,10 +62,32 @@ export function useBoardSwitcherCandidateSync(): void {
       if (!origin) {
         continue;
       }
-      const agent = agentByKey.get(`${origin.serverId}:${origin.agentId}`);
       const identity =
         identities.get(boardWorkspaceKey(origin)) ??
         fallbackBoardWorkspaceIdentity(origin.workspaceId);
+      if (origin.agentId === undefined) {
+        if (!origin.path) {
+          continue;
+        }
+        rows.push({
+          kind: "file",
+          serverId: origin.serverId,
+          workspaceId: origin.workspaceId,
+          path: origin.path,
+          // A file has no activity clock; the board's own MRU already ordered the rows.
+          at: 0,
+          title: origin.path.split("/").findLast(Boolean) ?? origin.path,
+          subtitle: identity.workspaceName,
+          status: null,
+          requiresAttention: false,
+          iconDataUri: identity.iconDataUri,
+          projectInitial: identity.initial,
+          projectViewKey: identity.projectViewKey,
+          commit: () => selectBoardTab(boardId, pane.id, tabId),
+        });
+        continue;
+      }
+      const agent = agentByKey.get(`${origin.serverId}:${origin.agentId}`);
       rows.push({
         kind: "agent",
         serverId: origin.serverId,

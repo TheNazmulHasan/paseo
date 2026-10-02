@@ -466,6 +466,7 @@ export const fr: TranslationResources = {
       empty: "Aucun espace de travail ne correspond",
     },
     screen: {
+      back: "Retour à l’espace de travail",
       openInWorkspace: "Ouvrir dans l’espace de travail",
       closeTab: "Retirer de la vue",
       live: "En direct",

@@ -5,6 +5,7 @@ import {
   buildBoardRoute,
   countVisibleBoardTabs,
   findBoardPane,
+  groupBoardVisibleAgents,
   orderBoardSwitcherTabIds,
   recordBoardTabUse,
   resolveAdjacentBoardPaneId,
@@ -264,5 +265,44 @@ describe("recent-tabs switcher scope", () => {
         limit: 2,
       }),
     ).toEqual(["a", "b"]);
+  });
+});
+
+describe("groupBoardVisibleAgents", () => {
+  const origins: Record<string, BoardTabOrigin> = {
+    a1: { serverId: "s2", workspaceId: "w1", agentId: "agent-b" },
+    a2: { serverId: "s2", workspaceId: "w1", agentId: "agent-a" },
+    b1: { serverId: "s1", workspaceId: "w2", agentId: "agent-c" },
+    f1: { serverId: "s1", workspaceId: "w2", path: "src/x.ts" },
+  };
+
+  it("takes the active tab of every pane, grouped by host, sorted", () => {
+    const root: SplitNode = {
+      kind: "group",
+      group: row("g", [pane("p1", ["a1", "a2"]), pane("p2", ["b1"]), pane("p3", ["a2"])]),
+    };
+    expect(groupBoardVisibleAgents(root, origins)).toEqual([
+      { serverId: "s1", agentIds: ["agent-c"] },
+      { serverId: "s2", agentIds: ["agent-a", "agent-b"] },
+    ]);
+  });
+
+  it("uses the selected tab, not the first, and skips file tabs and hidden panes", () => {
+    const root: SplitNode = {
+      kind: "group",
+      group: row("g", [
+        pane("p1", ["a1", "a2"], { focusedTabId: "a2" }),
+        pane("p2", ["b1", "f1"], { focusedTabId: "f1" }),
+        pane("p3", ["b1"], { hidden: true }),
+      ]),
+    };
+    expect(groupBoardVisibleAgents(root, origins)).toEqual([
+      { serverId: "s2", agentIds: ["agent-a"] },
+    ]);
+  });
+
+  it("ignores tabs without an origin and empty boards", () => {
+    expect(groupBoardVisibleAgents(pane("p", ["nope"]), origins)).toEqual([]);
+    expect(groupBoardVisibleAgents(pane("p", []), origins)).toEqual([]);
   });
 });

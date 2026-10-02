@@ -44,6 +44,10 @@ function ref(agentId: string, serverId = "s1", workspaceId = "w1"): BoardSession
   return { serverId, workspaceId, agentId };
 }
 
+function fileRef(path: string, serverId = "s1", workspaceId = "w1"): BoardSessionRef {
+  return { serverId, workspaceId, path };
+}
+
 function emptyBoard(ids = makeIds()): Board {
   return {
     id: "b1",
@@ -389,8 +393,8 @@ describe("buildWorkspaceSplit", () => {
   it("shows each group's focused agent, else its first", () => {
     const built = buildWorkspaceSplit({
       groups: [
-        { sessions: [ref("a"), ref("b"), ref("c")], focusedAgentId: "b" },
-        { sessions: [ref("d"), ref("e")], focusedAgentId: "not-there" },
+        { sessions: [ref("a"), ref("b"), ref("c")], focused: ref("b") },
+        { sessions: [ref("d"), ref("e")], focused: ref("not-there") },
         { sessions: [ref("f"), ref("g")] },
       ],
       layout: "columns",
@@ -402,6 +406,62 @@ describe("buildWorkspaceSplit", () => {
     expect(panes.map((pane) => focusedAgent(board, pane.id))).toEqual(["b", "d", "f"]);
     // The first workspace's pane holds overall focus.
     expect(board.layout.focusedPaneId).toBe(panes[0]!.id);
+  });
+
+  it("holds file tabs next to agent tabs, in the given order, and can open on a file", () => {
+    const built = buildWorkspaceSplit({
+      groups: [
+        { sessions: [ref("a"), fileRef("src/x.ts"), ref("b")], focused: fileRef("src/x.ts") },
+        { sessions: [fileRef("y.md"), ref("c")] },
+      ],
+      layout: "columns",
+      viewport: VIEWPORT,
+      ids: makeIds(),
+    });
+    const board = { ...emptyBoard(), layout: built.layout, origins: built.origins };
+    const entry = (tabId: string | null | undefined) => {
+      const target = collectAllTabs(board.layout.root).find((t) => t.tabId === tabId)?.target;
+      return target?.kind === "file"
+        ? `file:${target.path}`
+        : (target as { agentId?: string }).agentId;
+    };
+    const panes = collectAllPanes(board.layout.root);
+    expect(panes.map((pane) => pane.tabIds.map(entry))).toEqual([
+      ["a", "file:src/x.ts", "b"],
+      ["file:y.md", "c"],
+    ]);
+    expect(panes.map((pane) => entry(pane.focusedTabId))).toEqual(["file:src/x.ts", "file:y.md"]);
+    const fileOrigin = Object.values(built.origins).find((o) => o.path === "src/x.ts");
+    expect(fileOrigin).toEqual({ serverId: "s1", workspaceId: "w1", path: "src/x.ts" });
+  });
+
+  it("dedupes a file by host, workspace and path; agents by host and agent", () => {
+    expect(boardSessionKey(fileRef("a.ts"))).toBe(boardSessionKey(fileRef("a.ts")));
+    expect(boardSessionKey(fileRef("a.ts"))).not.toBe(boardSessionKey(fileRef("a.ts", "s1", "w2")));
+    expect(boardSessionKey(fileRef("a.ts"))).not.toBe(boardSessionKey(fileRef("a.ts", "s2")));
+    expect(boardSessionKey(fileRef("a.ts"))).not.toBe(boardSessionKey(ref("a.ts")));
+    const built = buildWorkspaceSplit({
+      groups: [
+        { sessions: [fileRef("a.ts"), fileRef("a.ts")] },
+        { sessions: [fileRef("a.ts", "s1", "w2"), fileRef("a.ts")] },
+      ],
+      layout: "columns",
+      viewport: VIEWPORT,
+      ids: makeIds(),
+    });
+    expect(Object.values(built.origins).map((o) => o.workspaceId)).toEqual(["w1", "w2"]);
+  });
+
+  it("addSessionsToBoardModel adds a file once", () => {
+    const board = emptyBoard();
+    const first = addSessionsToBoardModel(board, [fileRef("a.ts"), fileRef("a.ts")], makeIds());
+    expect(first.addedTabIds).toHaveLength(1);
+    const again = addSessionsToBoardModel(first.board, [fileRef("a.ts")], makeIds());
+    expect(again.addedTabIds).toHaveLength(0);
+    expect(collectAllTabs(first.board.layout.root)[0]?.target).toMatchObject({
+      kind: "file",
+      path: "a.ts",
+    });
   });
 
   it("keeps given tab ids for sessions that already had one", () => {

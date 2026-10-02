@@ -21,7 +21,11 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-state";
 import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import { WorkspacePanelHost } from "@/screens/workspace/workspace-panel-host";
-import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
+import {
+  WorkspaceTabIcon,
+  WorkspaceTabPresentationResolver,
+  type WorkspaceTabPresentation,
+} from "@/screens/workspace/workspace-tab-presentation";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SplitPane } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
@@ -77,7 +81,7 @@ interface BoardTabChipProps {
 }
 
 interface BoardTabChipBodyProps extends BoardTabChipProps {
-  label: string;
+  presentation: WorkspaceTabPresentation;
 }
 
 function BoardTabChipBody({
@@ -86,11 +90,12 @@ function BoardTabChipBody({
   identity,
   isActive,
   isPaneFocused,
-  label,
+  presentation,
   onSelectTab,
   onCloseTab,
 }: BoardTabChipBodyProps) {
   const { t } = useTranslation();
+  const { label } = presentation;
   const handleSelect = useCallback(
     () => onSelectTab(paneId, tab.tabId),
     [onSelectTab, paneId, tab.tabId],
@@ -123,13 +128,23 @@ function BoardTabChipBody({
         accessibilityState={isActive ? SELECTED_STATE : UNSELECTED_STATE}
         accessibilityLabel={label}
       >
-        <ProjectIconView
-          iconDataUri={identity.iconDataUri}
-          initial={identity.initial}
-          projectViewKey={identity.projectViewKey}
-          size={PROJECT_ICON_SIZE}
-          textStyle={styles.projectIconText}
-        />
+        {tab.kind === "file" ? (
+          // A file has no project of its own: it shows the file-type icon the workspace strip uses.
+          <WorkspaceTabIcon
+            presentation={presentation}
+            active={isActive}
+            size={PROJECT_ICON_SIZE}
+            backdrop={isActive ? "surface2" : "surface0"}
+          />
+        ) : (
+          <ProjectIconView
+            iconDataUri={identity.iconDataUri}
+            initial={identity.initial}
+            projectViewKey={identity.projectViewKey}
+            size={PROJECT_ICON_SIZE}
+            textStyle={styles.projectIconText}
+          />
+        )}
         <Text style={labelStyle} numberOfLines={1}>
           {label}
         </Text>
@@ -151,7 +166,9 @@ const UNSELECTED_STATE = { selected: false } as const;
 function BoardTabChip(props: BoardTabChipProps) {
   const { tab, origin } = props;
   const renderBody = useCallback(
-    (presentation: { label: string }) => <BoardTabChipBody {...props} label={presentation.label} />,
+    (presentation: WorkspaceTabPresentation) => (
+      <BoardTabChipBody {...props} presentation={presentation} />
+    ),
     [props],
   );
   return (

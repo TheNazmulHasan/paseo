@@ -460,6 +460,7 @@ export const ko: TranslationResources = {
       empty: "일치하는 워크스페이스가 없습니다",
     },
     screen: {
+      back: "워크스페이스로 돌아가기",
       openInWorkspace: "워크스페이스에서 열기",
       closeTab: "보기에서 제거",
       live: "라이브",

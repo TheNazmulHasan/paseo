@@ -459,6 +459,7 @@ export const zhCN: TranslationResources = {
       empty: "没有匹配的工作区",
     },
     screen: {
+      back: "返回工作区",
       openInWorkspace: "在工作区中打开",
       closeTab: "从视图中移除",
       live: "实时",

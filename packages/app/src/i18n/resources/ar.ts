@@ -459,6 +459,7 @@ export const ar: TranslationResources = {
       empty: "لا توجد مساحات عمل مطابقة",
     },
     screen: {
+      back: "العودة إلى مساحة العمل",
       openInWorkspace: "فتح في مساحة العمل",
       closeTab: "إزالة من العرض",
       live: "مباشر",

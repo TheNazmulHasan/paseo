@@ -15,6 +15,7 @@ import {
   resolveBoardGroupFlex,
   resolveBoardGroupSizes,
 } from "@/boards/screen-helpers";
+import { boardTabTarget } from "@/boards/model";
 import type { Board, BoardTabOrigin } from "@/boards/types";
 import {
   useBoardWorkspaceIdentities,
@@ -62,7 +63,7 @@ function openInOriginWorkspace(origin: BoardTabOrigin, target?: WorkspaceTabTarg
   navigateToWorkspace({
     serverId: origin.serverId,
     workspaceId: origin.workspaceId,
-    target: target ?? { kind: "agent", agentId: origin.agentId },
+    target: target ?? boardTabTarget(origin),
   });
 }
 
@@ -101,7 +102,7 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
   const buildPaneContentModel = useCallback<BuildPaneContentModel>(
     ({ tab }) => {
       // The pane drops tabs without an origin before mounting, so this is always set.
-      const origin = origins[tab.tabId] ?? { serverId: "", workspaceId: "", agentId: "" };
+      const origin = origins[tab.tabId] ?? { serverId: "", workspaceId: "" };
       const openInWorkspace = (target?: WorkspaceTabTarget) =>
         openInOriginWorkspace(origin, target);
       return buildWorkspacePaneContentModel({

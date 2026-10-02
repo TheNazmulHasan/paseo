@@ -160,6 +160,42 @@ export function findBoardPane(
   return null;
 }
 
+export interface BoardVisibleAgents {
+  serverId: string;
+  agentIds: string[];
+}
+
+/**
+ * The agents on screen, grouped by host (a view spans hosts): the active tab of every visible
+ * pane, when that tab is an agent. Hosts and ids are sorted so equal sets compare equal.
+ */
+export function groupBoardVisibleAgents(
+  root: SplitNode,
+  origins: Record<string, BoardTabOrigin>,
+): BoardVisibleAgents[] {
+  const byServer = new Map<string, Set<string>>();
+  const visit = (node: SplitNode): void => {
+    if (node.kind === "group") {
+      node.group.children.forEach(visit);
+      return;
+    }
+    if (node.pane.hidden === true) {
+      return;
+    }
+    const origin = origins[resolvePaneActiveTabId(node.pane) ?? ""];
+    if (!origin || origin.agentId === undefined) {
+      return;
+    }
+    const ids = byServer.get(origin.serverId) ?? new Set<string>();
+    ids.add(origin.agentId);
+    byServer.set(origin.serverId, ids);
+  };
+  visit(root);
+  return [...byServer.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([serverId, ids]) => ({ serverId, agentIds: [...ids].sort() }));
+}
+
 /** The tab a pane is showing: its focused tab when it is still open, else the first one. */
 export function resolvePaneActiveTabId(pane: SplitPane | null): string | null {
   if (!pane) {

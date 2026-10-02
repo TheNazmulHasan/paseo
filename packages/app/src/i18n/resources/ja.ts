@@ -464,6 +464,7 @@ export const ja: TranslationResources = {
       empty: "一致するワークスペースがありません",
     },
     screen: {
+      back: "ワークスペースに戻る",
       openInWorkspace: "ワークスペースで開く",
       closeTab: "ビューから削除",
       live: "ライブ",

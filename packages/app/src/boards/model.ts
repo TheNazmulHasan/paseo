@@ -25,7 +25,8 @@ import {
   type SplitPane,
   type WorkspaceLayout,
 } from "@/stores/workspace-layout-actions";
-import type { WorkspaceTab } from "@/workspace-tabs/model";
+import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import { createWorkspaceFileTabTarget } from "@/workspace/file-open";
 
 /** Passed to Arrange's model wherever it asks for the Explorer: a board has none. */
 export const NO_EXPLORER_PANE_ID = "__no_explorer__";
@@ -63,9 +64,31 @@ type NodeWithTabs =
       };
     };
 
-/** Two sessions are the same board entry when host and agent both match. */
-export function boardSessionKey(ref: { serverId: string; agentId: string }): string {
+type BoardEntryRef = Pick<BoardTabOrigin, "serverId" | "workspaceId" | "agentId" | "path">;
+
+/**
+ * Two entries are the same when they are the same agent on a host, or the same file path in
+ * the same workspace (a file belongs to one workspace, an agent is addressed by host alone).
+ */
+export function boardSessionKey(ref: BoardEntryRef): string {
+  if (ref.agentId === undefined) {
+    return `file\n${ref.serverId}\n${ref.workspaceId}\n${ref.path ?? ""}`;
+  }
   return `${ref.serverId}\n${ref.agentId}`;
+}
+
+/** The layout tab target for a board entry: the file when it has a path, else the agent. */
+export function boardTabTarget(ref: BoardEntryRef): WorkspaceTabTarget {
+  if (ref.agentId === undefined) {
+    return createWorkspaceFileTabTarget({ path: ref.path ?? "" });
+  }
+  return { kind: "agent", agentId: ref.agentId };
+}
+
+function originOf(ref: BoardSessionRef): BoardTabOrigin {
+  return ref.agentId === undefined
+    ? { serverId: ref.serverId, workspaceId: ref.workspaceId, path: ref.path }
+    : { serverId: ref.serverId, workspaceId: ref.workspaceId, agentId: ref.agentId };
 }
 
 function equalSizes(count: number): number[] {
@@ -164,7 +187,7 @@ function resolveLandingPane(layout: WorkspaceLayout): SplitPane | null {
 }
 
 /**
- * Adds sessions as agent tabs at the end of the focused pane (the last one added becomes the
+ * Adds sessions (agent or file tabs) at the end of the focused pane (the last one added becomes the
  * selected tab). Sessions already on the board, or repeated in `sessions`, are skipped.
  */
 export function addSessionsToBoardModel(
@@ -183,15 +206,11 @@ export function addSessionsToBoardModel(
     known.add(key);
     const tab: WorkspaceTab = {
       tabId: ids.createTabId(),
-      target: { kind: "agent", agentId: session.agentId },
+      target: boardTabTarget(session),
       createdAt: ids.now(),
     };
     added.push(tab);
-    origins[tab.tabId] = {
-      serverId: session.serverId,
-      workspaceId: session.workspaceId,
-      agentId: session.agentId,
-    };
+    origins[tab.tabId] = originOf(session);
   }
   const landing = resolveLandingPane(board.layout);
   if (added.length === 0 || !landing) {
@@ -321,7 +340,7 @@ export function restoreBoardLayout(
  * A pane keeps the focused tab of the group that owns the cell.
  */
 function dealIntoCells(
-  groups: ReadonlyArray<{ tabs: WorkspaceTab[]; focusedAgentId: string | null }>,
+  groups: ReadonlyArray<{ tabs: WorkspaceTab[]; focusedTabId: string | null }>,
   cells: number,
 ): Array<{ tabs: WorkspaceTab[]; focusedTabId: string | null }> {
   const panes = Array.from({ length: Math.min(cells, groups.length) }, () => ({
@@ -335,19 +354,16 @@ function dealIntoCells(
     }
     pane.tabs.push(...group.tabs);
     if (index < panes.length) {
-      pane.focusedTabId =
-        group.tabs.find(
-          (tab) => tab.target.kind === "agent" && tab.target.agentId === group.focusedAgentId,
-        )?.tabId ?? null;
+      pane.focusedTabId = group.focusedTabId;
     }
   });
   return panes;
 }
 
-/** One pane's worth of sessions; `focusedAgentId` is the tab that shows (default: the first). */
+/** One pane's worth of sessions; `focused` is the tab that shows (default: the first). */
 export interface BoardSplitGroup {
   sessions: readonly BoardSessionRef[];
-  focusedAgentId?: string | null;
+  focused?: BoardSessionRef | null;
 }
 
 /**
@@ -366,9 +382,10 @@ export function buildWorkspaceSplit(input: {
   const ids = input.ids ?? DEFAULT_BOARD_IDS;
   const origins: Record<string, BoardTabOrigin> = {};
   const seen = new Set<string>();
-  const tabGroups = input.groups.map((group) => ({
-    focusedAgentId: group.focusedAgentId ?? null,
-    tabs: group.sessions.flatMap((session) => {
+  const tabGroups = input.groups.map((group) => {
+    const focusedKey = group.focused ? boardSessionKey(group.focused) : null;
+    let focusedTabId: string | null = null;
+    const tabs = group.sessions.flatMap((session) => {
       const key = boardSessionKey(session);
       if (seen.has(key)) {
         return [];
@@ -376,17 +393,17 @@ export function buildWorkspaceSplit(input: {
       seen.add(key);
       const tab: WorkspaceTab = {
         tabId: input.keepTabIds?.get(key) ?? ids.createTabId(),
-        target: { kind: "agent", agentId: session.agentId },
+        target: boardTabTarget(session),
         createdAt: ids.now(),
       };
-      origins[tab.tabId] = {
-        serverId: session.serverId,
-        workspaceId: session.workspaceId,
-        agentId: session.agentId,
-      };
+      origins[tab.tabId] = originOf(session);
+      if (key === focusedKey) {
+        focusedTabId = tab.tabId;
+      }
       return [tab];
-    }),
-  }));
+    });
+    return { tabs, focusedTabId };
+  });
   if (tabGroups.length === 0) {
     return { layout: createEmptyBoardLayout(ids), origins };
   }

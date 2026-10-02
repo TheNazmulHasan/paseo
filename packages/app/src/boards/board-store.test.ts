@@ -84,6 +84,21 @@ describe("parseBoardPersistedState", () => {
     expect(parsed.boards.good?.name).toBe("Board good");
   });
 
+  it("keeps a board that holds a file tab (origin with a path, no agent)", () => {
+    const withFile = addSessionsToBoardModel(board("f"), [
+      { serverId: "s1", workspaceId: "w1", path: "src/a.ts" },
+    ]).board;
+    const parsed = parseBoardPersistedState({
+      boards: { f: withFile },
+      order: ["f"],
+      arrangeByBoard: {},
+      splitPairs: {},
+    });
+    expect(Object.values(parsed.boards.f?.origins ?? {})).toEqual([
+      { serverId: "s1", workspaceId: "w1", path: "src/a.ts" },
+    ]);
+  });
+
   it("forces the kind from the id: only the Live id is live", () => {
     const parsed = parseBoardPersistedState({
       boards: {

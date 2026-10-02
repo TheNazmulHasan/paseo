@@ -55,7 +55,12 @@ const BoardSchema = z.strictObject({
   splitSizes: SplitSizesSchema,
   origins: z.record(
     z.string(),
-    z.strictObject({ serverId: z.string(), workspaceId: z.string(), agentId: z.string() }),
+    z.strictObject({
+      serverId: z.string(),
+      workspaceId: z.string(),
+      agentId: z.string().optional(),
+      path: z.string().optional(),
+    }),
   ),
 });
 

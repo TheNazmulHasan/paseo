@@ -463,6 +463,7 @@ export const ptBR: TranslationResources = {
       empty: "Nenhum espaço de trabalho corresponde",
     },
     screen: {
+      back: "Voltar ao espaço de trabalho",
       openInWorkspace: "Abrir no espaço de trabalho",
       closeTab: "Remover da visualização",
       live: "Ao vivo",

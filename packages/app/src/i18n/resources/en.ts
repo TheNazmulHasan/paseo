@@ -456,6 +456,7 @@ export const en = {
       empty: "No workspaces match",
     },
     screen: {
+      back: "Back to workspace",
       openInWorkspace: "Open in workspace",
       closeTab: "Remove from view",
       live: "Live",

@@ -874,6 +874,8 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/backlog" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
+      // Views (fork mod #13) need the sidebar and keyboard shortcuts like a workspace does.
+      pathname.startsWith("/boards/") ||
       routeHasKnownHost);
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;

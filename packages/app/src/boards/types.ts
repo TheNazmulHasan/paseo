@@ -1,17 +1,19 @@
 /**
- * Boards (fork mod #13): named screens of agent sessions from ANY workspaces and hosts,
+ * Boards (fork mod #13): named screens of sessions from ANY workspaces and hosts,
  * arranged with the same panes, tab strips and Arrange presets a workspace has.
  *
  * A board's layout is a normal WorkspaceLayout (so arrange/model.ts works on it unchanged);
- * every tab targets {kind:"agent", agentId}, and `origins` says where that agent lives.
+ * every tab targets {kind:"agent", agentId} or {kind:"file", path}, and `origins` says where
+ * that agent or file lives.
  */
 import type { WorkspaceLayout } from "@/stores/workspace-layout-actions";
 
-/** Where a board tab's agent lives. */
+/** Where a board tab's agent or file lives. An agent tab has `agentId`, a file tab `path`. */
 export interface BoardTabOrigin {
   serverId: string;
   workspaceId: string;
-  agentId: string;
+  agentId?: string;
+  path?: string;
 }
 
 export interface Board {
@@ -33,7 +35,7 @@ export interface BoardSummary {
   sessionCount: number;
 }
 
-/** A session to put on a board. */
+/** An agent session or an open file to put on a board. */
 export type BoardSessionRef = BoardTabOrigin;
 
 export const LIVE_BOARD_ID = "live";

@@ -295,29 +295,37 @@ function splitBoardName(names: readonly string[]): string {
 }
 
 /**
- * What a workspace shows in its pane: the agent tabs it has open (layout order), with the
- * one it has focused showing; if none are open, its non-archived agents.
+ * What a workspace shows in its pane: the agent and file tabs it has open (layout order), with
+ * the one it has focused showing; if none are open, its non-archived agents.
  */
 function readWorkspaceGroup(ref: WorkspaceRef): BoardSplitGroup {
   const key = buildWorkspaceTabPersistenceKey(ref);
   const layout = key ? useWorkspaceLayoutStore.getState().layoutByWorkspace[key] : undefined;
   if (layout) {
     const tabs = collectAllTabs(layout.root);
+    const refByTabId = new Map<string, BoardSessionRef>();
     const sessions: BoardSessionRef[] = [];
     const seen = new Set<string>();
     for (const tab of tabs) {
-      if (tab.target.kind === "agent" && !seen.has(tab.target.agentId)) {
-        seen.add(tab.target.agentId);
-        sessions.push({ ...ref, agentId: tab.target.agentId });
+      let session: BoardSessionRef | null = null;
+      if (tab.target.kind === "agent") {
+        session = { ...ref, agentId: tab.target.agentId };
+      } else if (tab.target.kind === "file") {
+        session = { ...ref, path: tab.target.path };
+      }
+      if (!session) {
+        continue;
+      }
+      refByTabId.set(tab.tabId, session);
+      const sessionKey = boardSessionKey(session);
+      if (!seen.has(sessionKey)) {
+        seen.add(sessionKey);
+        sessions.push(session);
       }
     }
     if (sessions.length > 0) {
       const focusedTabId = findPaneById(layout.root, layout.focusedPaneId)?.focusedTabId;
-      const focusedTarget = tabs.find((tab) => tab.tabId === focusedTabId)?.target;
-      return {
-        sessions,
-        focusedAgentId: focusedTarget?.kind === "agent" ? focusedTarget.agentId : null,
-      };
+      return { sessions, focused: (focusedTabId && refByTabId.get(focusedTabId)) || null };
     }
   }
   const wanted = normalizeWorkspaceOpaqueId(ref.workspaceId);
@@ -349,7 +357,7 @@ function focusedSessionKey(board: Board): string | null {
 
 /**
  * A board of several workspaces at once: one pane per workspace, each pane a tab strip of
- * that workspace's open agent tabs. "columns" = side by side, "grid" = Arrange's grid shape.
+ * that workspace's open agent and file tabs. "columns" = side by side, "grid" = Arrange's grid shape.
  * The same SET of workspaces (any order) reuses its board and refreshes it. Returns its id.
  */
 export function splitWorkspaces(input: {

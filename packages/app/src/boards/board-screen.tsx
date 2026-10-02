@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Text, View, useWindowDimensions } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { RefreshCw } from "lucide-react-native";
+import { ArrowLeft, RefreshCw } from "lucide-react-native";
 import type { ArrangeViewport } from "@/arrange/types";
 import { BoardContainer } from "@/boards/board-container";
 import { useBoardMruStore } from "@/boards/board-mru-store";
 import { BoardIconButton } from "@/boards/board-pane";
 import { refreshLiveBoard, useBoard } from "@/boards/controller";
+import { goBackFromBoard } from "@/boards/navigation";
 import {
   countVisibleBoardTabs,
   findBoardPane,
@@ -17,8 +18,12 @@ import {
 } from "@/boards/screen-helpers";
 import type { Board } from "@/boards/types";
 import { useBoardKeyboard } from "@/boards/use-board-keyboard";
+import { useBoardVisibleAgents } from "@/boards/use-board-visible-agents";
 import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspace-cache";
-import { MenuHeader } from "@/components/headers/menu-header";
+import { ScreenHeader } from "@/components/headers/screen-header";
+import { ScreenTitle } from "@/components/headers/screen-title";
+import { SidebarMenuToggle } from "@/components/headers/menu-header";
+import { Button } from "@/components/ui/button";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 
 const ThemedRefreshCw = withUnistyles(RefreshCw);
@@ -38,16 +43,54 @@ export function BoardScreen({ boardId }: BoardScreenProps) {
   const isFocused = useIsFocused();
 
   if (!board) {
-    return <MissingBoard />;
+    return <MissingBoard boardId={boardId} />;
   }
   return <BoardScreenContent board={board} isFocused={isFocused} />;
 }
 
-function MissingBoard() {
+/** Top row of a view: sidebar toggle, an always-visible way back to the workspace, the title. */
+function BoardHeader({
+  boardId,
+  title,
+  rightContent,
+}: {
+  boardId: string;
+  title?: string;
+  rightContent?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const handleBack = useCallback(() => {
+    goBackFromBoard(boardId);
+  }, [boardId]);
+  return (
+    <ScreenHeader
+      left={
+        <>
+          <SidebarMenuToggle />
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={ArrowLeft}
+            onPress={handleBack}
+            accessibilityLabel={t("boards.screen.back")}
+            testID="board-back"
+          >
+            {t("boards.screen.back")}
+          </Button>
+          {title ? <ScreenTitle>{title}</ScreenTitle> : null}
+        </>
+      }
+      right={rightContent}
+      leftStyle={styles.headerLeft}
+    />
+  );
+}
+
+function MissingBoard({ boardId }: { boardId: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.container}>
-      <MenuHeader />
+      <BoardHeader boardId={boardId} />
       <View style={styles.centered}>
         <Text style={styles.hint}>{t("boards.screen.notFound")}</Text>
       </View>
@@ -85,6 +128,8 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   );
 
   useBoardKeyboard({ board, enabled: isFocused, getViewport });
+  // Without this the hosts never fetch or stream the timelines of agents shown here.
+  useBoardVisibleAgents(board, isFocused);
 
   // The recent-tabs switcher orders a pane's tabs by use, so note what the focused pane shows.
   const focusedPaneId = board.layout.focusedPaneId;
@@ -123,7 +168,7 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
 
   return (
     <View style={styles.container} testID={`board-screen-${board.id}`}>
-      <MenuHeader title={board.name} rightContent={headerRight} />
+      <BoardHeader boardId={board.id} title={board.name} rightContent={headerRight} />
       {hasTabs ? (
         <DiffDocumentWorkspaceCacheProvider>
           <BoardContainer
@@ -158,6 +203,9 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     textAlign: "center",
+  },
+  headerLeft: {
+    gap: theme.spacing[2],
   },
   headerRight: {
     flexDirection: "row",
