@@ -52,6 +52,7 @@ import {
   type Settings,
   type SidebarWorkspaceTrailing,
   type SettingsDeps,
+  type VoiceInputMode,
   type WorkspaceTitleSource,
 } from "./storage";
 
@@ -95,6 +96,7 @@ export type {
   Settings,
   SettingsDeps,
   SidebarWorkspaceTrailing,
+  VoiceInputMode,
   WorkspaceTitleSource,
 };
 
