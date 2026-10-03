@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addSessionsToBoardModel,
   appendActiveSessions,
+  arrangeBoardPanes,
   arrangeBoardTabs,
   boardSessionKey,
   buildWorkspaceSplit,
@@ -11,13 +12,16 @@ import {
   findBoardTabId,
   focusBoardPaneModel,
   listBoardTabs,
+  moveBoardPaneModel,
   moveBoardTab,
   NO_EXPLORER_PANE_ID,
+  openDraftInPaneModel,
   openFileBesideModel,
   rebuildLiveBoard,
   removeTabFromBoard,
   resizeBoardSplitModel,
   restoreBoardLayout,
+  retargetBoardTabModel,
   selectBoardTabModel,
   type BoardIds,
 } from "@/boards/model";
@@ -656,229 +660,394 @@ describe("tab bookkeeping", () => {
   });
 });
 
-describe("openFileBesideModel", () => {
+/** One pane per entry (each a list of agent ids, workspace w1, w2, ...), side by side. */
+function panesBoard(
+  groups: string[][],
+  ids = makeIds(),
+  layout: "columns" | "grid" = "columns",
+): { board: Board; ids: BoardIds } {
+  const built = buildWorkspaceSplit({
+    groups: groups.map((agents, index) => ({
+      sessions: agents.map((id) => ref(id, "s1", `w${index + 1}`)),
+    })),
+    layout,
+    viewport: VIEWPORT,
+    ids,
+  });
+  return {
+    board: { ...emptyBoard(ids), layout: built.layout, origins: built.origins },
+    ids,
+  };
+}
+
+function paneIds(board: Board): string[] {
+  return collectAllPanes(board.layout.root).map((pane) => pane.id);
+}
+
+/** Compact tree: pane id, or H[...] / V[...] with sizes rounded to 3 decimals. */
+function shape(node: SplitNode): string {
+  if (node.kind === "pane") {
+    return node.pane.id;
+  }
+  const dir = node.group.direction === "horizontal" ? "H" : "V";
+  const parts = node.group.children.map((child, index) => {
+    const size = Math.round((node.group.sizes[index] ?? 0) * 1000) / 1000;
+    return `${shape(child)}:${size}`;
+  });
+  return `${dir}[${parts.join(" ")}]`;
+}
+
+function bare(id: string): SplitNode {
+  return { kind: "pane", pane: { id, tabs: [], tabIds: [], focusedTabId: null } } as SplitNode;
+}
+
+function grp(id: string, direction: "horizontal" | "vertical", children: SplitNode[]): SplitNode {
+  return {
+    kind: "group",
+    group: { id, direction, children, sizes: children.map(() => 1 / children.length) },
+  } as SplitNode;
+}
+
+function withRoot(root: SplitNode, extra: Partial<Board> = {}): Board {
+  return { ...emptyBoard(), layout: { root, focusedPaneId: null }, ...extra };
+}
+
+describe("arrangeBoardPanes (presets move panes, never tabs)", () => {
+  const FIVE = [["a1", "a2"], ["b"], ["c1", "c2", "c3"], ["d"], ["e"]];
+  const flat = (board: Board) => paneAgents(board);
+
+  it("columns-2 keeps all five panes, dealt 3 + 2 in order, tabs intact", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const arranged = arrangeBoardPanes(board, { preset: "columns-2", viewport: VIEWPORT }, ids)!;
+    expect(flat(arranged)).toEqual(FIVE);
+    expect(paneIds(arranged)).toEqual(paneIds(board));
+    const root = rootGroup(arranged.layout.root);
+    expect(root.direction).toBe("horizontal");
+    expect(root.children.map((c) => (c.kind === "group" ? c.group.children.length : 1))).toEqual([
+      3, 2,
+    ]);
+    for (const column of root.children) {
+      expect(column.kind === "group" && column.group.direction).toBe("vertical");
+    }
+    expect(root.sizes).toEqual([0.5, 0.5]);
+    expect(arranged.origins).toBe(board.origins);
+  });
+
+  it("columns-3 deals 2 + 2 + 1", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const arranged = arrangeBoardPanes(board, { preset: "columns-3", viewport: VIEWPORT }, ids)!;
+    expect(flat(arranged)).toEqual(FIVE);
+    const root = rootGroup(arranged.layout.root);
+    expect(root.children.map((c) => (c.kind === "group" ? c.group.children.length : 1))).toEqual([
+      2, 2, 1,
+    ]);
+  });
+
+  it("single puts every pane side by side in one equal row", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const stacked = arrangeBoardPanes(board, { preset: "columns-2", viewport: VIEWPORT }, ids)!;
+    const arranged = arrangeBoardPanes(stacked, { preset: "single", viewport: VIEWPORT }, ids)!;
+    expect(flat(arranged)).toEqual(FIVE);
+    const root = rootGroup(arranged.layout.root);
+    expect(root.direction).toBe("horizontal");
+    expect(root.children.every((c) => c.kind === "pane")).toBe(true);
+    expect(root.sizes).toEqual([0.2, 0.2, 0.2, 0.2, 0.2]);
+  });
+
+  it("grid keeps all five panes in Arrange's rows", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const arranged = arrangeBoardPanes(board, { preset: "grid", viewport: VIEWPORT }, ids)!;
+    expect(flat(arranged)).toEqual(FIVE);
+    expect(paneIds(arranged)).toEqual(paneIds(board));
+    expect(arranged.layout.root.kind).toBe("group");
+  });
+
+  it("grid on a screen too small for the panes still keeps every pane", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const arranged = arrangeBoardPanes(
+      board,
+      { preset: "grid", viewport: { width: 300, height: 200 } },
+      ids,
+    )!;
+    expect(flat(arranged)).toEqual(FIVE);
+  });
+
+  it("20 panes stay 20 under every preset", () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => [`x${i}`]);
+    const { board, ids } = panesBoard(twenty, makeIds(), "grid");
+    expect(paneIds(board)).toHaveLength(20);
+    for (const preset of ["single", "columns-2", "columns-3", "grid"] as const) {
+      const arranged = arrangeBoardPanes(board, { preset, viewport: VIEWPORT }, ids)!;
+      expect(flat(arranged)).toEqual(twenty);
+    }
+  });
+
+  it("fewer panes than columns makes one column per pane", () => {
+    const { board, ids } = panesBoard([["a"], ["b"]]);
+    const arranged = arrangeBoardPanes(board, { preset: "columns-3", viewport: VIEWPORT }, ids)!;
+    const root = rootGroup(arranged.layout.root);
+    expect(root.children.map((c) => c.kind)).toEqual(["pane", "pane"]);
+  });
+
+  it("one pane with many tabs stays one pane", () => {
+    const board = withSessions(["a", "b", "c"]);
+    const arranged = arrangeBoardPanes(board, { preset: "grid", viewport: VIEWPORT })!;
+    expect(arranged.layout.root.kind).toBe("pane");
+    expect(paneAgents(arranged)).toEqual([["a", "b", "c"]]);
+  });
+
+  it("keeps each pane's selected tab and the focused pane, and clears size overrides", () => {
+    const ids = makeIds();
+    const { board } = panesBoard([["a1", "a2"], ["b"]], ids);
+    const [first] = collectAllPanes(board.layout.root);
+    const selected = selectBoardTabModel(board, first!.id, first!.tabIds[1]!);
+    const arranged = arrangeBoardPanes(
+      { ...selected, splitSizes: { g: [0.3, 0.7] } },
+      { preset: "grid", viewport: VIEWPORT },
+      ids,
+    )!;
+    expect(focusedAgent(arranged, first!.id)).toBe("a2");
+    expect(arranged.layout.focusedPaneId).toBe(selected.layout.focusedPaneId);
+    expect(arranged.splitSizes).toEqual({});
+  });
+
+  it("returns null on a board with no tabs", () => {
+    expect(arrangeBoardPanes(emptyBoard(), { preset: "grid", viewport: VIEWPORT })).toBeNull();
+  });
+
+  it("restore brings the original layout back", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const snapshot = { layout: board.layout, splitSizes: board.splitSizes };
+    const arranged = arrangeBoardPanes(board, { preset: "columns-2", viewport: VIEWPORT }, ids)!;
+    const restored = restoreBoardLayout(arranged, snapshot, ids);
+    expect(restored.layout.root).toEqual(board.layout.root);
+    expect(flat(restored)).toEqual(FIVE);
+  });
+
+  it("equalize evens every group of a nested layout", () => {
+    const { board, ids } = panesBoard(FIVE);
+    const grid = arrangeBoardPanes(board, { preset: "grid", viewport: VIEWPORT }, ids)!;
+    const skewed = JSON.parse(JSON.stringify(grid)) as Board;
+    const skew = (node: SplitNode) => {
+      if (node.kind === "group") {
+        node.group.sizes = node.group.sizes.map((_, i) =>
+          i === 0 ? 0.7 : 0.3 / (node.group.sizes.length - 1),
+        );
+        node.group.children.forEach(skew);
+      }
+    };
+    skew(skewed.layout.root);
+    const equal = equalizeBoardLayout({ ...skewed, splitSizes: { x: [0.9, 0.1] } });
+    const check = (node: SplitNode) => {
+      if (node.kind === "group") {
+        for (const size of node.group.sizes) {
+          expect(size).toBeCloseTo(1 / node.group.children.length);
+        }
+        node.group.children.forEach(check);
+      }
+    };
+    check(equal.layout.root);
+    expect(equal.splitSizes).toEqual({});
+  });
+});
+
+describe("moveBoardPaneModel", () => {
+  function three() {
+    const { board, ids } = panesBoard([["a"], ["b"], ["c"]]);
+    const [p1, p2, p3] = paneIds(board) as [string, string, string];
+    return { board, ids, p1, p2, p3 };
+  }
+
+  it("refuses the same pane, unknown panes and a no-op", () => {
+    const { board, p1 } = three();
+    expect(moveBoardPaneModel(board, p1, p1, "left")).toBeNull();
+    expect(moveBoardPaneModel(board, "ghost", p1, "left")).toBeNull();
+    expect(moveBoardPaneModel(board, p1, "ghost", "swap")).toBeNull();
+  });
+
+  it("swap exchanges two panes' places and keeps sizes and tabs", () => {
+    const { board, p1, p2, p3 } = three();
+    const swapped = moveBoardPaneModel(board, p1, p3, "swap")!;
+    expect(paneIds(swapped)).toEqual([p3, p2, p1]);
+    expect(paneAgents(swapped)).toEqual([["c"], ["b"], ["a"]]);
+    expect(rootGroup(swapped.layout.root).sizes).toEqual(rootGroup(board.layout.root).sizes);
+  });
+
+  it("right: the pane leaves its spot and shares the target's width", () => {
+    const { board, ids, p1, p2, p3 } = three();
+    const moved = moveBoardPaneModel(board, p1, p3, "right", ids)!;
+    expect(shape(moved.layout.root)).toBe(`H[${p2}:0.5 ${p3}:0.25 ${p1}:0.25]`);
+    expect(paneAgents(moved)).toEqual([["b"], ["c"], ["a"]]);
+  });
+
+  it("left puts it before the target", () => {
+    const { board, ids, p1, p2, p3 } = three();
+    const moved = moveBoardPaneModel(board, p3, p2, "left", ids)!;
+    expect(shape(moved.layout.root)).toBe(`H[${p1}:0.5 ${p3}:0.25 ${p2}:0.25]`);
+  });
+
+  it("above wraps the target in a vertical group of two halves", () => {
+    const { board, ids, p1, p2, p3 } = three();
+    const moved = moveBoardPaneModel(board, p1, p2, "above", ids)!;
+    expect(shape(moved.layout.root)).toBe(`H[V[${p1}:0.5 ${p2}:0.5]:0.5 ${p3}:0.5]`);
+  });
+
+  it("below puts it under the target", () => {
+    const { board, ids, p1, p3 } = three();
+    const moved = moveBoardPaneModel(board, p1, p3, "below", ids)!;
+    expect(rootGroup(moved.layout.root).children).toHaveLength(2);
+    expect(shape(moved.layout.root)).toMatch(new RegExp(`V\\[${p3}:0.5 ${p1}:0.5\\]`));
+  });
+
+  it("two panes: moving one below the other collapses the old group into a vertical root", () => {
+    const { board, ids } = panesBoard([["a"], ["b"]]);
+    const [p1, p2] = paneIds(board) as [string, string];
+    const moved = moveBoardPaneModel(board, p1, p2, "below", ids)!;
+    expect(shape(moved.layout.root)).toBe(`V[${p2}:0.5 ${p1}:0.5]`);
+  });
+
+  it("splices a collapsed group into a same-direction parent instead of nesting", () => {
+    const { board, ids, p1, p2, p3 } = three();
+    const stacked = moveBoardPaneModel(board, p1, p2, "above", ids)!;
+    const back = moveBoardPaneModel(stacked, p2, p3, "left", ids)!;
+    const root = rootGroup(back.layout.root);
+    expect(root.direction).toBe("horizontal");
+    expect(root.children.every((c) => c.kind === "pane")).toBe(true);
+    expect(paneIds(back)).toEqual([p1, p2, p3]);
+    expect(root.sizes.reduce((sum, s) => sum + s, 0)).toBeCloseTo(1);
+  });
+
+  it("folds stored divider drags into the move and clears the overrides", () => {
+    const { board, ids, p1, p2, p3 } = three();
+    const groupId = rootGroup(board.layout.root).id;
+    const dragged = { ...board, splitSizes: { [groupId]: [0.5, 0.3, 0.2] } };
+    const moved = moveBoardPaneModel(dragged, p3, p1, "swap", ids)!;
+    expect(rootGroup(moved.layout.root).sizes).toEqual([0.5, 0.3, 0.2]);
+    expect(moved.splitSizes).toEqual({});
+    const right = moveBoardPaneModel(dragged, p1, p3, "right", ids)!;
+    expect(shape(right.layout.root)).toBe(`H[${p2}:0.6 ${p3}:0.2 ${p1}:0.2]`);
+  });
+
+  it("keeps every pane and tab", () => {
+    const { board, ids, p1, p3 } = three();
+    const moved = moveBoardPaneModel(board, p1, p3, "above", ids)!;
+    expect(paneIds(moved).sort()).toEqual(paneIds(board).sort());
+    expect(listBoardTabs(moved.layout)).toHaveLength(3);
+    expect(moved.origins).toBe(board.origins);
+  });
+
+  it("returns null when the move would nest deeper than 5", () => {
+    const deep = grp("g1", "horizontal", [
+      grp("g2", "vertical", [
+        grp("g3", "horizontal", [grp("g4", "vertical", [bare("x"), bare("y")]), bare("z")]),
+        bare("w"),
+      ]),
+      bare("q"),
+      bare("r"),
+    ]);
+    const board = withRoot(deep);
+    expect(moveBoardPaneModel(board, "q", "x", "left")).toBeNull();
+    expect(moveBoardPaneModel(board, "q", "x", "above")).not.toBeNull();
+    expect(moveBoardPaneModel(board, "q", "x", "swap")).not.toBeNull();
+  });
+});
+
+describe("openFileBesideModel (files open as tabs in the same pane)", () => {
   const W1 = { serverId: "s1", workspaceId: "w1" };
   const W2 = { serverId: "s1", workspaceId: "w2" };
 
   /** Two workspaces side by side: pane1 = w1's agent a, pane2 = w2's agent b. */
-  function twoColumns(ids = makeIds()) {
-    const built = buildWorkspaceSplit({
-      groups: [{ sessions: [ref("a", "s1", "w1")] }, { sessions: [ref("b", "s1", "w2")] }],
-      layout: "columns",
-      viewport: VIEWPORT,
-      ids,
-    });
-    const board: Board = { ...emptyBoard(ids), layout: built.layout, origins: built.origins };
-    const [left, right] = collectAllPanes(board.layout.root);
-    return { board, left: left!.id, right: right!.id, ids };
+  function twoColumns() {
+    const { board, ids } = panesBoard([["a"], ["b"]]);
+    const [left, right] = paneIds(board) as [string, string];
+    return { board, left, right, ids };
   }
 
-  function filePaths(board: Board, paneId: string): string[] {
-    const tabs = new Map(collectAllTabs(board.layout.root).map((tab) => [tab.tabId, tab]));
+  function entries(board: Board, paneId: string): string[] {
     const pane = collectAllPanes(board.layout.root).find((candidate) => candidate.id === paneId);
     return (pane?.tabIds ?? []).map((id) => {
-      const target = tabs.get(id)?.target;
-      return target?.kind === "file" ? target.path : "?";
+      const origin = board.origins[id];
+      return origin?.agentId ?? `file:${origin?.path}`;
     });
   }
 
-  it("splits a new pane right of the source and splits its share 60/40", () => {
+  it("adds the file as the selected last tab of the source pane, no new pane", () => {
     const { board, left, right, ids } = twoColumns();
     const result = openFileBesideModel(
       board,
       { sourcePaneId: left, origin: W1, location: { path: "src/a.ts" } },
       ids,
-    );
-    expect(result).not.toBeNull();
-    const next = result!.board;
-    const group = rootGroup(next.layout.root);
-    expect(group.children.map((c) => (c.kind === "pane" ? c.pane.id : "group"))).toEqual([
-      left,
-      result!.paneId,
-      right,
-    ]);
-    expect(group.sizes[0]).toBeCloseTo(0.3);
-    expect(group.sizes[1]).toBeCloseTo(0.2);
-    expect(group.sizes[2]).toBeCloseTo(0.5);
-    expect(filePaths(next, result!.paneId)).toEqual(["src/a.ts"]);
-    expect(next.origins[result!.tabId]).toEqual({ ...W1, path: "src/a.ts" });
-    // The source keeps focus; the agent pane is untouched.
-    expect(next.layout.focusedPaneId).toBe(board.layout.focusedPaneId);
-    expect(paneAgents(next)[0]).toEqual(["a"]);
-  });
-
-  it("wraps a lone pane in a horizontal group sized 60/40", () => {
-    const ids = makeIds();
-    const board = withSessions(["a"], ids);
-    const source = collectAllPanes(board.layout.root)[0]!.id;
-    const result = openFileBesideModel(
-      board,
-      { sourcePaneId: source, origin: W1, location: { path: "x.md" } },
-      ids,
     )!;
-    const group = rootGroup(result.board.layout.root);
-    expect(group.direction).toBe("horizontal");
-    expect(group.sizes).toEqual([0.6, 0.4]);
+    expect(result.paneId).toBe(left);
+    expect(paneIds(result.board)).toEqual([left, right]);
+    expect(entries(result.board, left)).toEqual(["a", "file:src/a.ts"]);
+    expect(entries(result.board, right)).toEqual(["b"]);
+    const pane = collectAllPanes(result.board.layout.root)[0]!;
+    expect(pane.focusedTabId).toBe(result.tabId);
+    expect(result.board.layout.focusedPaneId).toBe(left);
+    expect(result.board.origins[result.tabId]).toEqual({ ...W1, path: "src/a.ts" });
+    const tab = collectAllTabs(result.board.layout.root).find((t) => t.tabId === result.tabId);
+    expect(tab?.target).toMatchObject({ kind: "file", path: "src/a.ts" });
   });
 
-  it("wraps a pane of a vertical group instead of reusing the group", () => {
-    const ids = makeIds();
-    const built = buildWorkspaceSplit({
-      groups: [
-        { sessions: [ref("a")] },
-        { sessions: [ref("b", "s1", "w2")] },
-        { sessions: [ref("c", "s1", "w3")] },
-      ],
-      layout: "grid",
-      viewport: { width: 900, height: 1400 },
-      ids,
-    });
-    const board: Board = { ...emptyBoard(ids), layout: built.layout, origins: built.origins };
-    const root = rootGroup(board.layout.root);
-    expect(root.direction).toBe("vertical");
-    const lone = root.children.find((child) => child.kind === "pane");
-    expect(lone).toBeDefined();
-    const sourceId = lone?.kind === "pane" ? lone.pane.id : "";
-    const sourceTab = collectAllPanes(board.layout.root).find((p) => p.id === sourceId)!.tabIds[0]!;
-    const origin = board.origins[sourceTab]!;
-    const result = openFileBesideModel(
-      board,
-      { sourcePaneId: sourceId, origin, location: { path: "f.ts" } },
-      ids,
-    )!;
-    expect(result.board.layout.root.kind).toBe("group");
-    expect(filePaths(result.board, result.paneId)).toEqual(["f.ts"]);
-    const paneIds = collectAllPanes(result.board.layout.root).map((p) => p.id);
-    expect(paneIds.indexOf(result.paneId)).toBe(paneIds.indexOf(sourceId) + 1);
-  });
-
-  it("keeps a dragged size override by building on it", () => {
-    const { board, left, ids } = twoColumns();
-    const groupId = rootGroup(board.layout.root).id;
-    const dragged: Board = { ...board, splitSizes: { [groupId]: [0.8, 0.2] } };
-    const result = openFileBesideModel(
-      dragged,
-      { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
-      ids,
-    )!;
-    const group = rootGroup(result.board.layout.root);
-    expect(group.sizes[0]).toBeCloseTo(0.48);
-    expect(group.sizes[1]).toBeCloseTo(0.32);
-    expect(group.sizes[2]).toBeCloseTo(0.2);
-    expect(result.board.splitSizes[groupId]).toBeUndefined();
-  });
-
-  it("adds to the right neighbour when it is that workspace's files pane (dedupe by path)", () => {
+  it("does not duplicate a file already open in the source pane, only selects it", () => {
     const { board, left, ids } = twoColumns();
     const first = openFileBesideModel(
       board,
       { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
       ids,
     )!;
-    const second = openFileBesideModel(
+    const other = openFileBesideModel(
       first.board,
       { sourcePaneId: left, origin: W1, location: { path: "b.ts" } },
       ids,
     )!;
-    expect(second.paneId).toBe(first.paneId);
-    expect(collectAllPanes(second.board.layout.root)).toHaveLength(3);
-    expect(filePaths(second.board, first.paneId)).toEqual(["a.ts", "b.ts"]);
-    expect(findPaneContainingTab(second.board.layout.root, second.tabId)?.focusedTabId).toBe(
-      second.tabId,
-    );
-
     const again = openFileBesideModel(
-      second.board,
+      other.board,
       { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
       ids,
     )!;
     expect(again.tabId).toBe(first.tabId);
-    expect(filePaths(again.board, first.paneId)).toEqual(["a.ts", "b.ts"]);
-    expect(findPaneContainingTab(again.board.layout.root, first.tabId)?.focusedTabId).toBe(
-      first.tabId,
-    );
-    expect(Object.keys(again.board.origins)).toHaveLength(Object.keys(second.board.origins).length);
+    expect(entries(again.board, left)).toEqual(["a", "file:a.ts", "file:b.ts"]);
+    expect(collectAllPanes(again.board.layout.root)[0]!.focusedTabId).toBe(first.tabId);
   });
 
-  it("opens in place when the source is already that workspace's files pane", () => {
-    const { board, left, ids } = twoColumns();
-    const first = openFileBesideModel(
-      board,
-      { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
-      ids,
-    )!;
-    const second = openFileBesideModel(
-      first.board,
-      { sourcePaneId: first.paneId, origin: W1, location: { path: "b.ts" } },
-      ids,
-    )!;
-    expect(second.paneId).toBe(first.paneId);
-    expect(collectAllPanes(second.board.layout.root)).toHaveLength(3);
-  });
-
-  it("never puts a file into an agent pane, even the right neighbour", () => {
+  it("focuses the file where it already is when another pane of the workspace has it", () => {
     const { board, left, right, ids } = twoColumns();
-    // Same workspace on both sides: w1's agent b sits right of w1's agent a.
-    const sameWorkspace: Board = {
-      ...board,
-      origins: Object.fromEntries(
-        Object.entries(board.origins).map(([tabId, origin]) => [tabId, { ...origin, ...W1 }]),
-      ),
-    };
-    const result = openFileBesideModel(
-      sameWorkspace,
-      { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
-      ids,
-    )!;
-    expect(result.paneId).not.toBe(right);
-    expect(result.paneId).not.toBe(left);
-    expect(
-      paneAgents(result.board)
-        .flat()
-        .filter((agent) => agent === "?"),
-    ).toHaveLength(1);
-    expect(filePaths(result.board, right)).toEqual(["?"]);
-    expect(filePaths(result.board, left)).toEqual(["?"]);
-  });
-
-  it("does not reuse another workspace's files pane to the right", () => {
-    const { board, left, ids } = twoColumns();
-    const w2Files = openFileBesideModel(
+    const inRight = openFileBesideModel(
       board,
-      {
-        sourcePaneId: collectAllPanes(board.layout.root)[1]!.id,
-        origin: W2,
-        location: { path: "z.ts" },
-      },
+      { sourcePaneId: right, origin: W2, location: { path: "x.ts" } },
       ids,
     )!;
-    // Now ask for a w1 file from w1's pane: its right neighbour is w2's agent pane, not w2's files.
-    const result = openFileBesideModel(
-      w2Files.board,
-      { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
+    const asked = openFileBesideModel(
+      inRight.board,
+      { sourcePaneId: left, origin: W2, location: { path: "x.ts" } },
       ids,
     )!;
-    expect(collectAllPanes(result.board.layout.root)).toHaveLength(4);
-    expect(filePaths(result.board, result.paneId)).toEqual(["a.ts"]);
+    expect(asked.tabId).toBe(inRight.tabId);
+    expect(asked.paneId).toBe(right);
+    expect(asked.board.layout.focusedPaneId).toBe(right);
+    expect(entries(asked.board, left)).toEqual(["a"]);
+    expect(listBoardTabs(asked.board.layout)).toHaveLength(3);
   });
 
-  it("keeps the same path in two workspaces apart", () => {
-    const { board, left, right, ids } = twoColumns();
+  it("the same path in another workspace is a different file", () => {
+    const { board, left, ids } = twoColumns();
     const one = openFileBesideModel(
       board,
-      { sourcePaneId: left, origin: W1, location: { path: "same.ts" } },
+      { sourcePaneId: left, origin: W1, location: { path: "a.ts" } },
       ids,
     )!;
     const two = openFileBesideModel(
       one.board,
-      { sourcePaneId: right, origin: W2, location: { path: "same.ts" } },
+      { sourcePaneId: left, origin: W2, location: { path: "a.ts" } },
       ids,
     )!;
     expect(two.tabId).not.toBe(one.tabId);
-    expect(two.board.origins[two.tabId]?.workspaceId).toBe("w2");
+    expect(entries(two.board, left)).toEqual(["a", "file:a.ts", "file:a.ts"]);
   });
 
-  it("returns null for an unknown pane or an empty path", () => {
+  it("returns null for an unknown pane or a blank path", () => {
     const { board, left, ids } = twoColumns();
     expect(
       openFileBesideModel(
@@ -891,73 +1060,100 @@ describe("openFileBesideModel", () => {
       openFileBesideModel(board, { sourcePaneId: left, origin: W1, location: { path: "  " } }, ids),
     ).toBeNull();
   });
+});
 
-  it("returns null instead of splitting past the depth limit", () => {
-    const ids = makeIds();
-    const pane = (id: string, tabId: string): SplitNode => ({
-      kind: "pane",
-      pane: { id, tabIds: [tabId], focusedTabId: tabId },
-    });
-    // Depth 5 already: g1(g2(g3(g4(pane, pane), pane), pane), pane), directions alternating.
-    const deep: SplitNode = {
-      kind: "group",
-      group: {
-        id: "g1",
-        direction: "horizontal",
-        sizes: [0.5, 0.5],
-        children: [
-          {
-            kind: "group",
-            group: {
-              id: "g2",
-              direction: "vertical",
-              sizes: [0.5, 0.5],
-              children: [
-                {
-                  kind: "group",
-                  group: {
-                    id: "g3",
-                    direction: "horizontal",
-                    sizes: [0.5, 0.5],
-                    children: [
-                      {
-                        kind: "group",
-                        group: {
-                          id: "g4",
-                          direction: "vertical",
-                          sizes: [0.5, 0.5],
-                          children: [pane("deep", "x1"), pane("p2", "x2")],
-                        },
-                      },
-                      pane("p3", "x3"),
-                    ],
-                  },
-                },
-                pane("p4", "x4"),
-              ],
-            },
+describe("openDraftInPaneModel / retargetBoardTabModel", () => {
+  function twoColumns() {
+    const base = makeIds();
+    const ids: BoardIds = { ...base, createDraftId: () => "draft_1" };
+    const { board } = panesBoard([["a"], ["b"]], ids);
+    const [left, right] = paneIds(board) as [string, string];
+    return { board, left, right, ids };
+  }
+
+  it("adds a selected draft tab to the pane, owned by the pane's workspace", () => {
+    const { board, right, ids } = twoColumns();
+    const result = openDraftInPaneModel(board, right, ids)!;
+    const pane = collectAllPanes(result.board.layout.root)[1]!;
+    expect(pane.tabIds).toHaveLength(2);
+    expect(pane.focusedTabId).toBe(result.tabId);
+    expect(result.board.layout.focusedPaneId).toBe(right);
+    const tab = collectAllTabs(result.board.layout.root).find((t) => t.tabId === result.tabId);
+    expect(tab?.target).toEqual({ kind: "draft", draftId: "draft_1" });
+    expect(result.board.origins[result.tabId]).toEqual({ serverId: "s1", workspaceId: "w2" });
+    expect(paneIds(result.board)).toEqual(paneIds(board));
+  });
+
+  it("generates a draft id when none is injected", () => {
+    const { board, left } = twoColumns();
+    const result = openDraftInPaneModel(board, left)!;
+    const tab = collectAllTabs(result.board.layout.root).find((t) => t.tabId === result.tabId);
+    expect(tab?.target.kind === "draft" && tab.target.draftId.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the first tab's workspace when the focused tab has no origin", () => {
+    const { board, left, ids } = twoColumns();
+    const pane = collectAllPanes(board.layout.root)[0]!;
+    const broken: Board = {
+      ...board,
+      layout: {
+        ...board.layout,
+        root: {
+          kind: "group",
+          group: {
+            ...rootGroup(board.layout.root),
+            children: rootGroup(board.layout.root).children.map((child) =>
+              child.kind === "pane" && child.pane.id === left
+                ? { kind: "pane", pane: { ...child.pane, focusedTabId: "ghost" } }
+                : child,
+            ),
           },
-          pane("p5", "x5"),
-        ],
-      },
+        },
+      } as Board["layout"],
     };
-    const tabs = ["x1", "x2", "x3", "x4", "x5"];
-    const board: Board = {
-      ...emptyBoard(ids),
-      layout: { root: deep, focusedPaneId: "deep" },
-      origins: Object.fromEntries(tabs.map((id) => [id, { ...W1, agentId: id }])),
-    };
-    // "deep" sits in a vertical group: wrapping it adds a sixth level.
-    expect(
-      openFileBesideModel(
-        board,
-        { sourcePaneId: "deep", origin: W1, location: { path: "a" } },
-        ids,
-      ),
-    ).toBeNull();
-    // "p5" sits in a horizontal group: a sibling joins it without a new level.
-    expect(
-      openFileBesideModel(board, { sourcePaneId: "p5", origin: W1, location: { path: "a" } }, ids),
-    ).not.toBeNull();
+    expect(pane.tabIds).toHaveLength(1);
+    const result = openDraftInPaneModel(broken, left, ids)!;
+    expect(result.board.origins[result.tabId]).toEqual({ serverId: "s1", workspaceId: "w1" });
+  });
+
+  it("returns null for an unknown pane and for a pane with no tab to name its workspace", () => {
+    const { board, ids } = twoColumns();
+    expect(openDraftInPaneModel(board, "ghost", ids)).toBeNull();
+    const empty = emptyBoard();
+    expect(openDraftInPaneModel(empty, "pane1", ids)).toBeNull();
+  });
+
+  it("retargets a draft into an agent in place, keeping id and slot, updating the origin", () => {
+    const { board, left, ids } = twoColumns();
+    const drafted = openDraftInPaneModel(board, left, ids)!;
+    const next = retargetBoardTabModel(drafted.board, drafted.tabId, {
+      kind: "agent",
+      agentId: "new1",
+    });
+    const pane = collectAllPanes(next.layout.root)[0]!;
+    expect(pane.tabIds).toEqual([...pane.tabIds.slice(0, 1), drafted.tabId]);
+    const tab = collectAllTabs(next.layout.root).find((t) => t.tabId === drafted.tabId);
+    expect(tab?.target).toEqual({ kind: "agent", agentId: "new1" });
+    expect(next.origins[drafted.tabId]).toEqual({
+      serverId: "s1",
+      workspaceId: "w1",
+      agentId: "new1",
+    });
+    expect(findBoardTabId(next, ref("new1"))).toBe(drafted.tabId);
+  });
+
+  it("retargets to a file by path, and ignores an unknown tab", () => {
+    const { board, left, ids } = twoColumns();
+    const drafted = openDraftInPaneModel(board, left, ids)!;
+    const next = retargetBoardTabModel(drafted.board, drafted.tabId, {
+      kind: "file",
+      path: "x.ts",
+    } as never);
+    expect(next.origins[drafted.tabId]).toEqual({
+      serverId: "s1",
+      workspaceId: "w1",
+      path: "x.ts",
+    });
+    expect(retargetBoardTabModel(board, "ghost", { kind: "agent", agentId: "z" })).toBe(board);
   });
 });

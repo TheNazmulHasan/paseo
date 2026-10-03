@@ -20,6 +20,7 @@ export type BoardKeyCommand =
   | { kind: "equalize" }
   | { kind: "focus-pane"; direction: BoardPaneDirection }
   | { kind: "close-tab" }
+  | { kind: "new-agent" }
   | { kind: "tab-relative"; delta: 1 | -1 }
   | { kind: "tab-index"; index: number };
 
@@ -42,6 +43,7 @@ export const BOARD_HANDLED_ACTION_IDS = [
   "workspace.tab.close-current",
   "workspace.tab.navigate-relative",
   "workspace.tab.navigate-index",
+  "workspace.tab.target.agent",
 ] as const satisfies readonly KeyboardActionId[];
 
 const PRESET_BY_ACTION_ID: Partial<Record<KeyboardActionId, ArrangePreset>> = {
@@ -77,6 +79,8 @@ export function resolveBoardKeyCommand(action: KeyboardActionDefinition): BoardK
       return { kind: "equalize" };
     case "workspace.tab.close-current":
       return { kind: "close-tab" };
+    case "workspace.tab.target.agent":
+      return { kind: "new-agent" };
     case "workspace.tab.navigate-relative":
       return { kind: "tab-relative", delta: action.delta };
     case "workspace.tab.navigate-index":
@@ -128,17 +132,136 @@ export function resolveBoardGroupSizes(
  * Flex grow per child, renormalized over the visible children so a hidden pane gives its space
  * back. The stored sizes are never touched, so unhiding restores what the user dragged to.
  */
-export function resolveBoardGroupFlex(children: SplitNode[], sizes: number[]): number[] {
+export function resolveBoardGroupFlex(
+  children: SplitNode[],
+  sizes: number[],
+  isHidden: (node: SplitNode) => boolean = isBoardNodeHidden,
+): number[] {
   const visibleTotal = children.reduce(
-    (total, child, index) => (isBoardNodeHidden(child) ? total : total + (sizes[index] ?? 1)),
+    (total, child, index) => (isHidden(child) ? total : total + (sizes[index] ?? 1)),
     0,
   );
   if (visibleTotal <= 0) {
     return children.map(() => 0);
   }
-  return children.map((child, index) =>
-    isBoardNodeHidden(child) ? 0 : (sizes[index] ?? 1) / visibleTotal,
-  );
+  return children.map((child, index) => (isHidden(child) ? 0 : (sizes[index] ?? 1) / visibleTotal));
+}
+
+/** A pane narrower than this is unreadable; the board shows one pane instead. */
+export const BOARD_MIN_PANE_WIDTH = 360;
+/** Same for height. */
+export const BOARD_MIN_PANE_HEIGHT = 240;
+
+export interface BoardPaneRect {
+  paneId: string;
+  width: number;
+  height: number;
+}
+
+/** Pixel size each visible pane would get in `viewport` (resize handles ignored). */
+export function computeBoardPaneRects(
+  root: SplitNode,
+  splitSizes: Record<string, number[]> | undefined,
+  viewport: ArrangeViewport,
+): BoardPaneRect[] {
+  const rects: BoardPaneRect[] = [];
+  const visit = (node: SplitNode, width: number, height: number): void => {
+    if (isBoardNodeHidden(node)) {
+      return;
+    }
+    if (node.kind === "pane") {
+      rects.push({ paneId: node.pane.id, width, height });
+      return;
+    }
+    const flex = resolveBoardGroupFlex(
+      node.group.children,
+      resolveBoardGroupSizes(node.group, splitSizes),
+    );
+    node.group.children.forEach((child, index) => {
+      const share = flex[index] ?? 0;
+      if (node.group.direction === "horizontal") {
+        visit(child, width * share, height);
+      } else {
+        visit(child, width, height * share);
+      }
+    });
+  };
+  visit(root, viewport.width, viewport.height);
+  return rects;
+}
+
+/**
+ * True when the board area is too small for its panes (any visible pane under the minimum
+ * width or height) and a single pane should be shown instead. Needs two or more visible
+ * panes and a measured viewport; widening the window flips it back.
+ */
+export function shouldShowOnlyFocusedBoardPane(input: {
+  root: SplitNode;
+  splitSizes?: Record<string, number[]>;
+  viewport: ArrangeViewport | null;
+  minWidth?: number;
+  minHeight?: number;
+}): boolean {
+  const { root, splitSizes, viewport } = input;
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+    return false;
+  }
+  const rects = computeBoardPaneRects(root, splitSizes, viewport);
+  if (rects.length < 2) {
+    return false;
+  }
+  const minWidth = input.minWidth ?? BOARD_MIN_PANE_WIDTH;
+  const minHeight = input.minHeight ?? BOARD_MIN_PANE_HEIGHT;
+  return rects.some((rect) => rect.width < minWidth || rect.height < minHeight);
+}
+
+/** Visible panes (not hidden by an arrange preset) in tree order. */
+export function listVisibleBoardPaneIds(root: SplitNode): string[] {
+  if (root.kind === "pane") {
+    return root.pane.hidden === true ? [] : [root.pane.id];
+  }
+  return root.group.children.flatMap(listVisibleBoardPaneIds);
+}
+
+/** The one pane to show in narrow mode: the focused pane, else the first visible one. */
+export function resolveSoloBoardPaneId(
+  root: SplitNode,
+  focusedPaneId: string | null,
+): string | null {
+  const visible = listVisibleBoardPaneIds(root);
+  if (focusedPaneId && visible.includes(focusedPaneId)) {
+    return focusedPaneId;
+  }
+  return visible[0] ?? null;
+}
+
+/** Hidden by an arrange preset, or (in narrow mode) anything but the solo pane. */
+export function isBoardNodeHiddenInView(node: SplitNode, soloPaneId: string | null): boolean {
+  if (soloPaneId === null) {
+    return isBoardNodeHidden(node);
+  }
+  if (node.kind === "pane") {
+    return node.pane.hidden === true || node.pane.id !== soloPaneId;
+  }
+  return node.group.children.every((child) => isBoardNodeHiddenInView(child, soloPaneId));
+}
+
+export type BoardPaneDropPosition = "left" | "right" | "above" | "below" | "swap";
+
+/** The split drop zones' names → the controller's move positions. */
+export function resolveBoardPaneDropPosition(
+  zone: "center" | "left" | "right" | "top" | "bottom",
+): BoardPaneDropPosition {
+  switch (zone) {
+    case "top":
+      return "above";
+    case "bottom":
+      return "below";
+    case "center":
+      return "swap";
+    default:
+      return zone;
+  }
 }
 
 export function findBoardPane(

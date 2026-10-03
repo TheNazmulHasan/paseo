@@ -19,6 +19,8 @@ export const BOARD_ROUTED_ACTION_IDS = [
   // Next/previous and nth tab act inside the focused pane (one workspace in a split view).
   "workspace.tab.navigate.relative",
   "workspace.tab.navigate.index",
+  // "New agent" (Cmd+Shift+A, often rebound) opens a draft in the focused pane's workspace.
+  "workspace.tab.target.agent",
 ] as const;
 
 export type BoardRoutedActionId = (typeof BOARD_ROUTED_ACTION_IDS)[number];

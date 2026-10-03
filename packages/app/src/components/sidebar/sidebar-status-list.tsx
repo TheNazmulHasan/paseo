@@ -208,7 +208,11 @@ export function SidebarStatusWorkspaceList({
     <>
       {pinnedWorkspaces.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
+          <PinnedSectionHeader
+            collapsed={pinnedCollapsed}
+            count={pinnedWorkspaces.length}
+            onToggle={togglePinnedCollapsed}
+          />
           {pinnedCollapsed ? null : (
             <>
               <DraggableList

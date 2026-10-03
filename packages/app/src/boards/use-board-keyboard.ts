@@ -4,6 +4,7 @@ import {
   arrangeBoard,
   equalizeBoardPanes,
   focusBoardPane,
+  openDraftInPane,
   refreshLiveBoard,
   removeBoardTab,
   restoreBoardArrangement,
@@ -36,8 +37,8 @@ interface UseBoardKeyboardInput {
 
 /**
  * Registers the one handler that serves every action the keyboard router sends to a board route
- * (BOARD_ROUTED_ACTION_IDS): arrange presets, restore, equalize, pane focus, close tab, and
- * next/previous/nth tab inside the focused pane.
+ * (BOARD_ROUTED_ACTION_IDS): arrange presets, restore, equalize, pane focus, new agent (draft in the
+ * focused pane), close tab, and next/previous/nth tab inside the focused pane.
  */
 export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboardInput) {
   const boardId = board.id;
@@ -77,6 +78,11 @@ export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboa
           }
           return true;
         }
+        case "new-agent":
+          if (focusedPane) {
+            openDraftInPane(boardId, focusedPane.id);
+          }
+          return true;
         case "close-tab":
           if (activeTabId) {
             removeBoardTab(boardId, activeTabId);

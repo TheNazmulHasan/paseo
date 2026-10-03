@@ -123,6 +123,57 @@ describe("workspace switcher shortcut isolation", () => {
   });
 });
 
+describe("Hyper+Arrow pane focus", () => {
+  const CASES = [
+    ["left", "ArrowLeft"],
+    ["right", "ArrowRight"],
+    ["up", "ArrowUp"],
+    ["down", "ArrowDown"],
+  ] as const;
+
+  it.each(CASES)("Hyper+%s focuses a pane on mac even while typing in a field", (dir, key) => {
+    for (const focusScope of ["message-input", "editable"] as const) {
+      expectShortcutResolution({
+        event: { key, code: key, metaKey: true, ctrlKey: true, altKey: true, shiftKey: true },
+        context: { isMac: true, focusScope },
+        action: `workspace.pane.focus.${dir}`,
+      });
+    }
+  });
+
+  it.each(CASES)("Ctrl+Alt+Shift+%s focuses a pane on non-mac while typing", (dir, key) => {
+    expectShortcutResolution({
+      event: { key, code: key, ctrlKey: true, altKey: true, shiftKey: true },
+      context: { isMac: false, focusScope: "message-input" },
+      action: `workspace.pane.focus.${dir}`,
+    });
+  });
+
+  it("keeps the Cmd+Shift+Arrow bindings", () => {
+    const combos = DEFAULT_BINDINGS.filter(
+      (binding) => binding.action === "workspace.pane.focus.left",
+    ).map((binding) => binding.combo);
+    expect(combos).toContain("Cmd+Shift+ArrowLeft");
+    expect(combos).toContain("Cmd+Ctrl+Alt+Shift+ArrowLeft");
+    expect(combos).toContain("Ctrl+Alt+Shift+ArrowLeft");
+  });
+
+  it("has unique binding ids and no combo shared by two different actions", () => {
+    const ids = DEFAULT_BINDINGS.map((binding) => binding.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const byCombo = new Map<string, Set<string>>();
+    for (const binding of DEFAULT_BINDINGS) {
+      if (binding.when?.mac === undefined || binding.when.focusScope !== undefined) continue;
+      const key = `${binding.when.mac}:${binding.combo}:${JSON.stringify(binding.when)}`;
+      const actions = byCombo.get(key) ?? new Set<string>();
+      actions.add(binding.action);
+      byCombo.set(key, actions);
+    }
+    const clashes = [...byCombo.entries()].filter(([, actions]) => actions.size > 1);
+    expect(clashes).toEqual([]);
+  });
+});
+
 describe("workspace arrange shortcuts", () => {
   const ARRANGE_CASES = [
     ["single", "1", "Digit1"],

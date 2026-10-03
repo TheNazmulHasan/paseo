@@ -28,13 +28,16 @@ import {
   equalizeBoardPanes,
   focusBoardPane,
   getBoard,
+  moveBoardPane,
   moveBoardTabToPane,
+  openDraftInPane,
   openFileBeside,
   refreshLiveBoard,
   removeBoardTab,
   renameBoard,
   resizeBoardSplit,
   restoreBoardArrangement,
+  retargetBoardTab,
   selectBoardTab,
   setBoardExplorerOpen,
   splitWorkspaces,
@@ -42,7 +45,7 @@ import {
   useBoards,
   useLiveBoardSync,
 } from "@/boards/controller";
-import { listBoardTabs } from "@/boards/model";
+import { buildWorkspaceSplit, listBoardTabs } from "@/boards/model";
 import { LIVE_BOARD_ID, type Board, type BoardSessionRef } from "@/boards/types";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
@@ -324,8 +327,7 @@ describe("board basics", () => {
   }
 
   it("focus, select, move and resize edit the layout", () => {
-    const id = createBoard("One", [ref("a"), ref("b"), ref("c")])!;
-    arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT });
+    const id = putPanes([["a", "b"], ["c"]]);
     let board = mustBoard(id);
     expect(paneAgents(board)).toEqual([["a", "b"], ["c"]]);
     const [left, right] = collectAllPanes(board.layout.root);
@@ -350,59 +352,67 @@ describe("board basics", () => {
   });
 });
 
+/** A user board with one pane per entry (each a list of agent ids, workspaces w1, w2, ...). */
+function putPanes(
+  groups: string[][],
+  layout: "columns" | "grid" = "columns",
+  boardId: string | null = null,
+): string {
+  const built = buildWorkspaceSplit({
+    groups: groups.map((agents, index) => ({
+      sessions: agents.map((agentId) => ref(agentId, "s1", `w${index + 1}`)),
+    })),
+    layout,
+    viewport: VIEWPORT,
+  });
+  const id = boardId ?? createBoard("Panes")!;
+  useBoardStore.getState().putBoard({
+    ...mustBoard(id),
+    layout: built.layout,
+    origins: built.origins,
+    splitSizes: {},
+  });
+  return id;
+}
+
 describe("openFileBeside", () => {
   const W1 = { serverId: "s1", workspaceId: "w1" };
 
-  function twoWorkspaceBoard(): { board: Board; left: string } {
-    const board = mustBoard(
-      createBoard(
-        "Two",
-        [ref("a"), ref("b")].map((r, i) => ({
-          serverId: r.serverId,
-          agentId: r.agentId,
-          workspaceId: `w${i + 1}`,
-        })),
-      ),
-    );
-    // One pane holds both agents; arrange columns so each workspace has its own pane.
-    arrangeBoard({ boardId: board.id, preset: "columns-2", viewport: VIEWPORT });
-    const arranged = mustBoard(board.id);
-    return { board: arranged, left: collectAllPanes(arranged.layout.root)[0]!.id };
+  function twoWorkspaceBoard(): { id: string; left: string; right: string } {
+    const id = putPanes([["a"], ["b"]]);
+    const [left, right] = collectAllPanes(mustBoard(id).layout.root);
+    return { id, left: left!.id, right: right!.id };
   }
 
-  it("opens a file as a tab in a new pane right of the source and keeps the source focused", () => {
-    const { board, left } = twoWorkspaceBoard();
-    expect(openFileBeside(board.id, left, W1, { path: "src/a.ts" })).toBe(true);
-    const next = mustBoard(board.id);
-    const panes = collectAllPanes(next.layout.root);
-    expect(panes).toHaveLength(3);
-    const filePane = panes[1]!;
-    const tab = collectAllTabs(next.layout.root).find((t) => t.tabId === filePane.tabIds[0]);
-    expect(tab?.target).toMatchObject({ kind: "file", path: "src/a.ts" });
-    expect(next.origins[filePane.tabIds[0]!]).toEqual({ ...W1, path: "src/a.ts" });
-    expect(next.layout.focusedPaneId).toBe(board.layout.focusedPaneId);
+  it("opens a file as a selected tab in the source pane itself, without adding a pane", () => {
+    const { id, left, right } = twoWorkspaceBoard();
+    expect(openFileBeside(id, left, W1, { path: "src/a.ts" })).toBe(true);
+    const next = mustBoard(id);
+    expect(collectAllPanes(next.layout.root).map((pane) => pane.id)).toEqual([left, right]);
+    expect(paneEntries(next)).toEqual([["a", "file:src/a.ts"], ["b"]]);
+    const pane = collectAllPanes(next.layout.root)[0]!;
+    expect(entryOf(next, pane.focusedTabId)).toBe("file:src/a.ts");
+    expect(next.origins[pane.tabIds[1]!]).toEqual({ ...W1, path: "src/a.ts" });
+    expect(next.layout.focusedPaneId).toBe(left);
   });
 
-  it("reuses that pane for the next file and does not duplicate an open one", () => {
-    const { board, left } = twoWorkspaceBoard();
-    openFileBeside(board.id, left, W1, { path: "a.ts" });
-    openFileBeside(board.id, left, W1, { path: "b.ts" });
-    openFileBeside(board.id, left, W1, { path: "a.ts" });
-    const next = mustBoard(board.id);
-    expect(collectAllPanes(next.layout.root)).toHaveLength(3);
+  it("does not duplicate an open file", () => {
+    const { id, left } = twoWorkspaceBoard();
+    openFileBeside(id, left, W1, { path: "a.ts" });
+    openFileBeside(id, left, W1, { path: "b.ts" });
+    openFileBeside(id, left, W1, { path: "a.ts" });
+    const next = mustBoard(id);
     expect(listBoardTabs(next.layout)).toHaveLength(4);
-    const filePane = collectAllPanes(next.layout.root)[1]!;
-    expect(filePane.tabIds).toHaveLength(2);
-    const first = filePane.tabIds[0]!;
-    expect(filePane.focusedTabId).toBe(first);
+    expect(paneEntries(next)[0]).toEqual(["a", "file:a.ts", "file:b.ts"]);
+    expect(entryOf(next, collectAllPanes(next.layout.root)[0]!.focusedTabId)).toBe("file:a.ts");
   });
 
   it("returns false and leaves the board alone for an unknown board or pane", () => {
-    const { board } = twoWorkspaceBoard();
-    const before = mustBoard(board.id);
+    const { id } = twoWorkspaceBoard();
+    const before = mustBoard(id);
     expect(openFileBeside("ghost", "pane1", W1, { path: "a.ts" })).toBe(false);
-    expect(openFileBeside(board.id, "ghost", W1, { path: "a.ts" })).toBe(false);
-    expect(mustBoard(board.id)).toBe(before);
+    expect(openFileBeside(id, "ghost", W1, { path: "a.ts" })).toBe(false);
+    expect(mustBoard(id)).toBe(before);
   });
 
   it("remembers the Files explorer per board, off by default", () => {
@@ -415,26 +425,101 @@ describe("openFileBeside", () => {
   });
 });
 
-describe("arrangeBoard", () => {
-  function four(): string {
-    return createBoard("Four", [ref("a"), ref("b"), ref("c"), ref("d")])!;
-  }
+describe("openDraftInPane / retargetBoardTab", () => {
+  it("adds a New agent draft tab to the pane and returns its id", () => {
+    const id = putPanes([["a"], ["b"]]);
+    const [, right] = collectAllPanes(mustBoard(id).layout.root);
+    const tabId = openDraftInPane(id, right!.id)!;
+    const board = mustBoard(id);
+    const pane = collectAllPanes(board.layout.root)[1]!;
+    expect(pane.focusedTabId).toBe(tabId);
+    expect(board.layout.focusedPaneId).toBe(right!.id);
+    expect(board.origins[tabId]).toEqual({ serverId: "s1", workspaceId: "w2" });
+    const tab = collectAllTabs(board.layout.root).find((t) => t.tabId === tabId);
+    expect(tab?.target.kind).toBe("draft");
+  });
 
-  it("arranges every session into the preset", () => {
-    const id = four();
-    expect(arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT })).toBe(true);
-    expect(paneAgents(mustBoard(id))).toEqual([
-      ["a", "b"],
-      ["c", "d"],
-    ]);
-    expect(getBoardArrangeState(id).lastPreset).toBe("columns-2");
+  it("returns null for an unknown board, an unknown pane or an empty pane", () => {
+    const id = putPanes([["a"]]);
+    expect(openDraftInPane("ghost", "pane1")).toBeNull();
+    expect(openDraftInPane(id, "ghost")).toBeNull();
+    const empty = createBoard("Empty")!;
+    const emptyPane = collectAllPanes(mustBoard(empty).layout.root)[0]!;
+    expect(openDraftInPane(empty, emptyPane.id)).toBeNull();
+  });
+
+  it("retarget turns the draft into the created agent in the same slot", () => {
+    const id = putPanes([["a"]]);
+    const pane = collectAllPanes(mustBoard(id).layout.root)[0]!;
+    const tabId = openDraftInPane(id, pane.id)!;
+    retargetBoardTab(id, tabId, { kind: "agent", agentId: "fresh" });
+    const board = mustBoard(id);
+    expect(paneAgents(board)).toEqual([["a", "fresh"]]);
+    expect(board.layout.root.kind === "pane" && board.layout.root.pane.tabIds[1]).toBe(tabId);
+    expect(board.origins[tabId]).toEqual({ serverId: "s1", workspaceId: "w1", agentId: "fresh" });
+    retargetBoardTab("ghost", tabId, { kind: "agent", agentId: "x" });
+    retargetBoardTab(id, "ghost", { kind: "agent", agentId: "x" });
+    expect(mustBoard(id)).toBe(board);
+  });
+});
+
+describe("moveBoardPane", () => {
+  it("moves a pane beside another and swaps two panes", () => {
+    const id = putPanes([["a"], ["b"], ["c"]]);
+    const [p1, p2, p3] = collectAllPanes(mustBoard(id).layout.root).map((pane) => pane.id) as [
+      string,
+      string,
+      string,
+    ];
+    expect(moveBoardPane(id, p1, p3, "swap")).toBe(true);
+    expect(paneAgents(mustBoard(id))).toEqual([["c"], ["b"], ["a"]]);
+    expect(moveBoardPane(id, p1, p2, "below")).toBe(true);
+    expect(collectAllPanes(mustBoard(id).layout.root)).toHaveLength(3);
+    expect(paneAgents(mustBoard(id)).flat().sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("is false for the same pane, unknown panes and unknown boards", () => {
+    const id = putPanes([["a"], ["b"]]);
+    const [p1] = collectAllPanes(mustBoard(id).layout.root);
+    const before = mustBoard(id);
+    expect(moveBoardPane(id, p1!.id, p1!.id, "left")).toBe(false);
+    expect(moveBoardPane(id, "ghost", p1!.id, "left")).toBe(false);
+    expect(moveBoardPane("ghost", p1!.id, p1!.id, "left")).toBe(false);
+    expect(mustBoard(id)).toBe(before);
+  });
+});
+
+describe("arrangeBoard (re-lays out panes, never touches tabs)", () => {
+  const FIVE = [["a1", "a2"], ["b"], ["c1", "c2", "c3"], ["d"], ["e"]];
+
+  it("keeps all five panes under columns-2, grid and single, and restore brings the original back", () => {
+    const id = putPanes(FIVE);
+    const original = mustBoard(id).layout.root;
+    for (const preset of ["columns-2", "grid", "single", "columns-3"] as const) {
+      expect(arrangeBoard({ boardId: id, preset, viewport: VIEWPORT })).toBe(true);
+      expect(paneAgents(mustBoard(id))).toEqual(FIVE);
+    }
+    expect(getBoardArrangeState(id).lastPreset).toBe("columns-3");
+    expect(restoreBoardArrangement(id)).toBe(true);
+    expect(mustBoard(id).layout.root).toEqual(original);
+    expect(paneAgents(mustBoard(id))).toEqual(FIVE);
+  });
+
+  it("columns-2 deals the panes into two columns", () => {
+    const id = putPanes(FIVE);
+    arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT });
+    const root = mustBoard(id).layout.root;
+    expect(
+      root.kind === "group" &&
+        root.group.children.map((c) => (c.kind === "group" ? c.group.children.length : 1)),
+    ).toEqual([3, 2]);
   });
 
   it("pressing the same preset again toggles back to the original layout", () => {
-    const id = four();
+    const id = putPanes(FIVE);
     const originalRoot = mustBoard(id).layout.root;
     expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
-    expect(collectAllPanes(mustBoard(id).layout.root)).toHaveLength(4);
+    expect(mustBoard(id).layout.root).not.toEqual(originalRoot);
     expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
     expect(mustBoard(id).layout.root).toEqual(originalRoot);
     expect(getBoardArrangeState(id).snapshot).toBeNull();
@@ -442,20 +527,16 @@ describe("arrangeBoard", () => {
   });
 
   it("keeps the ORIGINAL snapshot across consecutive different presets", () => {
-    const id = four();
-    const originalRoot = mustBoard(id).layout.root;
+    const id = putPanes(FIVE);
     arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT });
     const firstSnapshot = getBoardArrangeState(id).snapshot;
     arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT });
-    arrangeBoard({ boardId: id, preset: "columns-3", viewport: VIEWPORT });
     expect(getBoardArrangeState(id).snapshot).toBe(firstSnapshot);
-    expect(getBoardArrangeState(id).lastPreset).toBe("columns-3");
-    expect(restoreBoardArrangement(id)).toBe(true);
-    expect(mustBoard(id).layout.root).toEqual(originalRoot);
+    expect(getBoardArrangeState(id).lastPreset).toBe("grid");
   });
 
   it("restore reconciles with tabs closed and opened since", () => {
-    const id = four();
+    const id = putPanes([["a"], ["b"], ["c"], ["d"]]);
     arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT });
     const board = mustBoard(id);
     const aTab = Object.entries(board.origins).find(([, o]) => o.agentId === "a")![0];
@@ -475,8 +556,8 @@ describe("arrangeBoard", () => {
     expect(equalizeBoardPanes("ghost")).toBe(false);
   });
 
-  it("equalize evens the splits and clears dragged sizes", () => {
-    const id = four();
+  it("equalize evens every group on the view and clears dragged sizes", () => {
+    const id = putPanes(FIVE);
     arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT });
     const root = mustBoard(id).layout.root;
     if (root.kind !== "group") {
@@ -493,11 +574,12 @@ describe("arrangeBoard", () => {
   });
 
   it("works on the Live board too", () => {
-    addSessionsToBoard(LIVE_BOARD_ID, [ref("a"), ref("b")]);
+    useBoardStore.getState().ensureLive();
+    putPanes([["a"], ["b"], ["c"]], "columns", LIVE_BOARD_ID);
     expect(arrangeBoard({ boardId: LIVE_BOARD_ID, preset: "columns-2", viewport: VIEWPORT })).toBe(
       true,
     );
-    expect(paneAgents(mustBoard(LIVE_BOARD_ID))).toEqual([["a"], ["b"]]);
+    expect(paneAgents(mustBoard(LIVE_BOARD_ID))).toEqual([["a"], ["b"], ["c"]]);
   });
 });
 
@@ -866,12 +948,12 @@ describe("splitWorkspaces reuse by set", () => {
     openWorkspaceAgents("s1", "w2", ["b1", "b2"]);
     const id = split(["w1", "w2"])!;
     expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
-    expect(collectAllPanes(mustBoard(id).layout.root)).toHaveLength(4);
-    expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
     expect(paneAgents(mustBoard(id))).toEqual([
       ["a1", "a2"],
       ["b1", "b2"],
     ]);
+    expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
+    expect(collectAllPanes(mustBoard(id).layout.root)).toHaveLength(2);
   });
 });
 

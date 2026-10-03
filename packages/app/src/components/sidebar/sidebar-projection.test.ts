@@ -236,6 +236,19 @@ describe("buildSidebarProjection — Desk and Shelf", () => {
     ]);
   });
 
+  it("does not number a folded Desk, but keeps its rows and the count", () => {
+    const projection = buildSidebarProjection({
+      ...deskInput("status", ["srv:on-desk"]),
+      deskCollapsed: true,
+    });
+
+    expect(workspaceIds(projection.deskGroups.flatMap((group) => group.rows))).toEqual(["on-desk"]);
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-shelf",
+    ]);
+  });
+
   it("is the old projection when the Desk is empty", () => {
     const projection = buildSidebarProjection(deskInput("project", []));
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { usePathname } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { LayoutGrid, Radio } from "lucide-react-native";
@@ -6,9 +7,10 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { useBoards } from "@/boards/controller";
+import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { LIVE_BOARD_ID } from "@/boards/types";
 import { useDeskStore } from "@/desk/desk-store";
-import { orderKeysDeskFirst, toKeySet } from "@/desk/model";
+import { toKeySet } from "@/desk/model";
 import { isWeb } from "@/constants/platform";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
@@ -36,8 +38,8 @@ import {
 import {
   BOARD_ROW_SERVER_ID,
   boardRowKey,
-  insertBoardKeys,
-  mergeWorkspaceOrder,
+  boardVisit,
+  orderSwitcherKeys,
   WORKSPACE_SWITCHER_VISIBLE_LIMIT,
   workspaceVisitKey,
 } from "@/workspace-switcher/model";
@@ -61,6 +63,7 @@ interface WorkspaceProjectIdentity {
 
 export function WorkspaceSwitcherHost() {
   useWorkspaceVisitRecorder();
+  useBoardVisitRecorder();
   useWorkspaceCandidateSync();
   return <WorkspaceSwitcherOverlay />;
 }
@@ -73,6 +76,15 @@ function useWorkspaceVisitRecorder(): void {
   useEffect(() => {
     if (serverId && workspaceId) visit({ serverId, workspaceId });
   }, [serverId, visit, workspaceId]);
+}
+
+/** A view is a place like a workspace: showing `/boards/<id>` records a visit under `board:<id>`. */
+function useBoardVisitRecorder(): void {
+  const boardId = parseBoardIdFromPathname(usePathname());
+  const visit = useWorkspaceSwitcherMruStore((state) => state.visit);
+  useEffect(() => {
+    if (boardId) visit(boardVisit(boardId));
+  }, [boardId, visit]);
 }
 
 function createWorkspaceCandidate(input: {
@@ -110,6 +122,7 @@ function createWorkspaceCandidate(input: {
 function useWorkspaceCandidateSync(): void {
   const { t } = useTranslation();
   const selection = useActiveWorkspaceSelection();
+  const activeBoardId = parseBoardIdFromPathname(usePathname());
   const history = useWorkspaceSwitcherMruStore((state) => state.history);
   const setCandidates = useWorkspaceSwitcherStore((state) => state.setCandidates);
   const pruneHistory = useWorkspaceSwitcherMruStore((state) => state.prune);
@@ -155,7 +168,9 @@ function useWorkspaceCandidateSync(): void {
   );
   const iconDataByProjectViewKey = useProjectIcons({ projects: iconTargets });
 
-  const activeKey = selection ? workspaceVisitKey(selection) : null;
+  // Row 0 is the place you are on: a view on a /boards route, else the active workspace.
+  const workspaceKey = selection ? workspaceVisitKey(selection) : null;
+  const activeKey = activeBoardId ? boardRowKey(activeBoardId) : workspaceKey;
   const liveKeys = useMemo(
     () => new Set(workspacePlacements.map((workspace) => workspace.workspaceKey)),
     [workspacePlacements],
@@ -180,27 +195,17 @@ function useWorkspaceCandidateSync(): void {
     const placementByKey = new Map(
       workspacePlacements.map((workspace) => [workspace.workspaceKey, workspace] as const),
     );
-    const validHistoryKeys = history
-      .map((visit) => workspaceVisitKey(visit))
-      .filter((key) => placementByKey.has(key) && key !== activeKey);
-    const rowZeroIsCurrent = Boolean(activeKey && placementByKey.has(activeKey));
-    // Desk first (fork mod #12), after row 0 and the workspace just left, which stay put so a
-    // quick tap still lands on it. The cut to the visible limit comes after the reorder.
-    const headCount = rowZeroIsCurrent ? 2 : 1;
-    const orderedKeys = insertBoardKeys(
-      orderKeysDeskFirst(
-        mergeWorkspaceOrder(
-          rowZeroIsCurrent && activeKey ? [activeKey, ...validHistoryKeys] : validHistoryKeys,
-          workspacePlacements.map((workspace) => workspace.workspaceKey),
-          Number.POSITIVE_INFINITY,
-        ),
-        deskKeys,
-        headCount,
-      ),
-      [...boardByKey.keys()],
+    const isPlace = (key: string) => placementByKey.has(key) || boardByKey.has(key);
+    const rowZeroIsCurrent = Boolean(activeKey && isPlace(activeKey));
+    // Workspaces and views are ordered together by recency (see orderSwitcherKeys); the cut to
+    // the visible limit comes after the reorder.
+    const orderedKeys = orderSwitcherKeys({
+      currentKey: rowZeroIsCurrent ? activeKey : null,
+      historyKeys: history.map((visit) => workspaceVisitKey(visit)).filter(isPlace),
+      workspaceKeys: workspacePlacements.map((workspace) => workspace.workspaceKey),
+      boardKeys: [...boardByKey.keys()],
       deskKeys,
-      headCount,
-    ).slice(0, WORKSPACE_SWITCHER_VISIBLE_LIMIT);
+    }).slice(0, WORKSPACE_SWITCHER_VISIBLE_LIMIT);
 
     const rows: WorkspaceSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
@@ -209,7 +214,7 @@ function useWorkspaceCandidateSync(): void {
         rows.push({
           serverId: BOARD_ROW_SERVER_ID,
           workspaceId: board.id,
-          at: 0,
+          at: visitedAtByKey.get(key) ?? 0,
           title: board.id === LIVE_BOARD_ID ? t("boards.sidebar.live") : board.name,
           status: null,
           requiresAttention: false,
@@ -261,10 +266,11 @@ function useWorkspaceCandidateSync(): void {
     setCandidates(candidates, activeKey, switcherLiveKeys);
   }, [activeKey, candidates, setCandidates, switcherLiveKeys]);
 
-  // The workspace just opened may not be in the placements yet; never prune it.
+  // The workspace just opened may not be in the placements yet; never prune it. Deleted views
+  // drop out here too, since their pseudo-host keys are part of the live set.
   useEffect(() => {
-    pruneHistory(liveKeys, activeKey);
-  }, [activeKey, liveKeys, pruneHistory]);
+    pruneHistory(switcherLiveKeys, activeKey);
+  }, [activeKey, pruneHistory, switcherLiveKeys]);
 }
 
 function WorkspaceSwitcherOverlay() {

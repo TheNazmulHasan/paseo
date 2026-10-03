@@ -481,6 +481,7 @@ describe("routeKeyboardShortcut — board routes (fork mod #13)", () => {
     "workspace.pane.focus.right",
     "workspace.pane.focus.up",
     "workspace.pane.focus.down",
+    "workspace.tab.target.agent",
   ] as const;
 
   it.each(ARRANGE_AND_PANE_IDS)("%s on /boards/abc goes to the board handler", (action) => {

@@ -16,7 +16,12 @@ import {
   resolveBoardGroupSizes,
   resolveBoardKeyCommand,
   resolveBoardViewport,
+  resolveBoardPaneDropPosition,
   resolveFocusedPaneOrigin,
+  resolveSoloBoardPaneId,
+  isBoardNodeHiddenInView,
+  computeBoardPaneRects,
+  shouldShowOnlyFocusedBoardPane,
   resolvePaneActiveTabId,
 } from "@/boards/screen-helpers";
 import { BOARD_ROUTED_ACTION_IDS } from "@/boards/keyboard-contract";
@@ -57,6 +62,7 @@ describe("resolveBoardKeyCommand", () => {
       "workspace.tab.close.current": { id: "workspace.tab.close-current", scope },
       "workspace.tab.navigate.relative": { id: "workspace.tab.navigate-relative", scope, delta: 1 },
       "workspace.tab.navigate.index": { id: "workspace.tab.navigate-index", scope, index: 2 },
+      "workspace.tab.target.agent": { id: "workspace.tab.target.agent", scope },
     };
     for (const id of BOARD_ROUTED_ACTION_IDS) {
       const action = dispatcherIdByRoutedId[id];
@@ -328,5 +334,111 @@ describe("resolveFocusedPaneOrigin", () => {
   it("is null when nothing is focused or the pane is empty", () => {
     expect(resolveFocusedPaneOrigin({ layout: layout(null), origins })).toBeNull();
     expect(resolveFocusedPaneOrigin({ layout: layout("p3"), origins })).toBeNull();
+  });
+});
+
+describe("narrow board: one pane at a time", () => {
+  const five = (): SplitNode => ({
+    kind: "group",
+    group: row("g", [pane("a", ["t1"]), pane("b", ["t2"]), pane("c", ["t3"]), pane("d", ["t4"])]),
+  });
+
+  it("splits the viewport by the group's flex", () => {
+    const rects = computeBoardPaneRects(five(), undefined, { width: 1200, height: 800 });
+    expect(rects.map((rect) => [rect.paneId, rect.width, rect.height])).toEqual([
+      ["a", 300, 800],
+      ["b", 300, 800],
+      ["c", 300, 800],
+      ["d", 300, 800],
+    ]);
+  });
+
+  it("collapses when any visible pane is under 360 wide or 240 tall", () => {
+    const narrow = shouldShowOnlyFocusedBoardPane({
+      root: five(),
+      viewport: { width: 1200, height: 800 },
+    });
+    expect(narrow).toBe(true);
+    const roomy = shouldShowOnlyFocusedBoardPane({
+      root: five(),
+      viewport: { width: 1600, height: 800 },
+    });
+    expect(roomy).toBe(false);
+    const short = shouldShowOnlyFocusedBoardPane({
+      root: five(),
+      viewport: { width: 1600, height: 200 },
+    });
+    expect(short).toBe(true);
+  });
+
+  it("counts a stacked group's height and honours dragged split sizes", () => {
+    const column: SplitNode = {
+      kind: "group",
+      group: {
+        id: "col",
+        direction: "vertical",
+        children: [pane("a", ["t1"]), pane("b", ["t2"])],
+        sizes: [0.5, 0.5],
+      },
+    };
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 600 } }),
+    ).toBe(false);
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 450 } }),
+    ).toBe(true);
+    expect(
+      shouldShowOnlyFocusedBoardPane({
+        root: column,
+        splitSizes: { col: [0.9, 0.1] },
+        viewport: { width: 800, height: 600 },
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores hidden panes, a single pane and an unmeasured viewport", () => {
+    const withHidden: SplitNode = {
+      kind: "group",
+      group: row("g", [pane("a", ["t1"]), pane("b", ["t2"], { hidden: true })]),
+    };
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: withHidden, viewport: { width: 300, height: 300 } }),
+    ).toBe(false);
+    expect(shouldShowOnlyFocusedBoardPane({ root: five(), viewport: null })).toBe(false);
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: five(), viewport: { width: 0, height: 0 } }),
+    ).toBe(false);
+  });
+
+  it("shows the focused pane, else the first visible one", () => {
+    const root: SplitNode = {
+      kind: "group",
+      group: row("g", [pane("a", ["t1"], { hidden: true }), pane("b", ["t2"]), pane("c", ["t3"])]),
+    };
+    expect(resolveSoloBoardPaneId(root, "c")).toBe("c");
+    expect(resolveSoloBoardPaneId(root, "a")).toBe("b");
+    expect(resolveSoloBoardPaneId(root, null)).toBe("b");
+  });
+
+  it("hides every node but the solo pane's path, and gives the space to it", () => {
+    const root = five();
+    if (root.kind !== "group") throw new Error("group expected");
+    const [a, b] = root.group.children;
+    expect(isBoardNodeHiddenInView(a!, "a")).toBe(false);
+    expect(isBoardNodeHiddenInView(b!, "a")).toBe(true);
+    expect(isBoardNodeHiddenInView(root, "a")).toBe(false);
+    const flex = resolveBoardGroupFlex(root.group.children, root.group.sizes, (node) =>
+      isBoardNodeHiddenInView(node, "b"),
+    );
+    expect(flex).toEqual([0, 1, 0, 0]);
+    expect(isBoardNodeHiddenInView(b!, null)).toBe(false);
+  });
+
+  it("maps drop zones to move positions", () => {
+    expect(resolveBoardPaneDropPosition("top")).toBe("above");
+    expect(resolveBoardPaneDropPosition("bottom")).toBe("below");
+    expect(resolveBoardPaneDropPosition("center")).toBe("swap");
+    expect(resolveBoardPaneDropPosition("left")).toBe("left");
+    expect(resolveBoardPaneDropPosition("right")).toBe("right");
   });
 });

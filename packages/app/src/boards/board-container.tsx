@@ -1,23 +1,33 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
+import { useTranslation } from "react-i18next";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { BoardPane } from "@/boards/board-pane";
+import { BoardPaneDndProvider } from "@/boards/board-pane-dnd";
+import { BoardPaneStrip, type BoardPaneStripEntry } from "@/boards/board-pane-strip";
 import {
   focusBoardPane,
+  openDraftInPane,
   openFileBeside,
   removeBoardTab,
   resizeBoardSplit,
+  retargetBoardTab,
   selectBoardTab,
 } from "@/boards/controller";
 import { BoardFilesExplorer } from "@/boards/board-files-explorer";
 import {
   boardWorkspaceKey,
-  isBoardNodeHidden,
+  findBoardPane,
+  isBoardNodeHiddenInView,
+  listVisibleBoardPaneIds,
   resolveBoardGroupFlex,
   resolveBoardGroupSizes,
   resolveFocusedPaneOrigin,
+  resolvePaneActiveTabId,
+  resolveSoloBoardPaneId,
+  shouldShowOnlyFocusedBoardPane,
 } from "@/boards/screen-helpers";
 import { boardTabTarget } from "@/boards/model";
 import type { Board, BoardTabOrigin } from "@/boards/types";
@@ -56,10 +66,13 @@ interface BoardNodeViewProps {
   allTabs: WorkspaceTab[];
   identities: BoardWorkspaceIdentityMap;
   isScreenFocused: boolean;
+  /** Narrow window: the only pane on screen (the rest are hidden). Null = the full layout. */
+  soloPaneId: string | null;
   onFocusPane: (paneId: string) => void;
   onSelectTab: (paneId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onOpenInWorkspace: (origin: BoardTabOrigin) => void;
+  onNewAgent: (paneId: string) => void;
   buildPaneContentModel: BuildPaneContentModel;
 }
 
@@ -116,13 +129,67 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
     (origin: BoardTabOrigin) => openInOriginWorkspace(origin),
     [],
   );
+  const handleNewAgent = useCallback(
+    (paneId: string) => {
+      openDraftInPane(boardId, paneId);
+    },
+    [boardId],
+  );
+  const [viewport, setViewport] = useState<ArrangeViewport | null>(null);
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
       onViewportChange({ width, height });
+      setViewport((current) =>
+        current && current.width === width && current.height === height
+          ? current
+          : { width, height },
+      );
     },
     [onViewportChange],
   );
+  // Too narrow for its panes (a quarter-screen window): show only the focused pane, with a
+  // strip to switch. The strip appears only in this mode and the decision reads the full area,
+  // so it cannot flip itself back and forth.
+  const focusOnly = shouldShowOnlyFocusedBoardPane({
+    root: board.layout.root,
+    splitSizes: board.splitSizes,
+    viewport,
+  });
+  const soloPaneId = focusOnly
+    ? resolveSoloBoardPaneId(board.layout.root, board.layout.focusedPaneId)
+    : null;
+  const stripPanes = useMemo<BoardPaneStripEntry[]>(
+    () =>
+      soloPaneId === null
+        ? []
+        : listVisibleBoardPaneIds(board.layout.root).map((paneId) => {
+            const tabId = resolvePaneActiveTabId(findBoardPane(board.layout.root, paneId));
+            const origin = tabId ? origins[tabId] : undefined;
+            return {
+              paneId,
+              identity: origin
+                ? (identities.get(boardWorkspaceKey(origin)) ??
+                  fallbackBoardWorkspaceIdentity(origin.workspaceId))
+                : null,
+            };
+          }),
+    [board.layout.root, identities, origins, soloPaneId],
+  );
+  const getPaneLabel = useCallback(
+    (paneId: string) => {
+      const tabId = resolvePaneActiveTabId(findBoardPane(board.layout.root, paneId));
+      const origin = tabId ? origins[tabId] : undefined;
+      return origin
+        ? (
+            identities.get(boardWorkspaceKey(origin)) ??
+            fallbackBoardWorkspaceIdentity(origin.workspaceId)
+          ).workspaceName
+        : "";
+    },
+    [board.layout.root, identities, origins],
+  );
+  const { t } = useTranslation();
 
   const buildPaneContentModel = useCallback<BuildPaneContentModel>(
     ({ paneId, tab }) => {
@@ -139,7 +206,7 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
         onOpenPreferredTarget: (target) => openInWorkspace(target),
         onOpenTargetToSide: (target) => openInWorkspace(target),
         onCloseCurrentTab: () => removeBoardTab(boardId, tab.tabId),
-        onRetargetCurrentTab: () => {},
+        onRetargetCurrentTab: (target) => retargetBoardTab(boardId, tab.tabId, target),
         onSetCurrentTabState: () => {},
         onOpenWorkspaceFile: (request) =>
           openInWorkspace(createWorkspaceFileTabTarget(request.location)),
@@ -166,18 +233,32 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
   return (
     <View style={styles.row} testID={`board-container-${boardId}`}>
       <View style={styles.container} onLayout={handleLayout}>
-        <BoardNodeView
-          node={board.layout.root}
-          board={board}
-          allTabs={allTabs}
-          identities={identities}
-          isScreenFocused={isScreenFocused}
-          onFocusPane={handleFocusPane}
-          onSelectTab={handleSelectTab}
-          onCloseTab={handleCloseTab}
-          onOpenInWorkspace={handleOpenInWorkspace}
-          buildPaneContentModel={buildPaneContentModel}
-        />
+        {soloPaneId !== null ? (
+          <BoardPaneStrip
+            panes={stripPanes}
+            focusedPaneId={soloPaneId}
+            label={t("boards.screen.paneStrip")}
+            onFocusPane={handleFocusPane}
+          />
+        ) : null}
+        <View style={styles.tree}>
+          <BoardPaneDndProvider boardId={boardId} getPaneLabel={getPaneLabel}>
+            <BoardNodeView
+              node={board.layout.root}
+              board={board}
+              allTabs={allTabs}
+              identities={identities}
+              isScreenFocused={isScreenFocused}
+              soloPaneId={soloPaneId}
+              onFocusPane={handleFocusPane}
+              onSelectTab={handleSelectTab}
+              onCloseTab={handleCloseTab}
+              onOpenInWorkspace={handleOpenInWorkspace}
+              onNewAgent={handleNewAgent}
+              buildPaneContentModel={buildPaneContentModel}
+            />
+          </BoardPaneDndProvider>
+        </View>
       </View>
       {explorerOrigin ? (
         <BoardFilesExplorer
@@ -209,14 +290,16 @@ const BoardPaneNode = memo(function BoardPaneNode({
   allTabs,
   identities,
   isScreenFocused,
+  soloPaneId,
   onFocusPane,
   onSelectTab,
   onCloseTab,
   onOpenInWorkspace,
+  onNewAgent,
   buildPaneContentModel,
 }: BoardNodeViewProps & { node: Extract<SplitNode, { kind: "pane" }> }) {
   return (
-    <RetainedPanel active={node.pane.hidden !== true}>
+    <RetainedPanel active={!isBoardNodeHiddenInView(node, soloPaneId)}>
       <BoardPane
         boardId={board.id}
         pane={node.pane}
@@ -229,6 +312,8 @@ const BoardPaneNode = memo(function BoardPaneNode({
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onOpenInWorkspace={onOpenInWorkspace}
+        onNewAgent={onNewAgent}
+        dragEnabled={soloPaneId === null}
         buildPaneContentModel={buildPaneContentModel}
       />
     </RetainedPanel>
@@ -266,8 +351,12 @@ function BoardGroupChild({
 function BoardGroupView(
   props: BoardNodeViewProps & { node: Extract<SplitNode, { kind: "group" }> },
 ) {
-  const { node, board } = props;
+  const { node, board, soloPaneId } = props;
   const { group } = node;
+  const isHidden = useCallback(
+    (child: SplitNode) => isBoardNodeHiddenInView(child, soloPaneId),
+    [soloPaneId],
+  );
   const boardId = board.id;
   const [containerSize, setContainerSize] = useState(0);
 
@@ -276,8 +365,8 @@ function BoardGroupView(
     [group, board.splitSizes],
   );
   const visibleFlex = useMemo(
-    () => resolveBoardGroupFlex(group.children, sizes),
-    [group.children, sizes],
+    () => resolveBoardGroupFlex(group.children, sizes, isHidden),
+    [group.children, isHidden, sizes],
   );
   const resizeFlex = useSharedValue(visibleFlex);
   useEffect(() => {
@@ -286,9 +375,9 @@ function BoardGroupView(
 
   const previewResizeSplit = useCallback(
     (_groupId: string, nextSizes: number[]) => {
-      resizeFlex.value = resolveBoardGroupFlex(group.children, nextSizes);
+      resizeFlex.value = resolveBoardGroupFlex(group.children, nextSizes, isHidden);
     },
-    [group.children, resizeFlex],
+    [group.children, isHidden, resizeFlex],
   );
   const commitResizeSplit = useStableEvent((groupId: string, nextSizes: number[]) =>
     resizeBoardSplit(boardId, groupId, nextSizes),
@@ -313,14 +402,10 @@ function BoardGroupView(
     <View style={groupStyle} onLayout={handleLayout}>
       {group.children.map((child, index) => {
         const next = group.children[index + 1];
-        const showHandle = Boolean(next) && !isBoardNodeHidden(child) && !isBoardNodeHidden(next);
+        const showHandle = Boolean(next) && !isHidden(child) && !isHidden(next);
         return (
           <Fragment key={child.kind === "pane" ? child.pane.id : child.group.id}>
-            <BoardGroupChild
-              resizeFlex={resizeFlex}
-              index={index}
-              hidden={isBoardNodeHidden(child)}
-            >
+            <BoardGroupChild resizeFlex={resizeFlex} index={index} hidden={isHidden(child)}>
               <BoardNodeView {...props} node={child} />
             </BoardGroupChild>
             {showHandle ? (
@@ -350,6 +435,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   container: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+  },
+  tree: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   boardRowKey,
   cycleWorkspaceIndex,
-  insertBoardKeys,
+  boardVisit,
+  orderSwitcherKeys,
   initialWorkspaceSelectionIndex,
   mergeWorkspaceOrder,
   pruneWorkspaceHistory,
@@ -75,44 +76,82 @@ describe("workspace switcher model", () => {
   });
 });
 
-describe("board rows in the switcher order", () => {
-  const desk = new Set(["w3", "w4"]);
+describe("views in the switcher order", () => {
+  const desk = new Set(["srv:w3", "srv:w4"]);
+  const order = (input: Partial<Parameters<typeof orderSwitcherKeys>[0]>) =>
+    orderSwitcherKeys({
+      currentKey: "srv:w1",
+      historyKeys: [],
+      workspaceKeys: ["srv:w1", "srv:w2", "srv:w3", "srv:w4", "srv:w5"],
+      boardKeys: ["board:live", "board:b1"],
+      deskKeys: desk,
+      ...input,
+    });
 
-  it("keys a board under a pseudo host so it can never collide with a workspace", () => {
+  it("keys a view under a pseudo host so it can never collide with a workspace", () => {
     expect(boardRowKey("live")).toBe("board:live");
-    expect(workspaceVisitKey({ serverId: "board", workspaceId: "live" })).toBe(boardRowKey("live"));
+    expect(boardVisit("live")).toEqual({ serverId: "board", workspaceId: "live" });
+    expect(workspaceVisitKey(boardVisit("live"))).toBe(boardRowKey("live"));
   });
 
-  it("puts boards right after the head and the Desk workspaces", () => {
-    // head = current + just left; then Desk (w3, w4); then the rest.
+  it("makes a tap from a view land on the workspace you were on before it", () => {
+    // visited w2, then the view; now on the view.
     expect(
-      insertBoardKeys(["w1", "w2", "w3", "w4", "w5"], ["board:live", "board:b1"], desk, 2),
-    ).toEqual(["w1", "w2", "w3", "w4", "board:live", "board:b1", "w5"]);
+      order({ currentKey: "board:b1", historyKeys: ["board:b1", "srv:w2", "srv:w1"] }).slice(0, 2),
+    ).toEqual(["board:b1", "srv:w2"]);
   });
 
-  it("puts boards right after the head when the Desk is empty", () => {
-    expect(insertBoardKeys(["w1", "w2", "w5"], ["board:live"], new Set(), 2)).toEqual([
-      "w1",
-      "w2",
+  it("makes a tap from a workspace land on the view you were on before it", () => {
+    expect(
+      order({ currentKey: "srv:w2", historyKeys: ["srv:w2", "board:b1", "srv:w1"] }).slice(0, 2),
+    ).toEqual(["srv:w2", "board:b1"]);
+  });
+
+  it("orders visited views and workspaces together by recency after the head", () => {
+    expect(
+      order({
+        currentKey: "srv:w1",
+        historyKeys: ["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:live"],
+      }),
+    ).toEqual(["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:live", "srv:w4", "srv:w5"]);
+  });
+
+  it("puts never-visited views after the Desk and visited views, ahead of the rest", () => {
+    expect(order({})).toEqual([
+      "srv:w1",
+      "srv:w2",
+      "srv:w3",
+      "srv:w4",
       "board:live",
-      "w5",
+      "board:b1",
+      "srv:w5",
     ]);
   });
 
-  it("works when the head is a single row (off a workspace route)", () => {
-    expect(insertBoardKeys(["w1", "w3"], ["board:live"], desk, 1)).toEqual([
-      "w1",
-      "w3",
-      "board:live",
+  it("works off a workspace route, where the head is a single row", () => {
+    expect(
+      order({ currentKey: null, historyKeys: ["board:b1", "srv:w1"], boardKeys: ["board:b1"] }),
+    ).toEqual(["board:b1", "srv:w3", "srv:w4", "srv:w1", "srv:w2", "srv:w5"]);
+  });
+
+  it("still offers a never-visited view when it is the only other place", () => {
+    expect(
+      order({ workspaceKeys: ["srv:w1"], boardKeys: ["board:live"], historyKeys: ["srv:w1"] }),
+    ).toEqual(["srv:w1", "board:live"]);
+  });
+
+  it("prunes the visit of a deleted view and keeps the current one", () => {
+    const history = [
+      { serverId: "board", workspaceId: "gone", at: 3 },
+      { serverId: "board", workspaceId: "kept", at: 2 },
+      visit("a", "srv", 1),
+    ];
+    const live = new Set(["board:kept", "srv:a"]);
+    expect(pruneWorkspaceHistory(history, live).map((v) => v.workspaceId)).toEqual(["kept", "a"]);
+    expect(pruneWorkspaceHistory(history, live, "board:gone").map((v) => v.workspaceId)).toEqual([
+      "gone",
+      "kept",
+      "a",
     ]);
-  });
-
-  it("returns the same array when there are no boards", () => {
-    const keys = ["w1", "w2"];
-    expect(insertBoardKeys(keys, [], desk, 2)).toBe(keys);
-  });
-
-  it("appends when everything is head or Desk", () => {
-    expect(insertBoardKeys(["w1"], ["board:live"], desk, 2)).toEqual(["w1", "board:live"]);
   });
 });

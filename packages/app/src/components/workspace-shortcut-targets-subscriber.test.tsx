@@ -89,6 +89,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
       seenHosts: [],
       seeded: true,
       shelfCollapsed: false,
+      deskCollapsed: false,
     });
     useSidebarCollapsedSectionsStore.setState({
       collapsedProjectKeys: new Set(),
@@ -160,6 +161,21 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
       { serverId: "srv", workspaceId: "ws-2" },
+    ]);
+  });
+
+  it("skips Desk rows while the Desk is collapsed", async () => {
+    useDeskStore.setState({ deskKeys: ["srv:ws-2"], deskCollapsed: true });
+    await act(async () => {
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
+    });
+
+    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
+      { serverId: "srv", workspaceId: "ws-1" },
     ]);
   });
 

@@ -227,6 +227,46 @@ describe("workspace switcher controller", () => {
       expect(navigateToBoard).not.toHaveBeenCalled();
     });
 
+    function boardCandidate(id: string) {
+      return {
+        ...candidate(id),
+        serverId: "board",
+        boardId: id,
+        boardKind: "user" as const,
+        boardSessionCount: 1,
+      };
+    }
+
+    it("taps from a view back to the workspace you were on before it", () => {
+      useWorkspaceSwitcherStore.setState({
+        open: false,
+        visible: false,
+        selectedIndex: 0,
+        candidates: [boardCandidate("v1"), candidate("a"), candidate("b")],
+        currentKey: "board:v1",
+        liveKeys: new Set(["board:v1", "srv:a", "srv:b"]),
+      });
+      cycleWorkspaceSwitcher(1);
+      commitWorkspaceSwitcher();
+      expect(navigateToWorkspace).toHaveBeenCalledWith({ serverId: "srv", workspaceId: "a" });
+      expect(navigateToBoard).not.toHaveBeenCalled();
+    });
+
+    it("taps from a workspace back to the view you were on before it", () => {
+      useWorkspaceSwitcherStore.setState({
+        open: false,
+        visible: false,
+        selectedIndex: 0,
+        candidates: [candidate("a"), boardCandidate("v1"), candidate("b")],
+        currentKey: "srv:a",
+        liveKeys: new Set(["board:v1", "srv:a", "srv:b"]),
+      });
+      cycleWorkspaceSwitcher(1);
+      commitWorkspaceSwitcher();
+      expect(navigateToBoard).toHaveBeenCalledWith("v1");
+      expect(navigateToWorkspace).not.toHaveBeenCalled();
+    });
+
     it("cancels when the board was deleted while the switcher was open", () => {
       seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
       cycleWorkspaceSwitcher(1);

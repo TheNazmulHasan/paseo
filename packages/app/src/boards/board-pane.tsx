@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, type ReactElement } from
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ExternalLink, X } from "lucide-react-native";
+import { ExternalLink, Plus, X } from "lucide-react-native";
+import { BoardPaneDragHandle, BoardPaneDropOverlay } from "@/boards/board-pane-dnd";
 import {
   fallbackBoardWorkspaceIdentity,
   type BoardWorkspaceIdentity,
@@ -33,6 +34,7 @@ import { RenderProfile } from "@/utils/render-profiler";
 
 const ThemedX = withUnistyles(X);
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedPlus = withUnistyles(Plus);
 
 const PROJECT_ICON_SIZE = 14;
 const ACTION_ICON_SIZE = 14;
@@ -195,6 +197,10 @@ export interface BoardPaneProps {
   onSelectTab: (paneId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onOpenInWorkspace: (origin: BoardTabOrigin) => void;
+  /** Opens a draft ("New agent") as a tab in this pane. */
+  onNewAgent: (paneId: string) => void;
+  /** False while the board shows a single pane: nothing to drag onto. */
+  dragEnabled: boolean;
   buildPaneContentModel: (input: {
     paneId: string;
     tab: WorkspaceTabDescriptor;
@@ -221,6 +227,8 @@ export const BoardPane = memo(function BoardPane({
   onSelectTab,
   onCloseTab,
   onOpenInWorkspace,
+  onNewAgent,
+  dragEnabled,
   buildPaneContentModel,
 }: BoardPaneProps) {
   const { t } = useTranslation();
@@ -283,10 +291,15 @@ export const BoardPane = memo(function BoardPane({
     }
   }, [activeOrigin, onOpenInWorkspace]);
 
+  const handleNewAgent = useCallback(() => onNewAgent(paneId), [onNewAgent, paneId]);
+
   return (
     <RenderProfile id={`BoardPane:${paneId}`}>
       <View ref={paneRef} collapsable={false} style={styles.pane} testID={`board-pane-${paneId}`}>
         <View style={styles.tabsRow}>
+          {dragEnabled ? (
+            <BoardPaneDragHandle paneId={paneId} label={t("boards.screen.dragPane")} />
+          ) : null}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -316,6 +329,13 @@ export const BoardPane = memo(function BoardPane({
               );
             })}
           </ScrollView>
+          <BoardIconButton
+            label={t("boards.screen.newAgentInPane")}
+            onPress={handleNewAgent}
+            testID={`board-pane-new-agent-${paneId}`}
+          >
+            <ThemedPlus size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
+          </BoardIconButton>
         </View>
 
         {activeIdentity ? (
@@ -359,6 +379,7 @@ export const BoardPane = memo(function BoardPane({
             </View>
           )}
         </View>
+        {dragEnabled ? <BoardPaneDropOverlay paneId={paneId} /> : null}
       </View>
     </RenderProfile>
   );

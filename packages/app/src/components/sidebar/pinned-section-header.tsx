@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -15,13 +13,14 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 
 export function PinnedSectionHeader({
   collapsed,
+  count,
   onToggle,
 }: {
   collapsed: boolean;
+  count: number;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
   const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
   const Chevron = collapsed ? ThemedChevronRight : ThemedChevronDown;
 
@@ -33,14 +32,13 @@ export function PinnedSectionHeader({
       style={styles.header}
       testID="sidebar-pinned-section-header"
     >
-      {({ hovered }) => (
-        <>
-          <Text style={styles.title}>{t("sidebar.pinned.title")}</Text>
-          {hovered || isNative || isCompact ? (
-            <Chevron size={12} uniProps={foregroundMutedColorMapping} />
-          ) : null}
-        </>
-      )}
+      <Chevron size={12} uniProps={foregroundMutedColorMapping} />
+      <Text style={styles.title} numberOfLines={1}>
+        {t("sidebar.pinned.title")}
+      </Text>
+      <Text style={styles.count} testID="sidebar-pinned-count">
+        {count}
+      </Text>
     </Pressable>
   );
 }
@@ -60,5 +58,10 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  count: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    opacity: 0.7,
   },
 }));

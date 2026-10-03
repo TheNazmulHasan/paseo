@@ -910,6 +910,58 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       label: "Focus pane down",
     },
   },
+  // Hyper+Arrows (Caps Lock -> Cmd+Ctrl+Alt+Shift on Nazmul's Mac): pane focus that also fires
+  // while the cursor is in a chat box. The four-modifier chord cannot collide with text editing,
+  // so unlike Cmd+Shift+Arrow (selection) these carry no `editable: false`. No `help`: the
+  // Cmd+Shift row already labels the action.
+  {
+    id: "workspace-pane-focus-left-hyper-left-mac",
+    action: "workspace.pane.focus.left",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowLeft",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-left-ctrl-alt-shift-left-non-mac",
+    action: "workspace.pane.focus.left",
+    combo: "Ctrl+Alt+Shift+ArrowLeft",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-right-hyper-right-mac",
+    action: "workspace.pane.focus.right",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowRight",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-right-ctrl-alt-shift-right-non-mac",
+    action: "workspace.pane.focus.right",
+    combo: "Ctrl+Alt+Shift+ArrowRight",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-up-hyper-up-mac",
+    action: "workspace.pane.focus.up",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowUp",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-up-ctrl-alt-shift-up-non-mac",
+    action: "workspace.pane.focus.up",
+    combo: "Ctrl+Alt+Shift+ArrowUp",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-down-hyper-down-mac",
+    action: "workspace.pane.focus.down",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowDown",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-down-ctrl-alt-shift-down-non-mac",
+    action: "workspace.pane.focus.down",
+    combo: "Ctrl+Alt+Shift+ArrowDown",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
   {
     id: "workspace-pane-move-tab-left-cmd-shift-alt-left",
     action: "workspace.pane.move-tab.left",

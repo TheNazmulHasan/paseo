@@ -1,8 +1,8 @@
 import { memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, View } from "react-native";
-import { BrushCleaning } from "lucide-react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { Pressable, Text, View } from "react-native";
+import { BrushCleaning, ChevronDown, ChevronRight } from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
@@ -24,8 +24,13 @@ import { shouldShowSidebarHostLabels } from "@/hooks/use-sidebar-workspaces-list
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useProjectIcons } from "@/projects/icons";
+import type { Theme } from "@/styles/theme";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
+
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const EMPTY_SHORTCUT_INDEX = new Map<string, number>();
 
@@ -41,6 +46,10 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
   const { deskGroups, shelfCount, projects, projectIconTargets, shortcutModel } = useSidebarModel();
   const deskGrouping = useDeskStore((state) => state.deskGrouping);
   const setDeskGrouping = useDeskStore((state) => state.setDeskGrouping);
+  const collapsed = useDeskStore((state) => state.deskCollapsed);
+  const toggleCollapsed = useDeskStore((state) => state.toggleDeskCollapsed);
+  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
+  const Chevron = collapsed ? ThemedChevronRight : ThemedChevronDown;
   const clearDesk = useClearDesk(deskGroups);
   const hosts = useHosts();
   const rowItems = useSidebarRowItems();
@@ -89,6 +98,9 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
     [setDeskGrouping],
   );
 
+  const showEmpty = !collapsed && deskGroups.length === 0;
+  const showGroups = !collapsed && deskGroups.length > 0;
+
   // A sidebar with no workspaces yet has nothing to sort into Desk or Shelf.
   if (count === 0 && shelfCount === 0) {
     return null;
@@ -97,14 +109,21 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
   return (
     <View style={styles.section} testID="sidebar-desk-section">
       <View style={styles.header}>
-        <View style={styles.titleGroup}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={accessibilityState}
+          onPress={toggleCollapsed}
+          style={styles.titleGroup}
+          testID="sidebar-desk-header"
+        >
+          <Chevron size={12} uniProps={foregroundMutedColorMapping} />
           <Text style={styles.title} numberOfLines={1}>
             {t("sidebar.desk.title")}
           </Text>
           <Text style={styles.count} testID="sidebar-desk-count">
             {count}
           </Text>
-        </View>
+        </Pressable>
         <View style={styles.actions}>
           <SegmentedControl
             options={groupingOptions}
@@ -121,25 +140,26 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
           />
         </View>
       </View>
-      {deskGroups.length === 0 ? (
+      {showEmpty ? (
         <Text style={styles.empty} testID="sidebar-desk-empty">
           {t("sidebar.desk.empty")}
         </Text>
-      ) : (
-        deskGroups.map((group) => (
-          <DeskGroupRows
-            key={group.key}
-            group={group}
-            projectIconByProjectViewKey={projectIconByProjectViewKey}
-            hostBadgeByServerId={hostBadgeByServerId}
-            shortcutIndex={shortcutIndex}
-            showShortcutBadges={showShortcutBadges}
-            supportsPinningByServerId={supportsPinningByServerId}
-            onToggleWorkspacePin={onToggleWorkspacePin}
-            onWorkspacePress={onWorkspacePress}
-          />
-        ))
-      )}
+      ) : null}
+      {showGroups
+        ? deskGroups.map((group) => (
+            <DeskGroupRows
+              key={group.key}
+              group={group}
+              projectIconByProjectViewKey={projectIconByProjectViewKey}
+              hostBadgeByServerId={hostBadgeByServerId}
+              shortcutIndex={shortcutIndex}
+              showShortcutBadges={showShortcutBadges}
+              supportsPinningByServerId={supportsPinningByServerId}
+              onToggleWorkspacePin={onToggleWorkspacePin}
+              onWorkspacePress={onWorkspacePress}
+            />
+          ))
+        : null}
     </View>
   );
 }
@@ -209,8 +229,9 @@ const styles = StyleSheet.create((theme) => ({
   titleGroup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1.5],
+    gap: theme.spacing[1],
     flexShrink: 0,
+    userSelect: "none",
   },
   title: {
     color: theme.colors.foregroundMuted,

@@ -11,6 +11,7 @@ import {
 } from "@/arrange/model";
 import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
 import type { Board, BoardSessionRef, BoardTabOrigin } from "@/boards/types";
+import { generateDraftId } from "@/stores/draft-keys";
 import { defaultWorkspaceLayoutIds } from "@/stores/workspace-layout-ids";
 import type { WorkspaceLayoutNodeIdPrefix } from "@/stores/workspace-layout-ids";
 import {
@@ -42,8 +43,6 @@ const MAX_SPLIT_AXIS = 10;
 
 /** Same ceiling the workspace layout store puts on its split tree. */
 const MAX_BOARD_TREE_DEPTH = 5;
-/** A file pane split off a source pane takes this share of the source's width. */
-const FILE_PANE_SHARE = 0.4;
 
 export type BoardSplitLayout = "columns" | "grid";
 
@@ -51,6 +50,8 @@ export interface BoardIds {
   createTabId: () => string;
   createNodeId: (prefix: WorkspaceLayoutNodeIdPrefix) => string;
   now: () => number;
+  /** Id of a new draft agent tab; defaults to the app's generateDraftId. */
+  createDraftId?: () => string;
 }
 
 export const DEFAULT_BOARD_IDS: BoardIds = {
@@ -308,7 +309,11 @@ export function resizeBoardSplitModel(board: Board, groupId: string, sizes: numb
   return { ...board, splitSizes: { ...board.splitSizes, [groupId]: clampNormalizedSizes(sizes) } };
 }
 
-/** Re-arranges the board's sessions (all of them, in on-screen order unless `tabIds` says otherwise). */
+/**
+ * Re-deals the board's TABS into fresh panes (all of them, in on-screen order unless `tabIds`
+ * says otherwise). Only the Live board's own growth/refresh uses this; a user's Arrange
+ * preset goes through arrangeBoardPanes, which keeps every pane.
+ */
 export function arrangeBoardTabs(
   board: Board,
   input: { preset: ArrangePreset; viewport: ArrangeViewport; tabIds?: readonly string[] },
@@ -505,123 +510,289 @@ export function rebuildLiveBoard(
 }
 
 // ---------------------------------------------------------------------------
-// Files beside their workspace
+// Arranging panes (never tabs)
+// ---------------------------------------------------------------------------
+
+function collectPaneNodes(node: NodeWithTabs): NodeWithTabs[] {
+  return node.kind === "pane" ? [node] : node.group.children.flatMap(collectPaneNodes);
+}
+
+function distribute(total: number, parts: number): number[] {
+  const base = Math.floor(total / parts);
+  const extra = total % parts;
+  return Array.from({ length: parts }, (_, index) => base + (index < extra ? 1 : 0));
+}
+
+/** Row sizes for the grid preset that always hold exactly `count` panes. */
+function gridRowCounts(count: number, viewport: ArrangeViewport): number[] {
+  const shape = computeGridShape(count, viewport).rowCounts;
+  const counts: number[] = [];
+  let remaining = count;
+  for (const rowCount of shape) {
+    const take = Math.min(rowCount, remaining);
+    if (take > 0) {
+      counts.push(take);
+      remaining -= take;
+    }
+  }
+  // A screen too small for every pane still keeps them all: spread the rest over the rows.
+  return remaining > 0 ? distribute(count, Math.max(1, shape.length)) : counts;
+}
+
+function chunkNodes(
+  panes: NodeWithTabs[],
+  counts: readonly number[],
+  direction: "horizontal" | "vertical",
+  ids: BoardIds,
+): NodeWithTabs[] {
+  let cursor = 0;
+  return counts.map((count) => {
+    const chunk = panes.slice(cursor, cursor + count);
+    cursor += count;
+    return chunk.length === 1 && chunk[0]
+      ? chunk[0]
+      : groupNode(ids.createNodeId("group"), direction, chunk);
+  });
+}
+
+function wrapNodes(
+  nodes: NodeWithTabs[],
+  direction: "horizontal" | "vertical",
+  ids: BoardIds,
+): NodeWithTabs {
+  return nodes.length === 1 && nodes[0]
+    ? nodes[0]
+    : groupNode(ids.createNodeId("group"), direction, nodes);
+}
+
+/**
+ * Re-lays out the board's PANES for a preset. Panes are never created, merged or deleted and
+ * keep their tabs and selected tab: "single" = one row, "columns-2/3" = panes dealt into 2 / 3
+ * columns (vertical stacks) in current order, "grid" = Arrange's grid rows for the viewport.
+ * Null when the board has no tabs.
+ */
+export function arrangeBoardPanes(
+  board: Board,
+  input: { preset: ArrangePreset; viewport: ArrangeViewport },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  if (listBoardTabs(board.layout).length === 0) {
+    return null;
+  }
+  const panes = collectPaneNodes(board.layout.root as NodeWithTabs);
+  if (panes.length === 0) {
+    return null;
+  }
+  let root: NodeWithTabs;
+  if (input.preset === "single") {
+    root = wrapNodes(panes, "horizontal", ids);
+  } else if (input.preset === "grid") {
+    const rows = chunkNodes(panes, gridRowCounts(panes.length, input.viewport), "horizontal", ids);
+    root = wrapNodes(rows, "vertical", ids);
+  } else {
+    const columnCount = Math.min(input.preset === "columns-2" ? 2 : 3, panes.length);
+    const columns = chunkNodes(panes, distribute(panes.length, columnCount), "vertical", ids);
+    root = wrapNodes(columns, "horizontal", ids);
+  }
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Moving panes (drag and drop)
+// ---------------------------------------------------------------------------
+
+export type BoardPaneDropPosition = "left" | "right" | "above" | "below" | "swap";
+
+/** Writes stored divider overrides into the tree so the move works on what is on screen. */
+function bakeSplitSizes(node: NodeWithTabs, overrides: Record<string, number[]>): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const children = node.group.children.map((child) => bakeSplitSizes(child, overrides));
+  const override = overrides[node.group.id];
+  const sizes = override?.length === children.length ? override : node.group.sizes;
+  return { kind: "group", group: { ...node.group, children, sizes } };
+}
+
+function removePaneNode(node: NodeWithTabs, paneId: string): NodeWithTabs | null {
+  if (node.kind === "pane") {
+    return node.pane.id === paneId ? null : node;
+  }
+  const kept: Array<{ node: NodeWithTabs; size: number }> = [];
+  node.group.children.forEach((child, index) => {
+    const next = removePaneNode(child, paneId);
+    if (next) {
+      kept.push({ node: next, size: node.group.sizes[index] ?? 1 / node.group.children.length });
+    }
+  });
+  if (kept.length === 0) {
+    return null;
+  }
+  if (kept.length === 1 && kept[0]) {
+    return kept[0].node;
+  }
+  const total = kept.reduce((sum, entry) => sum + entry.size, 0);
+  return {
+    kind: "group",
+    group: {
+      ...node.group,
+      children: kept.map((entry) => entry.node),
+      sizes: kept.map((entry) => (total > 0 ? entry.size / total : 1 / kept.length)),
+    },
+  };
+}
+
+/** A group directly inside a group of the same direction is spliced into its parent. */
+function flattenSameDirection(node: NodeWithTabs): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const children: NodeWithTabs[] = [];
+  const sizes: number[] = [];
+  node.group.children.forEach((rawChild, index) => {
+    const child = flattenSameDirection(rawChild);
+    const size = node.group.sizes[index] ?? 1 / node.group.children.length;
+    if (child.kind === "group" && child.group.direction === node.group.direction) {
+      child.group.children.forEach((grand, grandIndex) => {
+        children.push(grand);
+        sizes.push(size * (child.group.sizes[grandIndex] ?? 1 / child.group.children.length));
+      });
+      return;
+    }
+    children.push(child);
+    sizes.push(size);
+  });
+  return { kind: "group", group: { ...node.group, children, sizes } };
+}
+
+function insertBesideTarget(
+  node: NodeWithTabs,
+  targetId: string,
+  moved: NodeWithTabs,
+  position: Exclude<BoardPaneDropPosition, "swap">,
+  ids: BoardIds,
+): NodeWithTabs | null {
+  const direction = position === "left" || position === "right" ? "horizontal" : "vertical";
+  const before = position === "left" || position === "above";
+  const pair = (target: NodeWithTabs): NodeWithTabs[] =>
+    before ? [moved, target] : [target, moved];
+  if (node.kind === "pane") {
+    return node.pane.id === targetId
+      ? groupNode(ids.createNodeId("group"), direction, pair(node))
+      : null;
+  }
+  const { group } = node;
+  const index = group.children.findIndex(
+    (child) => child.kind === "pane" && child.pane.id === targetId,
+  );
+  if (index >= 0) {
+    const target = group.children[index];
+    if (!target) {
+      return null;
+    }
+    const children = group.children.slice();
+    const sizes = group.sizes.slice();
+    if (group.direction === direction) {
+      const share = (sizes[index] ?? 1 / group.children.length) / 2;
+      children.splice(index, 1, ...pair(target));
+      sizes.splice(index, 1, share, share);
+    } else {
+      children[index] = groupNode(ids.createNodeId("group"), direction, pair(target));
+    }
+    return { kind: "group", group: { ...group, children, sizes } };
+  }
+  for (let i = 0; i < group.children.length; i += 1) {
+    const child = group.children[i];
+    const inserted = child ? insertBesideTarget(child, targetId, moved, position, ids) : null;
+    if (inserted) {
+      const children = group.children.slice();
+      children[i] = inserted;
+      return { kind: "group", group: { ...group, children } };
+    }
+  }
+  return null;
+}
+
+function swapPaneNodes(node: NodeWithTabs, aId: string, bId: string): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const byId = new Map(
+    collectPaneNodes(node).flatMap((pane) => (pane.kind === "pane" ? [[pane.pane.id, pane]] : [])),
+  );
+  const replace = (current: NodeWithTabs): NodeWithTabs => {
+    if (current.kind === "pane") {
+      if (current.pane.id === aId) {
+        return byId.get(bId) ?? current;
+      }
+      return current.pane.id === bId ? (byId.get(aId) ?? current) : current;
+    }
+    return {
+      kind: "group",
+      group: { ...current.group, children: current.group.children.map(replace) },
+    };
+  };
+  return replace(node);
+}
+
+/**
+ * Moves a pane (with all its tabs) next to another: "swap" exchanges their places; the other
+ * positions take the pane out of its spot (single-child groups collapse) and put it on that
+ * side of the target, the two sharing the target's old share evenly. Divider overrides are
+ * folded into the tree and cleared. Null when impossible (same pane, unknown pane, too deep).
+ */
+export function moveBoardPaneModel(
+  board: Board,
+  paneId: string,
+  targetPaneId: string,
+  position: BoardPaneDropPosition,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  if (paneId === targetPaneId) {
+    return null;
+  }
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const panes = new Map(
+    collectPaneNodes(root).flatMap((pane) => (pane.kind === "pane" ? [[pane.pane.id, pane]] : [])),
+  );
+  const moved = panes.get(paneId);
+  if (!moved || !panes.has(targetPaneId)) {
+    return null;
+  }
+  let next: NodeWithTabs | null;
+  if (position === "swap") {
+    next = swapPaneNodes(root, paneId, targetPaneId);
+  } else {
+    const without = removePaneNode(root, paneId);
+    const inserted = without
+      ? insertBesideTarget(without, targetPaneId, moved, position, ids)
+      : null;
+    next = inserted ? flattenSameDirection(inserted) : null;
+  }
+  if (!next || getTreeDepth(asLayoutRoot(next)) > MAX_BOARD_TREE_DEPTH) {
+    return null;
+  }
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(next) },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Files and new agents open as tabs in the pane they were asked from
 // ---------------------------------------------------------------------------
 
 type WorkspaceRef = Pick<BoardTabOrigin, "serverId" | "workspaceId">;
 
-function sameWorkspace(a: WorkspaceRef, b: WorkspaceRef): boolean {
-  return a.serverId === b.serverId && a.workspaceId === b.workspaceId;
-}
-
 /**
- * A "files pane" of a workspace: it has tabs, every one a file tab, and every one belongs to
- * that workspace. An agent tab (or a tab of another workspace) disqualifies the pane for good.
- */
-export function isFilesPaneOfWorkspace(
-  board: Pick<Board, "origins">,
-  pane: SplitPane,
-  workspace: WorkspaceRef,
-): boolean {
-  const tabs = (pane as PaneWithTabs).tabs;
-  if (!tabs || tabs.length === 0) {
-    return false;
-  }
-  return tabs.every((tab) => {
-    const origin = board.origins[tab.tabId];
-    return tab.target.kind === "file" && origin !== undefined && sameWorkspace(origin, workspace);
-  });
-}
-
-/** The pane directly right of `paneId` in its own horizontal group, when that sibling is a pane. */
-function findRightSiblingPane(root: SplitNode, paneId: string): SplitPane | null {
-  if (root.kind === "pane") {
-    return null;
-  }
-  const { group } = root;
-  const index = group.children.findIndex(
-    (child) => child.kind === "pane" && child.pane.id === paneId,
-  );
-  if (index >= 0) {
-    const next = group.children[index + 1];
-    return group.direction === "horizontal" && next?.kind === "pane" ? next.pane : null;
-  }
-  for (const child of group.children) {
-    const found = findRightSiblingPane(child, paneId);
-    if (found) {
-      return found;
-    }
-  }
-  return null;
-}
-
-/**
- * Puts `added` in a new pane right of `sourcePaneId`. Inside a horizontal group the source's
- * share is split source 60 / new 40; otherwise the source is wrapped in a new horizontal group.
- * `resizedGroupId` names a group whose child count changed, so a stored size override is stale.
- */
-function insertPaneRightOf(
-  node: NodeWithTabs,
-  sourcePaneId: string,
-  added: NodeWithTabs,
-  splitSizes: Record<string, number[]>,
-  ids: BoardIds,
-): { node: NodeWithTabs; resizedGroupId: string | null } | null {
-  if (node.kind === "pane") {
-    if (node.pane.id !== sourcePaneId) {
-      return null;
-    }
-    const wrapped = groupNode(ids.createNodeId("group"), "horizontal", [node, added]);
-    if (wrapped.kind === "group") {
-      wrapped.group.sizes = [1 - FILE_PANE_SHARE, FILE_PANE_SHARE];
-    }
-    return { node: wrapped, resizedGroupId: null };
-  }
-  const { group } = node;
-  const index = group.children.findIndex(
-    (child) => child.kind === "pane" && child.pane.id === sourcePaneId,
-  );
-  if (index >= 0 && group.direction === "horizontal") {
-    const override = splitSizes[group.id];
-    const current = override?.length === group.children.length ? override : group.sizes;
-    const share = current[index] ?? 1 / group.children.length;
-    const sizes = current.slice();
-    sizes.splice(index, 1, share * (1 - FILE_PANE_SHARE), share * FILE_PANE_SHARE);
-    const children = group.children.slice();
-    children.splice(index + 1, 0, added);
-    return {
-      node: { kind: "group", group: { ...group, children, sizes } },
-      resizedGroupId: group.id,
-    };
-  }
-  for (let i = 0; i < group.children.length; i += 1) {
-    const child = group.children[i];
-    const result = child ? insertPaneRightOf(child, sourcePaneId, added, splitSizes, ids) : null;
-    if (result) {
-      const children = group.children.slice();
-      children[i] = result.node;
-      return {
-        node: { kind: "group", group: { ...group, children } },
-        resizedGroupId: result.resizedGroupId,
-      };
-    }
-  }
-  return null;
-}
-
-/** Selects a tab inside its pane without moving pane focus (the source pane keeps it). */
-function selectTabKeepingFocus(board: Board, paneId: string, tabId: string): Board {
-  const layout = selectTabInPaneInLayout({ layout: board.layout, paneId, tabId });
-  return layout ? { ...board, layout } : board;
-}
-
-/**
- * Opens a file as a tab beside the pane it was asked from, belonging to the same workspace.
- * Order: the file is already on the board (select it); the source pane is itself that
- * workspace's files pane (add there); the pane to the right is that workspace's files pane (add
- * there); else split a new pane right of the source (60/40). Agent panes never receive files.
- * Returns null when nothing fits (unknown pane, bad path, or the split tree is too deep), so
- * the caller can fall back to the workspace screen.
+ * Opens a file as a tab in `sourcePaneId`, belonging to the workspace in `origin`, and selects
+ * it. A file already open on the board is not duplicated: its tab is selected (and its pane
+ * focused), wherever it is. Null for an unknown pane or an empty path.
  */
 export function openFileBesideModel(
   board: Board,
@@ -633,11 +804,11 @@ export function openFileBesideModel(
   if (!location || !source) {
     return null;
   }
-  const workspace: WorkspaceRef = {
+  const ref: BoardSessionRef = {
     serverId: input.origin.serverId,
     workspaceId: input.origin.workspaceId,
+    path: location.path,
   };
-  const ref: BoardSessionRef = { ...workspace, path: location.path };
 
   const existingTabId = findBoardTabId(board, ref);
   const existingPane = existingTabId
@@ -645,7 +816,7 @@ export function openFileBesideModel(
     : null;
   if (existingTabId && existingPane) {
     return {
-      board: selectTabKeepingFocus(board, existingPane.id, existingTabId),
+      board: selectBoardTabModel(board, existingPane.id, existingTabId),
       tabId: existingTabId,
       paneId: existingPane.id,
     };
@@ -656,45 +827,113 @@ export function openFileBesideModel(
     target: createWorkspaceFileTabTarget(location),
     createdAt: ids.now(),
   };
-  const origins = { ...board.origins, [tab.tabId]: originOf(ref) };
-
-  const host = isFilesPaneOfWorkspace(board, source, workspace)
-    ? source
-    : findRightSiblingPane(board.layout.root, source.id);
-  if (host && isFilesPaneOfWorkspace(board, host, workspace)) {
-    const root = updatePane(board.layout.root as NodeWithTabs, host.id, (pane) =>
-      makePane(pane.id, [...pane.tabs, tab], tab.tabId),
-    );
-    return {
-      board: { ...board, origins, layout: { ...board.layout, root: asLayoutRoot(root) } },
-      tabId: tab.tabId,
-      paneId: host.id,
-    };
-  }
-
-  const newPaneId = ids.createNodeId("pane");
-  const inserted = insertPaneRightOf(
-    board.layout.root as NodeWithTabs,
-    source.id,
-    paneNode(newPaneId, [tab]),
-    board.splitSizes,
-    ids,
+  const root = updatePane(board.layout.root as NodeWithTabs, source.id, (pane) =>
+    makePane(pane.id, [...pane.tabs, tab], tab.tabId),
   );
-  if (!inserted || getTreeDepth(asLayoutRoot(inserted.node)) > MAX_BOARD_TREE_DEPTH) {
-    return null;
-  }
-  const splitSizes = { ...board.splitSizes };
-  if (inserted.resizedGroupId) {
-    delete splitSizes[inserted.resizedGroupId];
-  }
   return {
     board: {
       ...board,
-      origins,
-      splitSizes,
-      layout: { ...board.layout, root: asLayoutRoot(inserted.node) },
+      origins: { ...board.origins, [tab.tabId]: originOf(ref) },
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: source.id },
     },
     tabId: tab.tabId,
-    paneId: newPaneId,
+    paneId: source.id,
+  };
+}
+
+/** The workspace a pane shows: its focused tab's, else its first tab's. */
+function paneWorkspace(board: Board, pane: SplitPane): WorkspaceRef | null {
+  const candidates = [pane.focusedTabId, ...pane.tabIds];
+  for (const tabId of candidates) {
+    const origin = tabId ? board.origins[tabId] : undefined;
+    if (origin) {
+      return { serverId: origin.serverId, workspaceId: origin.workspaceId };
+    }
+  }
+  return null;
+}
+
+/**
+ * Adds a "New agent" draft tab to a pane, for that pane's workspace, and selects it. Null when
+ * the pane is unknown or has no tab to say which workspace it belongs to.
+ */
+export function openDraftInPaneModel(
+  board: Board,
+  paneId: string,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; tabId: string } | null {
+  const pane = findPaneById(board.layout.root, paneId);
+  const workspace = pane ? paneWorkspace(board, pane) : null;
+  if (!pane || !workspace) {
+    return null;
+  }
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: { kind: "draft", draftId: ids.createDraftId?.() ?? generateDraftId() },
+    createdAt: ids.now(),
+  };
+  const root = updatePane(board.layout.root as NodeWithTabs, pane.id, (current) =>
+    makePane(current.id, [...current.tabs, tab], tab.tabId),
+  );
+  return {
+    board: {
+      ...board,
+      origins: { ...board.origins, [tab.tabId]: { ...workspace } },
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: pane.id },
+    },
+    tabId: tab.tabId,
+  };
+}
+
+function retargetTabInNode(
+  node: NodeWithTabs,
+  tabId: string,
+  target: WorkspaceTabTarget,
+): NodeWithTabs {
+  if (node.kind === "group") {
+    return {
+      kind: "group",
+      group: {
+        ...node.group,
+        children: node.group.children.map((child) => retargetTabInNode(child, tabId, target)),
+      },
+    };
+  }
+  if (!node.pane.tabIds.includes(tabId)) {
+    return node;
+  }
+  return {
+    kind: "pane",
+    pane: {
+      ...node.pane,
+      tabs: node.pane.tabs.map((tab) => (tab.tabId === tabId ? { ...tab, target } : tab)),
+    },
+  };
+}
+
+/**
+ * Swaps a tab's target in place (same tab id, same slot), e.g. a draft that became an agent,
+ * and brings its origin along. Unknown tab = the board unchanged.
+ */
+export function retargetBoardTabModel(
+  board: Board,
+  tabId: string,
+  target: WorkspaceTabTarget,
+): Board {
+  const origin = board.origins[tabId];
+  if (!origin || !findPaneContainingTab(board.layout.root, tabId)) {
+    return board;
+  }
+  const nextOrigin: BoardTabOrigin = { serverId: origin.serverId, workspaceId: origin.workspaceId };
+  if (target.kind === "agent") {
+    nextOrigin.agentId = target.agentId;
+  } else if (target.kind === "file") {
+    nextOrigin.path = target.path;
+  }
+  const root = retargetTabInNode(board.layout.root as NodeWithTabs, tabId, target);
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+    origins: { ...board.origins, [tabId]: nextOrigin },
   };
 }

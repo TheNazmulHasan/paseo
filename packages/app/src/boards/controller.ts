@@ -9,7 +9,7 @@ import { getBoardArrangeState, useBoardStore } from "@/boards/board-store";
 import {
   addSessionsToBoardModel,
   appendActiveSessions,
-  arrangeBoardTabs,
+  arrangeBoardPanes,
   boardSessionKey,
   buildWorkspaceSplit,
   countBoardSessions,
@@ -17,13 +17,17 @@ import {
   equalizeBoardLayout,
   findBoardTabId,
   focusBoardPaneModel,
+  moveBoardPaneModel,
   moveBoardTab,
+  openDraftInPaneModel,
   openFileBesideModel,
   rebuildLiveBoard,
   removeTabFromBoard,
   resizeBoardSplitModel,
   restoreBoardLayout,
+  retargetBoardTabModel,
   selectBoardTabModel,
+  type BoardPaneDropPosition,
   type BoardSplitGroup,
   type BoardSplitLayout,
 } from "@/boards/model";
@@ -44,7 +48,7 @@ import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { isWorkspaceRootAgent } from "@/subagents/policies";
 import { isSidebarActiveAgent } from "@/utils/sidebar-agent-state";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 
 /** A burst of agents starting together should produce one re-arrange, not one each. */
@@ -163,8 +167,10 @@ export function moveBoardTabToPane(boardId: string, tabId: string, toPaneId: str
 }
 
 /**
- * Opens a file as a tab in a files pane right of `sourcePaneId`, for the workspace in `origin`
- * (see openFileBesideModel). False when it could not be placed, so the caller can navigate instead.
+ * Opens a file as a tab in `sourcePaneId` itself (a pane is a tab strip of its workspace's
+ * sessions and files), for the workspace in `origin`; a file already open on the board is just
+ * focused. False when it could not be placed, so the caller can navigate instead. The name
+ * is kept from when files opened in a new pane beside the source.
  */
 export function openFileBeside(
   boardId: string,
@@ -186,6 +192,47 @@ export function openFileBeside(
   return true;
 }
 
+/** Moves a pane next to (or swaps it with) another pane. False when the move is impossible. */
+export function moveBoardPane(
+  boardId: string,
+  paneId: string,
+  targetPaneId: string,
+  position: BoardPaneDropPosition,
+): boolean {
+  const board = readBoard(boardId);
+  if (!board) {
+    return false;
+  }
+  const moved = moveBoardPaneModel(board, paneId, targetPaneId, position);
+  if (!moved) {
+    return false;
+  }
+  boardStore().putBoard(moved);
+  return true;
+}
+
+/**
+ * Adds a "New agent" draft tab to a pane (for the pane's workspace) and selects it. Returns the
+ * new tab id, or null when the pane is unknown or empty.
+ */
+export function openDraftInPane(boardId: string, paneId: string): string | null {
+  const board = readBoard(boardId);
+  if (!board) {
+    return null;
+  }
+  const opened = openDraftInPaneModel(board, paneId);
+  if (!opened) {
+    return null;
+  }
+  boardStore().putBoard(opened.board);
+  return opened.tabId;
+}
+
+/** Swaps a tab's target in place (a draft that became an agent), keeping its id and slot. */
+export function retargetBoardTab(boardId: string, tabId: string, target: WorkspaceTabTarget): void {
+  updateBoard(boardId, (board) => retargetBoardTabModel(board, tabId, target));
+}
+
 export function setBoardExplorerOpen(boardId: string, open: boolean): void {
   updateBoard(boardId, (board) =>
     Boolean(board.explorerOpen) === open ? board : { ...board, explorerOpen: open },
@@ -196,7 +243,10 @@ export function resizeBoardSplit(boardId: string, groupId: string, sizes: number
   updateBoard(boardId, (board) => resizeBoardSplitModel(board, groupId, sizes));
 }
 
-/** Same toggle semantics as arrangeWorkspace: same preset twice restores. */
+/**
+ * Same toggle semantics as arrangeWorkspace: same preset twice restores. Only re-lays out the
+ * PANES (every pane keeps its tabs); it never creates, merges or deletes one.
+ */
 export function arrangeBoard(input: {
   boardId: string;
   preset: ArrangePreset;
@@ -211,7 +261,7 @@ export function arrangeBoard(input: {
   if (arrange.lastPreset === preset && arrange.snapshot) {
     return restoreBoardArrangement(boardId);
   }
-  const arranged = arrangeBoardTabs(before, { preset, viewport });
+  const arranged = arrangeBoardPanes(before, { preset, viewport });
   if (!arranged) {
     return false;
   }

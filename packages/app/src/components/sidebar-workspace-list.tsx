@@ -2548,7 +2548,11 @@ function ProjectModeList({
     <>
       {pinnedChats.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
+          <PinnedSectionHeader
+            collapsed={pinnedCollapsed}
+            count={pinnedChats.length}
+            onToggle={togglePinnedCollapsed}
+          />
           {pinnedCollapsed ? null : (
             <>
               <DraggableList
