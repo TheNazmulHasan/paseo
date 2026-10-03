@@ -40,7 +40,6 @@ import {
 import { ResizeHandle } from "@/components/resize-handle";
 import { RetainedPanel } from "@/components/retained-panel";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { useGlobalExplorerOpen } from "@/stores/global-sidebars-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { collectAllPanes, collectAllTabs, type SplitNode } from "@/stores/workspace-layout-actions";
 import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
@@ -230,8 +229,7 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
   );
 
   // The explorer shows the workspace of the focused pane's session and follows focus.
-  const [globalExplorerOpen] = useGlobalExplorerOpen();
-  const explorerSource = globalExplorerOpen ? resolveFocusedPaneOrigin(board) : null;
+  const explorerSource = board.explorerOpen ? resolveFocusedPaneOrigin(board) : null;
   const explorerPaneId = explorerSource?.paneId ?? null;
   const explorerOrigin = explorerSource?.origin ?? null;
   const handleExplorerOpen = useCallback(

@@ -9,7 +9,7 @@ import type { ArrangeViewport } from "@/arrange/types";
 import { BoardContainer } from "@/boards/board-container";
 import { useBoardMruStore } from "@/boards/board-mru-store";
 import { BoardIconButton } from "@/boards/board-pane";
-import { refreshLiveBoard, useBoard } from "@/boards/controller";
+import { refreshLiveBoard, setBoardExplorerOpen, useBoard } from "@/boards/controller";
 import { goBackFromBoard } from "@/boards/navigation";
 import { openAddWorkspacePicker } from "@/boards/split-picker-store";
 import {
@@ -29,7 +29,6 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { WorkspaceExplorerToggle } from "@/screens/workspace/workspace-explorer-toggle";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
-import { useGlobalExplorerOpen } from "@/stores/global-sidebars-store";
 
 const ThemedRefreshCw = withUnistyles(RefreshCw);
 
@@ -154,12 +153,10 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   const handleRefresh = useCallback(() => refreshLiveBoard(getViewport()), [getViewport]);
 
   const isLive = board.kind === "live";
-  // One remembered Files-explorer state for every workspace and view (board.explorerOpen is
-  // kept in storage for compatibility but no longer read).
-  const [explorerOpen, setExplorerOpen] = useGlobalExplorerOpen();
+  const explorerOpen = Boolean(board.explorerOpen);
   const handleToggleExplorer = useCallback(
-    () => setExplorerOpen(!explorerOpen),
-    [explorerOpen, setExplorerOpen],
+    () => setBoardExplorerOpen(boardId, !explorerOpen),
+    [boardId, explorerOpen],
   );
   const handleAddWorkspace = useCallback(() => openAddWorkspacePicker(boardId), [boardId]);
   const explorerAccessibilityState = useMemo(() => ({ expanded: explorerOpen }), [explorerOpen]);

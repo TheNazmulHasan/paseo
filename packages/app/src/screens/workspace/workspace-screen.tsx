@@ -55,7 +55,6 @@ import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar
 import {
   isExplorerSidebarOpen,
   openExplorerSidebarView,
-  syncExplorerSidebarToGlobal,
   toggleExplorerSidebar,
   useIsExplorerSidebarOpen,
 } from "@/workspace-tabs/explorer-sidebar";
@@ -1922,12 +1921,6 @@ function WorkspaceScreenContent({
       checkout: activeExplorerCheckout,
     });
   }, [activeExplorerCheckout, isMobile, persistenceKey]);
-  // Hyper+J (or back) onto a workspace keeps the right explorer as the user last left it anywhere.
-  useEffect(() => {
-    if (isRouteFocused) {
-      syncExplorerSidebarToGlobal({ isCompact: isMobile, workspaceKey: persistenceKey });
-    }
-  }, [isMobile, isRouteFocused, persistenceKey]);
   const paneFocusSuppressedRef = useRef(false);
   const resizeWorkspaceSplit = useWorkspaceLayoutStore((state) => state.resizeSplit);
   const reorderWorkspaceTabsInPane = useWorkspaceLayoutStore((state) => state.reorderTabsInPane);

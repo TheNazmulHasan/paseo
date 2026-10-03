@@ -1,20 +1,21 @@
 import { useCallback } from "react";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
-import { useGlobalExplorerOpen } from "@/stores/global-sidebars-store";
+import { getBoard, setBoardExplorerOpen } from "@/boards/controller";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 
 /**
  * Sidebar keys on a view. A workspace screen owns these for its own explorer; a view has no
  * workspace screen, so without this only the left sidebar reacted and the Files explorer
- * state drifted from what the user set. Both act on the same global state workspaces use.
+ * state drifted from what the user set. The explorer state is the view's own (board.explorerOpen).
  */
 export function useBoardSidebarKeys(input: { boardId: string; enabled: boolean }): void {
-  const [explorerOpen, setExplorerOpen] = useGlobalExplorerOpen();
+  const { boardId } = input;
   const handle = useCallback(
     (action: KeyboardActionDefinition): boolean => {
+      const explorerOpen = Boolean(getBoard(boardId)?.explorerOpen);
       if (action.id === "sidebar.toggle.right") {
-        setExplorerOpen(!explorerOpen);
+        setBoardExplorerOpen(boardId, !explorerOpen);
         return true;
       }
       if (action.id !== "sidebar.toggle.both") {
@@ -29,10 +30,10 @@ export function useBoardSidebarKeys(input: { boardId: string; enabled: boolean }
       } else {
         panel.closeAgentListForLayout({ isCompact: false });
       }
-      setExplorerOpen(open);
+      setBoardExplorerOpen(boardId, open);
       return true;
     },
-    [explorerOpen, setExplorerOpen],
+    [boardId],
   );
   useKeyboardActionHandler({
     handlerId: `board-sidebar-actions:${input.boardId}`,
