@@ -353,22 +353,26 @@ describe("narrow board: one pane at a time", () => {
     ]);
   });
 
-  it("collapses when any visible pane is under 360 wide or 240 tall", () => {
-    const narrow = shouldShowOnlyFocusedBoardPane({
-      root: five(),
-      viewport: { width: 1200, height: 800 },
-    });
-    expect(narrow).toBe(true);
-    const roomy = shouldShowOnlyFocusedBoardPane({
-      root: five(),
-      viewport: { width: 1600, height: 800 },
-    });
-    expect(roomy).toBe(false);
-    const short = shouldShowOnlyFocusedBoardPane({
-      root: five(),
-      viewport: { width: 1600, height: 200 },
-    });
-    expect(short).toBe(true);
+  it("keeps five slim columns in a wide window and collapses in a narrow one", () => {
+    // Slim columns beside the sidebar (~1640px wide area) are still shown.
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: five(), viewport: { width: 1640, height: 1100 } }),
+    ).toBe(false);
+    // Quarter-screen snap: one pane.
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: five(), viewport: { width: 500, height: 1100 } }),
+    ).toBe(true);
+    // Unusably thin or short panes collapse even in a wide window.
+    expect(
+      shouldShowOnlyFocusedBoardPane({
+        root: five(),
+        viewport: { width: 730, height: 1100 },
+        minWidth: 200,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowOnlyFocusedBoardPane({ root: five(), viewport: { width: 1600, height: 150 } }),
+    ).toBe(true);
   });
 
   it("counts a stacked group's height and honours dragged split sizes", () => {
@@ -382,10 +386,10 @@ describe("narrow board: one pane at a time", () => {
       },
     };
     expect(
-      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 600 } }),
+      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 400 } }),
     ).toBe(false);
     expect(
-      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 450 } }),
+      shouldShowOnlyFocusedBoardPane({ root: column, viewport: { width: 800, height: 300 } }),
     ).toBe(true);
     expect(
       shouldShowOnlyFocusedBoardPane({

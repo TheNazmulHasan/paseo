@@ -148,9 +148,11 @@ export function resolveBoardGroupFlex(
 }
 
 /** A pane narrower than this is unreadable; the board shows one pane instead. */
-export const BOARD_MIN_PANE_WIDTH = 360;
+/** Below this board-area width a view shows only its focused pane. */
+export const BOARD_SOLO_AREA_WIDTH = 720;
+export const BOARD_MIN_PANE_WIDTH = 180;
 /** Same for height. */
-export const BOARD_MIN_PANE_HEIGHT = 240;
+export const BOARD_MIN_PANE_HEIGHT = 160;
 
 export interface BoardPaneRect {
   paneId: string;
@@ -209,6 +211,11 @@ export function shouldShowOnlyFocusedBoardPane(input: {
   const rects = computeBoardPaneRects(root, splitSizes, viewport);
   if (rects.length < 2) {
     return false;
+  }
+  // A view in a narrow window (the quarter-screen snap) shows one pane. A wide window keeps
+  // every pane even when each is slim: five columns beside the sidebar are ~330px and fine.
+  if (viewport.width < BOARD_SOLO_AREA_WIDTH) {
+    return true;
   }
   const minWidth = input.minWidth ?? BOARD_MIN_PANE_WIDTH;
   const minHeight = input.minHeight ?? BOARD_MIN_PANE_HEIGHT;
