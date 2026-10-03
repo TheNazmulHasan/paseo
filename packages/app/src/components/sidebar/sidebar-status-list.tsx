@@ -513,6 +513,7 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   reserveIdleStatusIndicatorSpace = true,
   inStatusGroup = true,
   onWorkspacePress,
+  onPressIntercept,
   drag,
   isDragging = false,
   dragHandleProps,
@@ -532,6 +533,8 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
    */
   inStatusGroup?: boolean;
   onWorkspacePress?: () => void;
+  /** Desk selection seam: return true to swallow the press instead of opening the workspace. */
+  onPressIntercept?: () => boolean;
   drag?: () => void;
   isDragging?: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
@@ -543,10 +546,11 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 
   const handlePress = useCallback(() => {
     if (!workspace.serverId) return;
+    if (onPressIntercept?.()) return;
     // navigateToWorkspace no-ops when interaction-locked; keep handler simple.
     onWorkspacePress?.();
     navigateToWorkspace({ serverId: workspace.serverId, workspaceId: workspace.workspaceId });
-  }, [onWorkspacePress, workspace.serverId, workspace.workspaceId]);
+  }, [onPressIntercept, onWorkspacePress, workspace.serverId, workspace.workspaceId]);
 
   return (
     <StatusWorkspaceRowWithMenu

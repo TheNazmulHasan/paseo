@@ -40,6 +40,8 @@ interface BoardStoreState {
   removeBoard: (boardId: string) => boolean;
   patchArrange: (boardId: string, patch: Partial<BoardArrangeState>) => void;
   setSplitPair: (pairKey: string, boardId: string) => void;
+  /** Re-keys the board's split-set memory: drops its old key(s), then stores `pairKey` (if any). */
+  rekeySplitPair: (boardId: string, pairKey: string | null) => void;
   ensureLive: () => void;
 }
 
@@ -211,6 +213,10 @@ export const useBoardStore = create<BoardStoreState>()(
       },
       setSplitPair: (pairKey, boardId) => {
         set({ splitPairs: { ...get().splitPairs, [pairKey]: boardId } });
+      },
+      rekeySplitPair: (boardId, pairKey) => {
+        const kept = Object.entries(get().splitPairs).filter(([, id]) => id !== boardId);
+        set({ splitPairs: Object.fromEntries(pairKey ? [...kept, [pairKey, boardId]] : kept) });
       },
       ensureLive: () => {
         if (get().boards[LIVE_BOARD_ID]) {

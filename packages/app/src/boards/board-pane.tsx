@@ -1,5 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
-import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink, Plus, X } from "lucide-react-native";
@@ -9,7 +18,7 @@ import {
   type BoardWorkspaceIdentity,
   type BoardWorkspaceIdentityMap,
 } from "@/boards/use-board-workspace-identity";
-import { boardWorkspaceKey } from "@/boards/screen-helpers";
+import { boardWorkspaceKey, resolveActiveTabScrollX } from "@/boards/screen-helpers";
 import type { BoardTabOrigin } from "@/boards/types";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { shouldFocusPaneFromEventTarget } from "@/components/split-container-pane-focus";
@@ -43,23 +52,37 @@ interface BoardIconButtonProps {
   label: string;
   onPress: () => void;
   testID?: string;
+  disabled?: boolean;
   children: ReactElement;
 }
 
 /** Always-visible icon button with a tooltip. Boards never hide an action behind hover. */
-export function BoardIconButton({ label, onPress, testID, children }: BoardIconButtonProps) {
+export function BoardIconButton({
+  label,
+  onPress,
+  testID,
+  disabled,
+  children,
+}: BoardIconButtonProps) {
   const buttonStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) =>
-      iconButtonChromeStyle({ size: "small", state: { hovered: Boolean(hovered), pressed } }),
-    [],
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      iconButtonChromeStyle({
+        size: "small",
+        state: { hovered: Boolean(hovered) && !disabled, pressed: pressed && !disabled },
+      }),
+      disabled ? styles.iconButtonDisabled : null,
+    ],
+    [disabled],
   );
   return (
     <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         onPress={onPress}
+        disabled={disabled}
         style={buttonStyle}
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityState={disabled ? DISABLED_STATE : undefined}
         testID={testID}
       >
         {children}
@@ -162,6 +185,7 @@ function BoardTabChipBody({
   );
 }
 
+const DISABLED_STATE = { disabled: true } as const;
 const SELECTED_STATE = { selected: true } as const;
 const UNSELECTED_STATE = { selected: false } as const;
 
@@ -184,6 +208,30 @@ function BoardTabChip(props: BoardTabChipProps) {
   );
 }
 
+/** Reports a chip's position inside the strip so the pane can scroll the active one into view. */
+function BoardTabChipSlot({
+  tabId,
+  onChipLayout,
+  children,
+}: {
+  tabId: string;
+  onChipLayout: (tabId: string, layout: { x: number; width: number }) => void;
+  children: ReactElement;
+}) {
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { x, width } = event.nativeEvent.layout;
+      onChipLayout(tabId, { x, width });
+    },
+    [onChipLayout, tabId],
+  );
+  return (
+    <View collapsable={false} onLayout={handleLayout}>
+      {children}
+    </View>
+  );
+}
+
 export interface BoardPaneProps {
   /** Scopes retained-tab bookkeeping; boards own no workspace of their own. */
   boardId: string;
@@ -199,6 +247,10 @@ export interface BoardPaneProps {
   onOpenInWorkspace: (origin: BoardTabOrigin) => void;
   /** Opens a draft ("New agent") as a tab in this pane. */
   onNewAgent: (paneId: string) => void;
+  /** Takes this pane (its workspace) out of the view; absent on the Live view (no icon). */
+  onRemoveWorkspace?: (paneId: string) => void;
+  /** False on the view's last pane: the icon stays but is disabled. */
+  canRemove: boolean;
   /** False while the board shows a single pane: nothing to drag onto. */
   dragEnabled: boolean;
   buildPaneContentModel: (input: {
@@ -210,9 +262,10 @@ export interface BoardPaneProps {
 const BOARD_HOST_SCOPE = "board";
 
 /**
- * One pane of a board: a compact tab strip (project icon + session title, an always-visible ×),
- * a header line naming the active session's workspace with an "Open in workspace" icon, and the
- * session itself. Sessions render through the shared panel host, so the chat is the exact
+ * One pane of a board: a header line naming the pane's workspace (drag grip, "Open in
+ * workspace", "Remove from view"), a compact tab strip below it (project icon + session title,
+ * an always-visible ×, "+" for a new agent) that keeps the active tab in view, and the session
+ * itself. Sessions render through the shared panel host, so the chat is the exact
  * AgentPanel a workspace mounts.
  */
 export const BoardPane = memo(function BoardPane({
@@ -228,6 +281,8 @@ export const BoardPane = memo(function BoardPane({
   onCloseTab,
   onOpenInWorkspace,
   onNewAgent,
+  onRemoveWorkspace,
+  canRemove,
   dragEnabled,
   buildPaneContentModel,
 }: BoardPaneProps) {
@@ -292,19 +347,112 @@ export const BoardPane = memo(function BoardPane({
   }, [activeOrigin, onOpenInWorkspace]);
 
   const handleNewAgent = useCallback(() => onNewAgent(paneId), [onNewAgent, paneId]);
+  const handleRemoveWorkspace = useCallback(
+    () => onRemoveWorkspace?.(paneId),
+    [onRemoveWorkspace, paneId],
+  );
+
+  // Keep the active chip in view: scroll when it changes, when it is first measured, and when
+  // the strip is resized. Everything is read from refs so the callbacks stay stable.
+  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollXRef = useRef(0);
+  const viewportWidthRef = useRef(0);
+  const chipLayoutsRef = useRef(new Map<string, { x: number; width: number }>());
+  const activeTabIdRef = useRef<string | null>(null);
+  const activeTabId = activeTab?.tabId ?? null;
+  activeTabIdRef.current = activeTabId;
+  const revealActiveTab = useCallback(() => {
+    const id = activeTabIdRef.current;
+    const chip = id ? chipLayoutsRef.current.get(id) : undefined;
+    if (!chip) {
+      return;
+    }
+    const x = resolveActiveTabScrollX({
+      scrollX: scrollXRef.current,
+      viewportWidth: viewportWidthRef.current,
+      tabX: chip.x,
+      tabWidth: chip.width,
+    });
+    if (x !== null) {
+      scrollXRef.current = x;
+      scrollRef.current?.scrollTo({ x, animated: false });
+    }
+  }, []);
+  useEffect(() => {
+    revealActiveTab();
+  }, [activeTabId, revealActiveTab]);
+  const handleStripLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      viewportWidthRef.current = event.nativeEvent.layout.width;
+      revealActiveTab();
+    },
+    [revealActiveTab],
+  );
+  const handleStripScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollXRef.current = event.nativeEvent.contentOffset.x;
+  }, []);
+  const handleChipLayout = useCallback(
+    (tabId: string, layout: { x: number; width: number }) => {
+      chipLayoutsRef.current.set(tabId, layout);
+      if (tabId === activeTabIdRef.current) {
+        revealActiveTab();
+      }
+    },
+    [revealActiveTab],
+  );
 
   return (
     <RenderProfile id={`BoardPane:${paneId}`}>
       <View ref={paneRef} collapsable={false} style={styles.pane} testID={`board-pane-${paneId}`}>
-        <View style={styles.tabsRow}>
+        <View style={styles.headerLine} testID={`board-pane-header-${paneId}`}>
           {dragEnabled ? (
             <BoardPaneDragHandle paneId={paneId} label={t("boards.screen.dragPane")} />
           ) : null}
+          {activeIdentity ? (
+            <>
+              <ProjectIconView
+                iconDataUri={activeIdentity.iconDataUri}
+                initial={activeIdentity.initial}
+                projectViewKey={activeIdentity.projectViewKey}
+                size={PROJECT_ICON_SIZE}
+                textStyle={styles.projectIconText}
+              />
+              <Text style={styles.headerWorkspaceName} numberOfLines={1}>
+                {activeIdentity.workspaceName}
+              </Text>
+              <BoardIconButton
+                label={t("boards.screen.openInWorkspace")}
+                onPress={handleOpenInWorkspace}
+                testID={`board-pane-open-${paneId}`}
+              >
+                <ThemedExternalLink size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
+              </BoardIconButton>
+            </>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
+          {onRemoveWorkspace ? (
+            <BoardIconButton
+              label={t("boards.screen.removeWorkspace")}
+              onPress={handleRemoveWorkspace}
+              disabled={!canRemove}
+              testID={`board-pane-remove-${paneId}`}
+            >
+              <ThemedX size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
+            </BoardIconButton>
+          ) : null}
+        </View>
+
+        <View style={styles.tabsRow}>
           <ScrollView
+            ref={scrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.tabsScroll}
             contentContainerStyle={styles.tabsContent}
+            onLayout={handleStripLayout}
+            onScroll={handleStripScroll}
+            scrollEventThrottle={16}
           >
             {paneTabs.map((tab) => {
               const origin = origins[tab.tabId];
@@ -312,20 +460,21 @@ export const BoardPane = memo(function BoardPane({
                 return null;
               }
               return (
-                <BoardTabChip
-                  key={tab.tabId}
-                  paneId={paneId}
-                  tab={tab}
-                  origin={origin}
-                  identity={
-                    identities.get(boardWorkspaceKey(origin)) ??
-                    fallbackBoardWorkspaceIdentity(origin.workspaceId)
-                  }
-                  isActive={tab.tabId === activeTab?.tabId}
-                  isPaneFocused={isFocused && isScreenFocused}
-                  onSelectTab={onSelectTab}
-                  onCloseTab={onCloseTab}
-                />
+                <BoardTabChipSlot key={tab.tabId} tabId={tab.tabId} onChipLayout={handleChipLayout}>
+                  <BoardTabChip
+                    paneId={paneId}
+                    tab={tab}
+                    origin={origin}
+                    identity={
+                      identities.get(boardWorkspaceKey(origin)) ??
+                      fallbackBoardWorkspaceIdentity(origin.workspaceId)
+                    }
+                    isActive={tab.tabId === activeTab?.tabId}
+                    isPaneFocused={isFocused && isScreenFocused}
+                    onSelectTab={onSelectTab}
+                    onCloseTab={onCloseTab}
+                  />
+                </BoardTabChipSlot>
               );
             })}
           </ScrollView>
@@ -337,28 +486,6 @@ export const BoardPane = memo(function BoardPane({
             <ThemedPlus size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
           </BoardIconButton>
         </View>
-
-        {activeIdentity ? (
-          <View style={styles.headerLine} testID={`board-pane-header-${paneId}`}>
-            <ProjectIconView
-              iconDataUri={activeIdentity.iconDataUri}
-              initial={activeIdentity.initial}
-              projectViewKey={activeIdentity.projectViewKey}
-              size={PROJECT_ICON_SIZE}
-              textStyle={styles.projectIconText}
-            />
-            <Text style={styles.headerWorkspaceName} numberOfLines={1}>
-              {activeIdentity.workspaceName}
-            </Text>
-            <BoardIconButton
-              label={t("boards.screen.openInWorkspace")}
-              onPress={handleOpenInWorkspace}
-              testID={`board-pane-open-${paneId}`}
-            >
-              <ThemedExternalLink size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
-            </BoardIconButton>
-          </View>
-        ) : null}
 
         <View style={styles.paneContent}>
           {activeTab ? (
@@ -455,15 +582,18 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 9,
   },
   headerLine: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT - 8,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT - 4,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingLeft: theme.spacing[3],
+    paddingLeft: theme.spacing[1],
     paddingRight: theme.spacing[1],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
+  },
+  headerSpacer: {
+    flex: 1,
   },
   headerWorkspaceName: {
     flex: 1,
@@ -487,6 +617,9 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+  },
+  iconButtonDisabled: {
+    opacity: 0.35,
   },
   tooltipText: {
     fontSize: theme.fontSize.base,

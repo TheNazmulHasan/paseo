@@ -784,6 +784,121 @@ export function moveBoardPaneModel(
 }
 
 // ---------------------------------------------------------------------------
+// Adding a workspace to a view / removing one
+// ---------------------------------------------------------------------------
+
+/** True for a single pane, or one horizontal row whose children are all panes. */
+function isSingleRow(root: NodeWithTabs): boolean {
+  return (
+    root.kind === "pane" ||
+    (root.group.direction === "horizontal" && root.group.children.every((c) => c.kind === "pane"))
+  );
+}
+
+/**
+ * Appends one NEW pane per group to the board, each filled like a split pane (same builder as
+ * buildWorkspaceSplit). Existing panes keep their tabs and selected tab. A single row grows by
+ * the new columns (existing widths scaled to make room); any other shape is re-laid out over
+ * all its panes with `preset` (the board's last one) or a grid. Sessions already on the board
+ * are skipped. Divider overrides are folded into the tree and cleared.
+ */
+export function addWorkspacePanesToBoard(
+  board: Board,
+  groups: readonly BoardSplitGroup[],
+  input: { preset?: ArrangePreset | null; viewport: ArrangeViewport },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; addedPaneIds: string[] } {
+  if (groups.length === 0) {
+    return { board, addedPaneIds: [] };
+  }
+  const known = new Set(Object.values(board.origins).map(boardSessionKey));
+  const fresh = groups.map((group) => ({
+    sessions: group.sessions.filter((session) => !known.has(boardSessionKey(session))),
+    focused: group.focused && !known.has(boardSessionKey(group.focused)) ? group.focused : null,
+  }));
+  const built = buildWorkspaceSplit({
+    groups: fresh,
+    layout: "columns",
+    viewport: input.viewport,
+    ids,
+  });
+  const newPanes = collectPaneNodes(built.layout.root as NodeWithTabs);
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const existingPanes = collectPaneNodes(root);
+  const total = existingPanes.length + newPanes.length;
+
+  let nextRoot: NodeWithTabs;
+  if (isSingleRow(root)) {
+    const children = [...existingPanes, ...newPanes];
+    const scale = existingPanes.length / total;
+    const oldSizes = root.kind === "group" ? root.group.sizes : [1];
+    const sizes = [
+      ...existingPanes.map((_, index) => (oldSizes[index] ?? 1 / existingPanes.length) * scale),
+      ...newPanes.map(() => 1 / total),
+    ];
+    const base =
+      root.kind === "group"
+        ? root.group
+        : { id: ids.createNodeId("group"), direction: "horizontal" as const };
+    nextRoot = { kind: "group", group: { ...base, children, sizes } };
+  } else {
+    const flat: Board = {
+      ...board,
+      layout: {
+        ...board.layout,
+        root: asLayoutRoot(wrapNodes([...existingPanes, ...newPanes], "horizontal", ids)),
+      },
+      splitSizes: {},
+    };
+    const arranged = arrangeBoardPanes(
+      { ...flat, origins: { ...board.origins, ...built.origins } },
+      { preset: input.preset ?? "grid", viewport: input.viewport },
+      ids,
+    );
+    nextRoot = (arranged ?? flat).layout.root as NodeWithTabs;
+  }
+  return {
+    board: {
+      ...board,
+      origins: { ...board.origins, ...built.origins },
+      layout: { ...board.layout, root: asLayoutRoot(nextRoot) },
+      splitSizes: {},
+    },
+    addedPaneIds: newPanes.flatMap((node) => (node.kind === "pane" ? [node.pane.id] : [])),
+  };
+}
+
+/**
+ * Takes a whole pane (workspace) out of the view, with its tabs and origins; emptied groups
+ * collapse. The last pane is never removed. Focus moves to the first pane if it was on this one.
+ */
+export function removeWorkspacePaneFromBoard(board: Board, paneId: string): Board {
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const panes = collectPaneNodes(root);
+  const target = panes.find((node) => node.kind === "pane" && node.pane.id === paneId);
+  if (!target || target.kind !== "pane" || panes.length <= 1) {
+    return board;
+  }
+  const without = removePaneNode(root, paneId);
+  if (!without) {
+    return board;
+  }
+  const next = flattenSameDirection(without);
+  const dropped = new Set(target.pane.tabIds);
+  const origins = Object.fromEntries(
+    Object.entries(board.origins).filter(([tabId]) => !dropped.has(tabId)),
+  );
+  const focusedPaneId =
+    board.layout.focusedPaneId === paneId ? firstPaneId(next) : board.layout.focusedPaneId;
+  return {
+    ...board,
+    origins,
+    layout: { ...board.layout, root: asLayoutRoot(next), focusedPaneId },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Files and new agents open as tabs in the pane they were asked from
 // ---------------------------------------------------------------------------
 

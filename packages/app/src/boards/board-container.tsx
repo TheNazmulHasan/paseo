@@ -12,6 +12,7 @@ import {
   openDraftInPane,
   openFileBeside,
   removeBoardTab,
+  removeWorkspaceFromBoard,
   resizeBoardSplit,
   retargetBoardTab,
   selectBoardTab,
@@ -39,8 +40,9 @@ import {
 import { ResizeHandle } from "@/components/resize-handle";
 import { RetainedPanel } from "@/components/retained-panel";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useGlobalExplorerOpen } from "@/stores/global-sidebars-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { collectAllTabs, type SplitNode } from "@/stores/workspace-layout-actions";
+import { collectAllPanes, collectAllTabs, type SplitNode } from "@/stores/workspace-layout-actions";
 import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import { buildWorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -73,6 +75,9 @@ interface BoardNodeViewProps {
   onCloseTab: (tabId: string) => void;
   onOpenInWorkspace: (origin: BoardTabOrigin) => void;
   onNewAgent: (paneId: string) => void;
+  onRemoveWorkspace?: (paneId: string) => void;
+  /** False while the view has a single pane. */
+  canRemove: boolean;
   buildPaneContentModel: BuildPaneContentModel;
 }
 
@@ -135,6 +140,13 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
     },
     [boardId],
   );
+  const handleRemoveWorkspace = useCallback(
+    (paneId: string) => {
+      removeWorkspaceFromBoard(boardId, paneId);
+    },
+    [boardId],
+  );
+  const canRemove = collectAllPanes(board.layout.root).length > 1;
   const [viewport, setViewport] = useState<ArrangeViewport | null>(null);
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -218,7 +230,8 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
   );
 
   // The explorer shows the workspace of the focused pane's session and follows focus.
-  const explorerSource = board.explorerOpen ? resolveFocusedPaneOrigin(board) : null;
+  const [globalExplorerOpen] = useGlobalExplorerOpen();
+  const explorerSource = globalExplorerOpen ? resolveFocusedPaneOrigin(board) : null;
   const explorerPaneId = explorerSource?.paneId ?? null;
   const explorerOrigin = explorerSource?.origin ?? null;
   const handleExplorerOpen = useCallback(
@@ -255,6 +268,8 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
               onCloseTab={handleCloseTab}
               onOpenInWorkspace={handleOpenInWorkspace}
               onNewAgent={handleNewAgent}
+              onRemoveWorkspace={board.kind === "live" ? undefined : handleRemoveWorkspace}
+              canRemove={canRemove}
               buildPaneContentModel={buildPaneContentModel}
             />
           </BoardPaneDndProvider>
@@ -296,6 +311,8 @@ const BoardPaneNode = memo(function BoardPaneNode({
   onCloseTab,
   onOpenInWorkspace,
   onNewAgent,
+  onRemoveWorkspace,
+  canRemove,
   buildPaneContentModel,
 }: BoardNodeViewProps & { node: Extract<SplitNode, { kind: "pane" }> }) {
   return (
@@ -313,6 +330,8 @@ const BoardPaneNode = memo(function BoardPaneNode({
         onCloseTab={onCloseTab}
         onOpenInWorkspace={onOpenInWorkspace}
         onNewAgent={onNewAgent}
+        onRemoveWorkspace={onRemoveWorkspace}
+        canRemove={canRemove}
         dragEnabled={soloPaneId === null}
         buildPaneContentModel={buildPaneContentModel}
       />

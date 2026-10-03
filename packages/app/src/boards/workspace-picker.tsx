@@ -8,8 +8,9 @@ import { ProjectIconView } from "@/components/project-icon-view";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
 import { useArrangeViewportStore } from "@/arrange/viewport";
-import { splitWorkspaces } from "@/boards/controller";
+import { addWorkspacesToBoard, splitWorkspaces, useBoard } from "@/boards/controller";
 import { navigateToBoard } from "@/boards/navigation";
+import { boardWorkspaceKey } from "@/boards/screen-helpers";
 import { closeSplitPicker, useSplitPickerStore } from "@/boards/split-picker-store";
 import { useSplitPickerWorkspaces } from "@/boards/use-split-picker-workspaces";
 import {
@@ -17,8 +18,9 @@ import {
   filterPickerWorkspaces,
   layoutForEnter,
   moveHighlight,
+  newPickedKeys,
   resolveSplitViewport,
-  togglePickedKey,
+  togglePickedKeyUnlessLocked,
   type PickerWorkspace,
   type SplitLayoutChoice,
 } from "@/boards/workspace-picker-model";
@@ -73,6 +75,7 @@ const PickerRow = memo(function PickerRow({
   item,
   index,
   order,
+  locked,
   highlighted,
   onToggle,
   onHover,
@@ -81,6 +84,8 @@ const PickerRow = memo(function PickerRow({
   index: number;
   /** 1-based position in the pick order, or 0 when unchecked. */
   order: number;
+  /** Add mode: already in the view, so checked and not changeable. */
+  locked: boolean;
   highlighted: boolean;
   onToggle: (key: string) => void;
   onHover: (index: number) => void;
@@ -88,13 +93,17 @@ const PickerRow = memo(function PickerRow({
   const checked = order > 0;
   const handlePress = useCallback(() => onToggle(item.key), [item.key, onToggle]);
   const handleHover = useCallback(() => onHover(index), [index, onHover]);
-  const accessibilityState = useMemo(() => ({ checked }), [checked]);
-  const rowStyle = useMemo(() => [styles.row, highlighted && styles.rowHighlighted], [highlighted]);
+  const accessibilityState = useMemo(() => ({ checked, disabled: locked }), [checked, locked]);
+  const rowStyle = useMemo(
+    () => [styles.row, highlighted && styles.rowHighlighted, locked && styles.rowLocked],
+    [highlighted, locked],
+  );
   const boxStyle = useMemo(() => [styles.checkbox, checked && styles.checkboxChecked], [checked]);
   return (
     <Pressable
       style={rowStyle}
       onPress={handlePress}
+      disabled={locked}
       onHoverIn={handleHover}
       accessibilityRole="checkbox"
       accessibilityLabel={item.title}
@@ -133,6 +142,16 @@ const PickerRow = memo(function PickerRow({
 export function WorkspacePicker() {
   const { t } = useTranslation();
   const visible = useSplitPickerStore((state) => state.open);
+  const addToBoardId = useSplitPickerStore((state) => state.addToBoardId);
+  const addBoard = useBoard(addToBoardId);
+  const adding = addBoard !== null;
+  // Add mode: the workspaces the view already shows are checked and locked.
+  const lockedKeys = useMemo<ReadonlySet<string>>(
+    () => new Set(addBoard ? Object.values(addBoard.origins).map(boardWorkspaceKey) : []),
+    [addBoard],
+  );
+  const lockedKeysRef = useRef(lockedKeys);
+  lockedKeysRef.current = lockedKeys;
   const selection = useActiveWorkspaceSelection();
   const currentKey = selection ? `${selection.serverId}:${selection.workspaceId}` : null;
   const workspaces = useSplitPickerWorkspaces({ enabled: visible, currentKey });
@@ -150,8 +169,13 @@ export function WorkspacePicker() {
     }
     setQuery("");
     setHighlight(0);
-    setPicked(currentKeyRef.current ? [currentKeyRef.current] : []);
-  }, [visible]);
+    const locked = [...lockedKeysRef.current];
+    if (locked.length > 0) {
+      setPicked(locked);
+    } else {
+      setPicked(currentKeyRef.current ? [currentKeyRef.current] : []);
+    }
+  }, [visible, addToBoardId]);
 
   const filtered = useMemo(() => filterPickerWorkspaces(workspaces, query), [query, workspaces]);
   const safeHighlight = Math.min(highlight, Math.max(filtered.length - 1, 0));
@@ -159,14 +183,14 @@ export function WorkspacePicker() {
     () => new Map(picked.map((key, index) => [key, index + 1] as const)),
     [picked],
   );
-  const splittable = canSplit(picked);
+  const splittable = adding ? newPickedKeys(picked, lockedKeys).length > 0 : canSplit(picked);
 
   const handleQuery = useCallback((value: string) => {
     setQuery(value);
     setHighlight(0);
   }, []);
   const handleToggle = useCallback((key: string) => {
-    setPicked((current) => togglePickedKey(current, key));
+    setPicked((current) => togglePickedKeyUnlessLocked(current, key, lockedKeysRef.current));
   }, []);
   const handleMove = useCallback(
     (delta: number) => setHighlight((index) => moveHighlight(index, delta, filtered.length)),
@@ -181,34 +205,42 @@ export function WorkspacePicker() {
 
   const confirm = useCallback(
     (layout: SplitLayoutChoice) => {
-      if (!canSplit(picked)) {
-        return;
-      }
       const byKey = new Map(workspaces.map((workspace) => [workspace.key, workspace] as const));
-      const chosen = picked.flatMap((key) => {
-        const workspace = byKey.get(key);
-        return workspace
-          ? [{ serverId: workspace.serverId, workspaceId: workspace.workspaceId }]
-          : [];
-      });
-      if (chosen.length < 2) {
-        return;
-      }
+      const toRefs = (keys: readonly string[]) =>
+        keys.flatMap((key) => {
+          const workspace = byKey.get(key);
+          return workspace
+            ? [{ serverId: workspace.serverId, workspaceId: workspace.workspaceId }]
+            : [];
+        });
       const measured = currentKeyRef.current
         ? useArrangeViewportStore.getState().byWorkspace[currentKeyRef.current]
         : null;
       const { width, height } = Dimensions.get("window");
-      const boardId = splitWorkspaces({
-        workspaces: chosen,
-        layout,
-        viewport: resolveSplitViewport({ measured, windowSize: { width, height } }),
-      });
+      const viewport = resolveSplitViewport({ measured, windowSize: { width, height } });
+      if (addToBoardId) {
+        const added = toRefs(newPickedKeys(picked, lockedKeysRef.current));
+        if (added.length === 0) {
+          return;
+        }
+        addWorkspacesToBoard(addToBoardId, added, viewport);
+        closeSplitPicker();
+        return;
+      }
+      if (!canSplit(picked)) {
+        return;
+      }
+      const chosen = toRefs(picked);
+      if (chosen.length < 2) {
+        return;
+      }
+      const boardId = splitWorkspaces({ workspaces: chosen, layout, viewport });
       closeSplitPicker();
       if (boardId) {
         navigateToBoard(boardId);
       }
     },
-    [picked, workspaces],
+    [addToBoardId, picked, workspaces],
   );
   const handleColumns = useCallback(() => confirm("columns"), [confirm]);
   const handleGrid = useCallback(() => confirm("grid"), [confirm]);
@@ -221,7 +253,7 @@ export function WorkspacePicker() {
 
   const header = useMemo<SheetHeader>(
     () => ({
-      title: t("boards.picker.title"),
+      title: t(adding ? "boards.picker.addTitle" : "boards.picker.title"),
       search: {
         onChange: handleQuery,
         placeholder: t("boards.picker.searchPlaceholder"),
@@ -229,16 +261,20 @@ export function WorkspacePicker() {
         testID: "split-picker-search",
       },
     }),
-    [handleQuery, t],
+    [adding, handleQuery, t],
   );
 
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
         <Text style={styles.hint} numberOfLines={2}>
-          {splittable
-            ? t("boards.picker.hint", { count: picked.length })
-            : t("boards.picker.needTwo")}
+          {adding
+            ? t(splittable ? "boards.picker.addHint" : "boards.picker.addNone", {
+                count: newPickedKeys(picked, lockedKeys).length,
+              })
+            : t(splittable ? "boards.picker.hint" : "boards.picker.needTwo", {
+                count: picked.length,
+              })}
         </Text>
         <View style={styles.footerButtons}>
           <Button
@@ -246,23 +282,25 @@ export function WorkspacePicker() {
             variant="default"
             disabled={!splittable}
             onPress={handleColumns}
-            testID="split-picker-columns"
+            testID={adding ? "split-picker-add" : "split-picker-columns"}
           >
-            {t("boards.picker.columns")}
+            {t(adding ? "boards.picker.add" : "boards.picker.columns")}
           </Button>
-          <Button
-            style={styles.footerButton}
-            variant="secondary"
-            disabled={!splittable}
-            onPress={handleGrid}
-            testID="split-picker-grid"
-          >
-            {t("boards.picker.grid")}
-          </Button>
+          {adding ? null : (
+            <Button
+              style={styles.footerButton}
+              variant="secondary"
+              disabled={!splittable}
+              onPress={handleGrid}
+              testID="split-picker-grid"
+            >
+              {t("boards.picker.grid")}
+            </Button>
+          )}
         </View>
       </View>
     ),
-    [handleColumns, handleGrid, picked.length, splittable, t],
+    [adding, handleColumns, handleGrid, lockedKeys, picked, splittable, t],
   );
 
   return (
@@ -271,7 +309,7 @@ export function WorkspacePicker() {
       visible={visible}
       onClose={closeSplitPicker}
       footer={footer}
-      testID="split-picker"
+      testID={adding ? "split-picker-add-mode" : "split-picker"}
     >
       {filtered.length === 0 ? (
         <Text style={styles.empty} testID="split-picker-empty">
@@ -284,6 +322,7 @@ export function WorkspacePicker() {
             item={item}
             index={index}
             order={orderByKey.get(item.key) ?? 0}
+            locked={lockedKeys.has(item.key)}
             highlighted={index === safeHighlight}
             onToggle={handleToggle}
             onHover={setHighlight}
@@ -304,6 +343,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
   },
   rowHighlighted: { backgroundColor: theme.colors.surface3 },
+  rowLocked: { opacity: 0.55 },
   checkbox: {
     width: 22,
     height: 22,

@@ -22,6 +22,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 import { getBoardArrangeState, useBoardStore } from "@/boards/board-store";
 import {
   addSessionsToBoard,
+  addWorkspacesToBoard,
   arrangeBoard,
   createBoard,
   deleteBoard,
@@ -34,6 +35,7 @@ import {
   openFileBeside,
   refreshLiveBoard,
   removeBoardTab,
+  removeWorkspaceFromBoard,
   renameBoard,
   resizeBoardSplit,
   restoreBoardArrangement,
@@ -954,6 +956,108 @@ describe("splitWorkspaces reuse by set", () => {
     ]);
     expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
     expect(collectAllPanes(mustBoard(id).layout.root)).toHaveLength(2);
+  });
+});
+
+describe("addWorkspacesToBoard / removeWorkspaceFromBoard", () => {
+  function setup3(): string {
+    setWorld({ s1: { a1: {}, b1: {}, c1: {}, d1: {} } });
+    openWorkspaceAgents("s1", "w1", ["a1"]);
+    openWorkspaceAgents("s1", "w2", ["b1"]);
+    openWorkspaceAgents("s1", "w3", ["c1"]);
+    openWorkspaceAgents("s1", "w4", ["d1"]);
+    return split(["w1", "w2"])!;
+  }
+
+  it("appends one new pane per added workspace and leaves existing panes untouched", () => {
+    const id = setup3();
+    const before = mustBoard(id);
+    const [leftBefore, rightBefore] = collectAllPanes(before.layout.root);
+    const added = addWorkspacesToBoard(id, [W("w2"), W("w3"), W("w4")], VIEWPORT);
+    expect(added).toHaveLength(2);
+    const after = mustBoard(id);
+    expect(paneAgents(after)).toEqual([["a1"], ["b1"], ["c1"], ["d1"]]);
+    const panes = collectAllPanes(after.layout.root);
+    expect(panes[0]).toEqual(leftBefore);
+    expect(panes[1]).toEqual(rightBefore);
+    expect(panes.slice(2).map((pane) => pane.id)).toEqual(added);
+    expect(rowShape(after)).toEqual([4]);
+    const root = after.layout.root;
+    const sizes = root.kind === "group" ? root.group.sizes : [];
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeCloseTo(1);
+    expect(sizes[0]).toBeCloseTo(0.25);
+    expect(after.layout.focusedPaneId).toBe(before.layout.focusedPaneId);
+  });
+
+  it("skips workspaces already in the view and adds nothing when none are new", () => {
+    const id = setup3();
+    expect(addWorkspacesToBoard(id, [W("w1"), W("w2")], VIEWPORT)).toEqual([]);
+    expect(paneAgents(mustBoard(id))).toEqual([["a1"], ["b1"]]);
+  });
+
+  it("keeps the set memory current: the new set finds this board, the old set does not", () => {
+    const id = setup3();
+    addWorkspacesToBoard(id, [W("w3")], VIEWPORT);
+    expect(split(["w1", "w2", "w3"])).toBe(id);
+    expect(split(["w1", "w2"])).not.toBe(id);
+  });
+
+  it("re-lays out a non-row board with the last preset, else a grid", () => {
+    const id = setup3();
+    addWorkspacesToBoard(id, [W("w3"), W("w4")], VIEWPORT);
+    expect(arrangeBoard({ boardId: id, preset: "columns-2", viewport: VIEWPORT })).toBe(true);
+    setWorld({ s1: { a1: {}, b1: {}, c1: {}, d1: {}, e1: {} } });
+    openWorkspaceAgents("s1", "w5", ["e1"]);
+    addWorkspacesToBoard(id, [W("w5")], VIEWPORT);
+    const after = mustBoard(id);
+    expect(paneAgents(after).flat().sort()).toEqual(["a1", "b1", "c1", "d1", "e1"]);
+    expect(collectAllPanes(after.layout.root)).toHaveLength(5);
+    const root = after.layout.root;
+    expect(root.kind === "group" && root.group.direction).toBe("horizontal");
+  });
+
+  it("refuses the Live board", () => {
+    expect(addWorkspacesToBoard(LIVE_BOARD_ID, [W("w1")], VIEWPORT)).toEqual([]);
+    expect(removeWorkspaceFromBoard(LIVE_BOARD_ID, "x")).toBe(false);
+  });
+
+  it("removes a pane with its tabs and origins, collapsing the group", () => {
+    const id = setup3();
+    addWorkspacesToBoard(id, [W("w3")], VIEWPORT);
+    const board = mustBoard(id);
+    const middle = collectAllPanes(board.layout.root)[1]!;
+    expect(removeWorkspaceFromBoard(id, middle.id)).toBe(true);
+    const after = mustBoard(id);
+    expect(paneAgents(after)).toEqual([["a1"], ["c1"]]);
+    expect(Object.values(after.origins).some((o) => o.agentId === "b1")).toBe(false);
+    expect(Object.keys(after.origins)).toHaveLength(2);
+    expect(split(["w1", "w3"])).toBe(id);
+  });
+
+  it("moves focus to a surviving pane when the focused pane is removed", () => {
+    const id = setup3();
+    const board = mustBoard(id);
+    const [first, second] = collectAllPanes(board.layout.root);
+    focusBoardPane(id, first!.id);
+    removeWorkspaceFromBoard(id, first!.id);
+    expect(mustBoard(id).layout.focusedPaneId).toBe(second!.id);
+  });
+
+  it("never removes the last pane", () => {
+    const id = setup3();
+    const [first, second] = collectAllPanes(mustBoard(id).layout.root);
+    expect(removeWorkspaceFromBoard(id, first!.id)).toBe(true);
+    expect(removeWorkspaceFromBoard(id, second!.id)).toBe(false);
+    expect(paneAgents(mustBoard(id))).toEqual([["b1"]]);
+  });
+
+  it("Restore reconciles a pre-arrange snapshot after an add", () => {
+    const id = setup3();
+    expect(arrangeBoard({ boardId: id, preset: "grid", viewport: VIEWPORT })).toBe(true);
+    addWorkspacesToBoard(id, [W("w3")], VIEWPORT);
+    expect(restoreBoardArrangement(id)).toBe(true);
+    expect(paneAgents(mustBoard(id)).flat().sort()).toEqual(["a1", "b1", "c1"]);
+    expect(getBoardArrangeState(id).snapshot).toBeNull();
   });
 });
 

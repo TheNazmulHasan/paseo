@@ -87,3 +87,17 @@ export function resolveSplitViewport(input: {
     explorerWidth: SIDEBAR_ALLOWANCE_PX,
   });
 }
+
+/** Add mode: toggling a workspace already in the view does nothing (it stays checked). */
+export function togglePickedKeyUnlessLocked(
+  picked: readonly string[],
+  key: string,
+  locked: ReadonlySet<string>,
+): string[] {
+  return locked.has(key) ? [...picked] : togglePickedKey(picked, key);
+}
+
+/** Add mode: the checked workspaces that are new to the view, in the order they were checked. */
+export function newPickedKeys(picked: readonly string[], locked: ReadonlySet<string>): string[] {
+  return picked.filter((key) => !locked.has(key));
+}

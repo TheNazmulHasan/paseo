@@ -8,6 +8,7 @@ import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
 import { getBoardArrangeState, useBoardStore } from "@/boards/board-store";
 import {
   addSessionsToBoardModel,
+  addWorkspacePanesToBoard,
   appendActiveSessions,
   arrangeBoardPanes,
   boardSessionKey,
@@ -23,6 +24,7 @@ import {
   openFileBesideModel,
   rebuildLiveBoard,
   removeTabFromBoard,
+  removeWorkspacePaneFromBoard,
   resizeBoardSplitModel,
   restoreBoardLayout,
   retargetBoardTabModel,
@@ -509,6 +511,82 @@ export function splitWorkspaces(input: {
   // The layout was rebuilt, so a restore point from before would describe another arrangement.
   boardStore().patchArrange(existing.id, { snapshot: null, lastPreset: null });
   return existing.id;
+}
+
+/** The distinct workspaces a board shows, keyed like the split-set memory. */
+function boardWorkspaceKeys(board: Board): string[] {
+  const keys = new Set<string>();
+  for (const origin of Object.values(board.origins)) {
+    const key = buildWorkspaceTabPersistenceKey(origin);
+    if (key) {
+      keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
+/** Makes reopening the board's CURRENT set of workspaces find this board (not the old set). */
+function rememberSplitSet(board: Board): void {
+  const keys = boardWorkspaceKeys(board);
+  boardStore().rekeySplitPair(board.id, keys.length >= 2 ? JSON.stringify([...keys].sort()) : null);
+}
+
+/**
+ * Adds one new pane per workspace not already in the view, each filled like a split pane
+ * (open agent + file tabs, its focused tab showing, else its recent agents). Existing panes are
+ * untouched. Returns the new panes' ids (empty when nothing was added).
+ */
+export function addWorkspacesToBoard(
+  boardId: string,
+  workspaces: ReadonlyArray<{ serverId: string; workspaceId: string }>,
+  viewport: ArrangeViewport | null,
+): string[] {
+  const board = readBoard(boardId);
+  if (!board || board.kind === "live") {
+    return [];
+  }
+  const present = new Set(boardWorkspaceKeys(board));
+  const refs: WorkspaceRef[] = [];
+  for (const workspace of workspaces) {
+    const key = buildWorkspaceTabPersistenceKey(workspace);
+    if (key && !present.has(key)) {
+      present.add(key);
+      refs.push({ serverId: workspace.serverId.trim(), workspaceId: workspace.workspaceId.trim() });
+    }
+  }
+  if (refs.length === 0) {
+    return [];
+  }
+  const { lastPreset } = getBoardArrangeState(boardId);
+  const added = addWorkspacePanesToBoard(board, refs.map(readWorkspaceGroup), {
+    preset: lastPreset,
+    viewport: viewport ?? DEFAULT_VIEWPORT,
+  });
+  if (added.addedPaneIds.length === 0) {
+    return [];
+  }
+  boardStore().putBoard(added.board);
+  rememberSplitSet(added.board);
+  // The snapshot stays (Restore reconciles it with the new panes); the preset no longer
+  // describes the layout, so pressing it again re-arranges instead of restoring.
+  boardStore().patchArrange(boardId, { lastPreset: null });
+  return added.addedPaneIds;
+}
+
+/** Takes a pane (one workspace, with its tabs) out of the view. The last pane stays. */
+export function removeWorkspaceFromBoard(boardId: string, paneId: string): boolean {
+  const board = readBoard(boardId);
+  if (!board || board.kind === "live") {
+    return false;
+  }
+  const next = removeWorkspacePaneFromBoard(board, paneId);
+  if (next === board) {
+    return false;
+  }
+  boardStore().putBoard(next);
+  rememberSplitSet(next);
+  boardStore().patchArrange(boardId, { lastPreset: null });
+  return true;
 }
 
 // ---------------------------------------------------------------------------

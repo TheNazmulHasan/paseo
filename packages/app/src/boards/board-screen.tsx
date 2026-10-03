@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useBoardSidebarKeys } from "@/boards/use-board-sidebar-keys";
 import { Text, View, useWindowDimensions } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ArrowLeft, RefreshCw } from "lucide-react-native";
+import { ArrowLeft, Plus, RefreshCw } from "lucide-react-native";
 import type { ArrangeViewport } from "@/arrange/types";
 import { BoardContainer } from "@/boards/board-container";
 import { useBoardMruStore } from "@/boards/board-mru-store";
 import { BoardIconButton } from "@/boards/board-pane";
-import { refreshLiveBoard, setBoardExplorerOpen, useBoard } from "@/boards/controller";
+import { refreshLiveBoard, useBoard } from "@/boards/controller";
 import { goBackFromBoard } from "@/boards/navigation";
+import { openAddWorkspacePicker } from "@/boards/split-picker-store";
 import {
   countVisibleBoardTabs,
   findBoardPane,
@@ -27,6 +29,7 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { WorkspaceExplorerToggle } from "@/screens/workspace/workspace-explorer-toggle";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { useGlobalExplorerOpen } from "@/stores/global-sidebars-store";
 
 const ThemedRefreshCw = withUnistyles(RefreshCw);
 
@@ -131,6 +134,7 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   );
 
   useBoardKeyboard({ board, enabled: isFocused, getViewport });
+  useBoardSidebarKeys({ boardId: board.id, enabled: isFocused });
   // Without this the hosts never fetch or stream the timelines of agents shown here.
   useBoardVisibleAgents(board, isFocused);
 
@@ -150,11 +154,14 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   const handleRefresh = useCallback(() => refreshLiveBoard(getViewport()), [getViewport]);
 
   const isLive = board.kind === "live";
-  const explorerOpen = Boolean(board.explorerOpen);
+  // One remembered Files-explorer state for every workspace and view (board.explorerOpen is
+  // kept in storage for compatibility but no longer read).
+  const [explorerOpen, setExplorerOpen] = useGlobalExplorerOpen();
   const handleToggleExplorer = useCallback(
-    () => setBoardExplorerOpen(boardId, !explorerOpen),
-    [boardId, explorerOpen],
+    () => setExplorerOpen(!explorerOpen),
+    [explorerOpen, setExplorerOpen],
   );
+  const handleAddWorkspace = useCallback(() => openAddWorkspacePicker(boardId), [boardId]);
   const explorerAccessibilityState = useMemo(() => ({ expanded: explorerOpen }), [explorerOpen]);
   const headerRight = useMemo(
     () => (
@@ -171,6 +178,18 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
             </BoardIconButton>
           </>
         ) : null}
+        {isLive ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={Plus}
+            onPress={handleAddWorkspace}
+            accessibilityLabel={t("boards.screen.addWorkspace")}
+            testID="board-add-workspace"
+          >
+            {t("boards.screen.addWorkspace")}
+          </Button>
+        )}
         <WorkspaceExplorerToggle
           onPress={handleToggleExplorer}
           label={t(
@@ -185,7 +204,15 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
         />
       </View>
     ),
-    [explorerAccessibilityState, explorerOpen, handleRefresh, handleToggleExplorer, isLive, t],
+    [
+      explorerAccessibilityState,
+      explorerOpen,
+      handleAddWorkspace,
+      handleRefresh,
+      handleToggleExplorer,
+      isLive,
+      t,
+    ],
   );
 
   const hasTabs = countVisibleBoardTabs(board.layout.root) > 0;

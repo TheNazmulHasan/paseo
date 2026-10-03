@@ -8,6 +8,7 @@ import {
   groupBoardVisibleAgents,
   orderBoardSwitcherTabIds,
   recordBoardTabUse,
+  resolveActiveTabScrollX,
   resolveAdjacentBoardPaneId,
   resolveIndexedTabId,
   resolveRelativeTabId,
@@ -444,5 +445,33 @@ describe("narrow board: one pane at a time", () => {
     expect(resolveBoardPaneDropPosition("center")).toBe("swap");
     expect(resolveBoardPaneDropPosition("left")).toBe("left");
     expect(resolveBoardPaneDropPosition("right")).toBe("right");
+  });
+});
+
+describe("resolveActiveTabScrollX", () => {
+  const base = { scrollX: 100, viewportWidth: 300, inset: 8 };
+
+  it("leaves the strip alone when the chip is fully visible", () => {
+    expect(resolveActiveTabScrollX({ ...base, tabX: 150, tabWidth: 100 })).toBeNull();
+  });
+
+  it("scrolls left to a chip hidden on the left, keeping a small inset", () => {
+    expect(resolveActiveTabScrollX({ ...base, tabX: 40, tabWidth: 100 })).toBe(32);
+    expect(resolveActiveTabScrollX({ ...base, tabX: 2, tabWidth: 100 })).toBe(0);
+  });
+
+  it("scrolls right so a chip hidden on the right ends at the edge", () => {
+    expect(resolveActiveTabScrollX({ ...base, tabX: 350, tabWidth: 120 })).toBe(178);
+  });
+
+  it("lines a chip wider than the strip up at its left edge", () => {
+    expect(resolveActiveTabScrollX({ ...base, tabX: 160, tabWidth: 400 })).toBe(152);
+  });
+
+  it("does nothing before the strip or the chip is measured", () => {
+    expect(
+      resolveActiveTabScrollX({ ...base, viewportWidth: 0, tabX: 500, tabWidth: 50 }),
+    ).toBeNull();
+    expect(resolveActiveTabScrollX({ ...base, tabX: 500, tabWidth: 0 })).toBeNull();
   });
 });

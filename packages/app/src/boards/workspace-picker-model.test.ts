@@ -4,9 +4,11 @@ import {
   filterPickerWorkspaces,
   layoutForEnter,
   moveHighlight,
+  newPickedKeys,
   orderPickerWorkspaces,
   resolveSplitViewport,
   togglePickedKey,
+  togglePickedKeyUnlessLocked,
 } from "@/boards/workspace-picker-model";
 
 const item = (key: string, title = key, projectName = "proj") => ({ key, title, projectName });
@@ -86,5 +88,20 @@ describe("resolveSplitViewport", () => {
     expect(
       resolveSplitViewport({ measured: null, windowSize: { width: 1600, height: 1000 } }),
     ).toEqual({ width: 1280, height: 1000 });
+  });
+});
+
+describe("add mode", () => {
+  const locked = new Set(["a", "b"]);
+
+  it("never unchecks a workspace already in the view", () => {
+    expect(togglePickedKeyUnlessLocked(["a", "b"], "a", locked)).toEqual(["a", "b"]);
+    expect(togglePickedKeyUnlessLocked(["a", "b"], "c", locked)).toEqual(["a", "b", "c"]);
+    expect(togglePickedKeyUnlessLocked(["a", "b", "c"], "c", locked)).toEqual(["a", "b"]);
+  });
+
+  it("offers only the new workspaces, in check order", () => {
+    expect(newPickedKeys(["a", "b", "d", "c"], locked)).toEqual(["d", "c"]);
+    expect(newPickedKeys(["a", "b"], locked)).toEqual([]);
   });
 });

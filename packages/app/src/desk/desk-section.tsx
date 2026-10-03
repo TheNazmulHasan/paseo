@@ -1,7 +1,7 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
-import { BrushCleaning, ChevronDown, ChevronRight } from "lucide-react-native";
+import { Dimensions, Pressable, Text, View } from "react-native";
+import { BrushCleaning, ChevronDown, ChevronRight, ListChecks } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
@@ -10,7 +10,14 @@ import {
   buildStatusRowProjectPresentation,
   StatusWorkspaceRow,
 } from "@/components/sidebar/sidebar-status-list";
+import { splitWorkspaces } from "@/boards/controller";
+import { navigateToBoard } from "@/boards/navigation";
+import { resolveSplitViewport } from "@/boards/workspace-picker-model";
+import { isWeb } from "@/constants/platform";
 import { DeskIconButton } from "@/desk/desk-icon-button";
+import { DeskSelectableRow } from "@/desk/desk-selectable-row";
+import { DeskSelectionBar } from "@/desk/desk-selection-bar";
+import { useDeskSelectionStore } from "@/desk/desk-selection-store";
 import { useDeskStore } from "@/desk/desk-store";
 import type { DeskGroup, DeskGrouping } from "@/desk/model";
 import { useClearDesk } from "@/desk/use-clear-desk";
@@ -73,6 +80,53 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
     () => deskGroups.reduce((total, group) => total + group.rows.length, 0),
     [deskGroups],
   );
+
+  const selectionActive = useDeskSelectionStore((state) => state.active);
+  const checked = useDeskSelectionStore((state) => state.checked);
+  const toggleSelectionMode = useDeskSelectionStore((state) => state.toggleMode);
+  const exitSelection = useDeskSelectionStore((state) => state.exit);
+  const toggleChecked = useDeskSelectionStore((state) => state.toggle);
+  const pruneSelection = useDeskSelectionStore((state) => state.prune);
+  const deskWorkspaces = useMemo(() => {
+    const byKey = new Map<string, { serverId: string; workspaceId: string }>();
+    for (const group of deskGroups) {
+      for (const row of group.rows) {
+        byKey.set(row.workspaceKey, { serverId: row.serverId, workspaceId: row.workspaceId });
+      }
+    }
+    return byKey;
+  }, [deskGroups]);
+  useEffect(() => {
+    pruneSelection(new Set(deskWorkspaces.keys()));
+  }, [deskWorkspaces, pruneSelection]);
+  useEffect(() => {
+    if (!selectionActive || !isWeb || typeof window === "undefined") return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") exitSelection();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [exitSelection, selectionActive]);
+  const createView = useCallback(
+    (layout: "columns" | "grid") => {
+      const chosen = checked.flatMap((key) => {
+        const ref = deskWorkspaces.get(key);
+        return ref ? [ref] : [];
+      });
+      if (chosen.length < 2) return;
+      const { width, height } = Dimensions.get("window");
+      const boardId = splitWorkspaces({
+        workspaces: chosen,
+        layout,
+        viewport: resolveSplitViewport({ measured: null, windowSize: { width, height } }),
+      });
+      exitSelection();
+      if (boardId) navigateToBoard(boardId);
+    },
+    [checked, deskWorkspaces, exitSelection],
+  );
+  const handleColumns = useCallback(() => createView("columns"), [createView]);
+  const handleGrid = useCallback(() => createView("grid"), [createView]);
   const groupingOptions = useMemo(
     () => [
       {
@@ -133,6 +187,12 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
             testID="sidebar-desk-grouping"
           />
           <DeskIconButton
+            icon={ListChecks}
+            label={t("sidebar.desk.select")}
+            onPress={toggleSelectionMode}
+            testID="sidebar-desk-select"
+          />
+          <DeskIconButton
             icon={BrushCleaning}
             label={t("sidebar.desk.clear")}
             onPress={clearDesk}
@@ -140,6 +200,14 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
           />
         </View>
       </View>
+      {selectionActive && checked.length >= 2 ? (
+        <DeskSelectionBar
+          count={checked.length}
+          onColumns={handleColumns}
+          onGrid={handleGrid}
+          onCancel={exitSelection}
+        />
+      ) : null}
       {showEmpty ? (
         <Text style={styles.empty} testID="sidebar-desk-empty">
           {t("sidebar.desk.empty")}
@@ -157,6 +225,9 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
               supportsPinningByServerId={supportsPinningByServerId}
               onToggleWorkspacePin={onToggleWorkspacePin}
               onWorkspacePress={onWorkspacePress}
+              selectionActive={selectionActive}
+              checked={checked}
+              onToggleChecked={toggleChecked}
             />
           ))
         : null}
@@ -173,6 +244,9 @@ const DeskGroupRows = memo(function DeskGroupRows({
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onWorkspacePress,
+  selectionActive,
+  checked,
+  onToggleChecked,
 }: {
   group: DeskGroup;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -182,6 +256,9 @@ const DeskGroupRows = memo(function DeskGroupRows({
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onWorkspacePress?: () => void;
+  selectionActive: boolean;
+  checked: readonly string[];
+  onToggleChecked: (workspaceKey: string) => void;
 }) {
   const grouped = group.label !== null;
   return (
@@ -192,21 +269,32 @@ const DeskGroupRows = memo(function DeskGroupRows({
         </Text>
       ) : null}
       {group.rows.map((workspace) => (
-        <StatusWorkspaceRow
+        <DeskSelectableRow
           key={workspace.workspaceKey}
-          workspace={workspace}
-          {...buildStatusRowProjectPresentation({
-            workspace,
-            projectIconByProjectViewKey,
-            hostBadgeByServerId,
-          })}
-          inStatusGroup={grouped}
-          shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-          showShortcutBadge={showShortcutBadges}
-          canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-          onToggleWorkspacePin={onToggleWorkspacePin}
-          onWorkspacePress={onWorkspacePress}
-        />
+          workspaceKey={workspace.workspaceKey}
+          name={workspace.name}
+          selectionActive={selectionActive}
+          checked={checked.includes(workspace.workspaceKey)}
+          onToggle={onToggleChecked}
+        >
+          {(onPressIntercept) => (
+            <StatusWorkspaceRow
+              workspace={workspace}
+              {...buildStatusRowProjectPresentation({
+                workspace,
+                projectIconByProjectViewKey,
+                hostBadgeByServerId,
+              })}
+              inStatusGroup={grouped}
+              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+              showShortcutBadge={showShortcutBadges}
+              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+              onToggleWorkspacePin={onToggleWorkspacePin}
+              onWorkspacePress={onWorkspacePress}
+              onPressIntercept={onPressIntercept}
+            />
+          )}
+        </DeskSelectableRow>
       ))}
     </View>
   );

@@ -1,5 +1,10 @@
 import { supportsDesktopPaneSplits } from "@/constants/layout";
 import { selectIsCompactFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
+import {
+  getGlobalExplorerOpen,
+  resolveExplorerSync,
+  setGlobalExplorerOpen,
+} from "@/stores/global-sidebars-store";
 import type { ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import {
   selectIsExplorerSidebarVisible,
@@ -62,6 +67,7 @@ export function openExplorerSidebarView(
   if (!input.workspaceKey) return;
   const store = useWorkspaceLayoutStore.getState();
   const paneId = store.showExplorerSidebar(input.workspaceKey);
+  setGlobalExplorerOpen(true);
   store.openTab({
     workspaceKey: input.workspaceKey,
     target: VIEW_TARGETS[input.view],
@@ -77,6 +83,7 @@ export function showExplorerSidebar(input: ExplorerSidebarInput): void {
   }
   if (input.workspaceKey && canUseExplorerSidebar(input)) {
     useWorkspaceLayoutStore.getState().showExplorerSidebar(input.workspaceKey);
+    setGlobalExplorerOpen(true);
   }
 }
 
@@ -87,7 +94,23 @@ export function hideExplorerSidebar(input: ExplorerSidebarInput): void {
   }
   if (input.workspaceKey && canUseExplorerSidebar(input)) {
     useWorkspaceLayoutStore.getState().hideExplorerSidebar(input.workspaceKey);
+    setGlobalExplorerOpen(false);
   }
+}
+
+/**
+ * When a workspace becomes the active route, make its explorer match the one remembered state
+ * (the user's last toggle anywhere). Writes the layout store directly, never the global value.
+ */
+export function syncExplorerSidebarToGlobal(input: ExplorerSidebarQuery): void {
+  if (!input.workspaceKey || !canUseExplorerSidebar(input)) return;
+  const action = resolveExplorerSync({
+    globalOpen: getGlobalExplorerOpen(),
+    layoutOpen: isExplorerSidebarOpen(input),
+  });
+  const layout = useWorkspaceLayoutStore.getState();
+  if (action === "show") layout.showExplorerSidebar(input.workspaceKey);
+  else if (action === "hide") layout.hideExplorerSidebar(input.workspaceKey);
 }
 
 export function toggleExplorerSidebar(input: ExplorerSidebarInput): void {

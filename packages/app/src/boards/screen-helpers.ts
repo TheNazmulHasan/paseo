@@ -438,3 +438,29 @@ export function orderBoardSwitcherTabIds(input: {
   }
   return ordered.slice(0, limit);
 }
+
+/**
+ * Where a pane's tab strip must scroll so the active chip is fully in view, or null when it
+ * already is. A chip wider than the strip lines up at its left edge.
+ */
+export function resolveActiveTabScrollX(input: {
+  scrollX: number;
+  viewportWidth: number;
+  tabX: number;
+  tabWidth: number;
+  inset?: number;
+}): number | null {
+  const { scrollX, viewportWidth, tabX, tabWidth, inset = 8 } = input;
+  if (viewportWidth <= 0 || tabWidth <= 0) {
+    return null;
+  }
+  const left = Math.max(0, tabX - inset);
+  const right = tabX + tabWidth + inset;
+  if (left < scrollX || right - left > viewportWidth) {
+    return left === scrollX ? null : left;
+  }
+  if (right > scrollX + viewportWidth) {
+    return right - viewportWidth;
+  }
+  return null;
+}
