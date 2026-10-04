@@ -20,6 +20,7 @@ export type BoardKeyCommand =
   | { kind: "equalize" }
   | { kind: "focus-pane"; direction: BoardPaneDirection }
   | { kind: "close-tab" }
+  | { kind: "copy-id" }
   | { kind: "new-agent" }
   | { kind: "tab-relative"; delta: 1 | -1 }
   | { kind: "tab-index"; index: number };
@@ -41,6 +42,7 @@ export const BOARD_HANDLED_ACTION_IDS = [
   "workspace.pane.focus.up",
   "workspace.pane.focus.down",
   "workspace.tab.close-current",
+  "workspace.tab.copy-id",
   "workspace.tab.navigate-relative",
   "workspace.tab.navigate-index",
   "workspace.tab.target.agent",
@@ -79,6 +81,8 @@ export function resolveBoardKeyCommand(action: KeyboardActionDefinition): BoardK
       return { kind: "equalize" };
     case "workspace.tab.close-current":
       return { kind: "close-tab" };
+    case "workspace.tab.copy-id":
+      return { kind: "copy-id" };
     case "workspace.tab.target.agent":
       return { kind: "new-agent" };
     case "workspace.tab.navigate-relative":
@@ -88,6 +92,14 @@ export function resolveBoardKeyCommand(action: KeyboardActionDefinition): BoardK
     default:
       return null;
   }
+}
+
+/** The full agent id behind a board tab; null for a file tab or an unknown tab. */
+export function resolveBoardTabAgentId(
+  origins: Record<string, BoardTabOrigin>,
+  tabId: string | null,
+): string | null {
+  return (tabId ? origins[tabId]?.agentId : undefined) ?? null;
 }
 
 export function buildBoardRoute(boardId: string): string {

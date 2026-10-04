@@ -16,6 +16,7 @@ import {
   resolveBoardGroupFlex,
   resolveBoardGroupSizes,
   resolveBoardKeyCommand,
+  resolveBoardTabAgentId,
   resolveBoardViewport,
   resolveBoardPaneDropPosition,
   resolveFocusedPaneOrigin,
@@ -61,6 +62,7 @@ describe("resolveBoardKeyCommand", () => {
       "workspace.pane.focus.up": { id: "workspace.pane.focus.up", scope },
       "workspace.pane.focus.down": { id: "workspace.pane.focus.down", scope },
       "workspace.tab.close.current": { id: "workspace.tab.close-current", scope },
+      "workspace.tab.copy.id": { id: "workspace.tab.copy-id", scope },
       "workspace.tab.navigate.relative": { id: "workspace.tab.navigate-relative", scope, delta: 1 },
       "workspace.tab.navigate.index": { id: "workspace.tab.navigate-index", scope, index: 2 },
       "workspace.tab.target.agent": { id: "workspace.tab.target.agent", scope },
@@ -98,6 +100,9 @@ describe("resolveBoardKeyCommand", () => {
       kind: "focus-pane",
       direction: "up",
     });
+    expect(resolveBoardKeyCommand({ id: "workspace.tab.copy-id", scope })).toEqual({
+      kind: "copy-id",
+    });
     expect(resolveBoardKeyCommand({ id: "workspace.tab.close-current", scope })).toEqual({
       kind: "close-tab",
     });
@@ -115,6 +120,23 @@ describe("resolveBoardKeyCommand", () => {
   it("ignores actions a board does not own", () => {
     expect(resolveBoardKeyCommand({ id: "workspace.terminal.new", scope })).toBeNull();
     expect(resolveBoardKeyCommand({ id: "workspace.arrange.menu", scope })).toBeNull();
+  });
+});
+
+describe("resolveBoardTabAgentId", () => {
+  const origins: Record<string, BoardTabOrigin> = {
+    "agent-tab": { serverId: "s", workspaceId: "w", agentId: "full-agent-id" },
+    "file-tab": { serverId: "s", workspaceId: "w", path: "/a.ts" },
+  };
+
+  it("returns the full agent id of an agent tab", () => {
+    expect(resolveBoardTabAgentId(origins, "agent-tab")).toBe("full-agent-id");
+  });
+
+  it("returns null for a file tab, an unknown tab, or no tab", () => {
+    expect(resolveBoardTabAgentId(origins, "file-tab")).toBeNull();
+    expect(resolveBoardTabAgentId(origins, "nope")).toBeNull();
+    expect(resolveBoardTabAgentId(origins, null)).toBeNull();
   });
 });
 

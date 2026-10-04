@@ -609,6 +609,22 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
 
+  // --- Copy the current session's id (fork mod #13 follow-up: works in Views too) ---
+  // No help row on purpose: it is reached by the tab menu and the hover card, and this binding
+  // exists so keybindings.json can rebind it (the file only accepts actions that have a binding).
+  {
+    id: "workspace-tab-copy-id-cmd-shift-i-mac",
+    action: "workspace.tab.copy.id",
+    combo: "Cmd+Shift+I",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-tab-copy-id-ctrl-alt-shift-i-non-mac",
+    action: "workspace.tab.copy.id",
+    combo: "Ctrl+Alt+Shift+I",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+  },
+
   // --- Workspace index jump ---
   {
     id: "workspace-navigate-index-cmd-digit-mac",

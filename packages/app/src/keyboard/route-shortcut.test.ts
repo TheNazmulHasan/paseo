@@ -502,6 +502,22 @@ describe("routeKeyboardShortcut — board routes (fork mod #13)", () => {
     });
   });
 
+  it("routes copy-id to the board with the dispatcher's copy-id id, and plainly on a workspace", () => {
+    expect(
+      routeKeyboardShortcut({ action: "workspace.tab.copy.id", payload: null }, boardCtx()),
+    ).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      boardId: "abc",
+      action: { id: "workspace.tab.copy-id", scope: "workspace" },
+    });
+    expect(
+      routeKeyboardShortcut({ action: "workspace.tab.copy.id", payload: null }, makeCtx()),
+    ).toEqual<ShortcutAction>({
+      kind: "dispatch",
+      action: { id: "workspace.tab.copy-id", scope: "workspace" },
+    });
+  });
+
   it("delivers tab navigation to the board handler with its payload, as a workspace would", () => {
     expect(
       routeKeyboardShortcut(

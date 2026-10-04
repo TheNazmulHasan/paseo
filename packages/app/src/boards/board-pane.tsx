@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   Pressable,
   ScrollView,
@@ -10,9 +10,16 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink, Plus, X } from "lucide-react-native";
 import { BoardPaneDragHandle, BoardPaneDropOverlay } from "@/boards/board-pane-dnd";
+import {
+  boardTabContextMenuTestId,
+  buildBoardTabMenuEntries,
+  resolveBoardTabsToClose,
+  type BoardTabCloseScope,
+} from "@/boards/board-tab-menu";
 import {
   fallbackBoardWorkspaceIdentity,
   type BoardWorkspaceIdentity,
@@ -22,12 +29,24 @@ import { boardWorkspaceKey, resolveActiveTabScrollX } from "@/boards/screen-help
 import type { BoardTabOrigin } from "@/boards/types";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { shouldFocusPaneFromEventTarget } from "@/components/split-container-pane-focus";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { buttonControlHeight } from "@/components/ui/control-geometry";
 import { iconButtonChromeStyle, mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import { useAgentTabActions } from "@/hooks/use-agent-tab-actions";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
+import { AgentTabTooltipBody } from "@/screens/workspace/agent-tab-tooltip-body";
+import { TabContextMenuItem } from "@/screens/workspace/workspace-desktop-tabs-row";
+import { WorkspaceTabRenameModal } from "@/screens/workspace/use-workspace-tab-rename";
 import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-state";
 import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import { WorkspacePanelHost } from "@/screens/workspace/workspace-panel-host";
@@ -36,6 +55,7 @@ import {
   WorkspaceTabPresentationResolver,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
+import type { WorkspaceTabMenuLabels } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SplitPane } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
@@ -101,31 +121,84 @@ interface BoardTabChipProps {
   identity: BoardWorkspaceIdentity;
   isActive: boolean;
   isPaneFocused: boolean;
+  /** Position in the pane's tab strip; the right-click menu disables "close to the left" etc. from it. */
+  index: number;
+  tabCount: number;
   onSelectTab: (paneId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
+  onCloseTabs: (tabId: string, scope: BoardTabCloseScope) => void;
+  onRenameTab: (tab: WorkspaceTabDescriptor, origin: BoardTabOrigin) => void;
 }
 
 interface BoardTabChipBodyProps extends BoardTabChipProps {
   presentation: WorkspaceTabPresentation;
 }
 
+function useBoardTabMenuLabels(): WorkspaceTabMenuLabels {
+  const { t } = useTranslation();
+  return useMemo(
+    () => ({
+      copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
+      copyAgentId: t("workspace.tabs.menu.copyAgentId"),
+      copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
+      copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+      rename: t("workspace.tabs.menu.rename"),
+      closeAbove: t("workspace.tabs.menu.closeAbove"),
+      closeBelow: t("workspace.tabs.menu.closeBelow"),
+      closeLeft: t("workspace.tabs.menu.closeLeft"),
+      closeRight: t("workspace.tabs.menu.closeRight"),
+      closeOthers: t("workspace.tabs.menu.closeOthers"),
+      reloadAgent: t("workspace.tabs.menu.reloadAgent"),
+      reloadAgentTooltip: t("workspace.tabs.menu.reloadAgentTooltip"),
+      close: t("workspace.tabs.menu.close"),
+    }),
+    [t],
+  );
+}
+
 function BoardTabChipBody({
   paneId,
   tab,
+  origin,
   identity,
   isActive,
   isPaneFocused,
+  index,
+  tabCount,
   presentation,
   onSelectTab,
   onCloseTab,
+  onCloseTabs,
+  onRenameTab,
 }: BoardTabChipBodyProps) {
   const { t } = useTranslation();
   const { label } = presentation;
+  const menuLabels = useBoardTabMenuLabels();
+  const actions = useAgentTabActions(origin.serverId);
   const handleSelect = useCallback(
     () => onSelectTab(paneId, tab.tabId),
     [onSelectTab, paneId, tab.tabId],
   );
   const handleClose = useCallback(() => onCloseTab(tab.tabId), [onCloseTab, tab.tabId]);
+  const menuEntries = useMemo(
+    () =>
+      buildBoardTabMenuEntries({
+        tab,
+        index,
+        tabCount,
+        labels: menuLabels,
+        onCopyResumeCommand: actions.copyResumeCommand,
+        onCopyAgentId: actions.copyAgentId,
+        onCopyFilePath: actions.copyFilePath,
+        onReloadAgent: actions.reloadAgent,
+        onRenameTab: (renamed) => onRenameTab(renamed, origin),
+        onCloseTab,
+        onCloseTabsBefore: (tabId) => onCloseTabs(tabId, "before"),
+        onCloseTabsAfter: (tabId) => onCloseTabs(tabId, "after"),
+        onCloseOtherTabs: (tabId) => onCloseTabs(tabId, "others"),
+      }),
+    [actions, index, menuLabels, onCloseTab, onCloseTabs, onRenameTab, origin, tab, tabCount],
+  );
   const chipStyle = useMemo(() => {
     if (!isActive) {
       return [styles.tab];
@@ -143,48 +216,87 @@ function BoardTabChipBody({
     ],
     [isActive],
   );
+  const agentId = tab.target.kind === "agent" ? tab.target.agentId : null;
 
   return (
-    <View style={chipStyle} testID={`board-tab-${tab.tabId}`}>
-      <Pressable
-        onPress={handleSelect}
-        style={selectStyle}
-        accessibilityRole="button"
-        accessibilityState={isActive ? SELECTED_STATE : UNSELECTED_STATE}
-        accessibilityLabel={label}
+    <ContextMenu>
+      <ContextMenuTrigger contextOnly style={chipStyle} testID={`board-tab-${tab.tabId}`}>
+        <Tooltip
+          delayDuration={400}
+          enabledOnDesktop
+          enabledOnMobile={false}
+          interactive={agentId !== null}
+        >
+          <TooltipTrigger asChild triggerRefProp="ref">
+            <Pressable
+              onPress={handleSelect}
+              style={selectStyle}
+              accessibilityRole="button"
+              accessibilityState={isActive ? SELECTED_STATE : UNSELECTED_STATE}
+              accessibilityLabel={label}
+            >
+              {tab.kind === "file" ? (
+                // A file has no project of its own: it shows the file-type icon the workspace strip uses.
+                <WorkspaceTabIcon
+                  presentation={presentation}
+                  active={isActive}
+                  size={PROJECT_ICON_SIZE}
+                  backdrop={isActive ? "surface2" : "surface0"}
+                />
+              ) : (
+                <ProjectIconView
+                  iconDataUri={identity.iconDataUri}
+                  initial={identity.initial}
+                  projectViewKey={identity.projectViewKey}
+                  size={PROJECT_ICON_SIZE}
+                  textStyle={styles.projectIconText}
+                />
+              )}
+              <Text style={labelStyle} numberOfLines={1}>
+                {label}
+              </Text>
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent
+            side="bottom"
+            align="center"
+            offset={8}
+            maxWidth={720}
+            testID={`board-tab-tooltip-${tab.tabId}`}
+          >
+            {agentId !== null ? (
+              <AgentTabTooltipBody serverId={origin.serverId} agentId={agentId} title={label} />
+            ) : (
+              <Text style={styles.tooltipText}>{label}</Text>
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <BoardIconButton
+          label={t("boards.screen.closeTab")}
+          onPress={handleClose}
+          testID={`board-tab-close-${tab.tabId}`}
+        >
+          <ThemedX size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
+        </BoardIconButton>
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        align="start"
+        width={BOARD_TAB_MENU_WIDTH}
+        testID={boardTabContextMenuTestId(tab.tabId)}
       >
-        {tab.kind === "file" ? (
-          // A file has no project of its own: it shows the file-type icon the workspace strip uses.
-          <WorkspaceTabIcon
-            presentation={presentation}
-            active={isActive}
-            size={PROJECT_ICON_SIZE}
-            backdrop={isActive ? "surface2" : "surface0"}
-          />
-        ) : (
-          <ProjectIconView
-            iconDataUri={identity.iconDataUri}
-            initial={identity.initial}
-            projectViewKey={identity.projectViewKey}
-            size={PROJECT_ICON_SIZE}
-            textStyle={styles.projectIconText}
-          />
+        {menuEntries.map((entry) =>
+          entry.kind === "separator" ? (
+            <ContextMenuSeparator key={entry.key} />
+          ) : (
+            <TabContextMenuItem key={entry.key} entry={entry} />
+          ),
         )}
-        <Text style={labelStyle} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
-      <BoardIconButton
-        label={t("boards.screen.closeTab")}
-        onPress={handleClose}
-        testID={`board-tab-close-${tab.tabId}`}
-      >
-        <ThemedX size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
-      </BoardIconButton>
-    </View>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
+const BOARD_TAB_MENU_WIDTH = 220;
 const DISABLED_STATE = { disabled: true } as const;
 const SELECTED_STATE = { selected: true } as const;
 const UNSELECTED_STATE = { selected: false } as const;
@@ -205,6 +317,43 @@ function BoardTabChip(props: BoardTabChipProps) {
     >
       {renderBody}
     </WorkspaceTabPresentationResolver>
+  );
+}
+
+interface BoardRenamingAgent {
+  serverId: string;
+  agentId: string;
+  currentTitle: string;
+}
+
+/** The rename dialog of a view tab: a session on any host, so it talks to that tab's own host. */
+function BoardAgentRenameModal({
+  renaming,
+  onClose,
+}: {
+  renaming: BoardRenamingAgent;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const client = useHostRuntimeClient(renaming.serverId);
+  const queryClient = useQueryClient();
+  const renamingTab = useMemo(
+    () => ({ kind: "agent" as const, id: renaming.agentId, currentTitle: renaming.currentTitle }),
+    [renaming.agentId, renaming.currentTitle],
+  );
+  const handleSubmit = useCallback(
+    async (nextTitle: string) => {
+      if (!client) {
+        throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      await client.updateAgent(renaming.agentId, { name: nextTitle.trim() });
+      void queryClient.invalidateQueries({ queryKey: ["sidebarAgentsList", renaming.serverId] });
+      void queryClient.invalidateQueries({ queryKey: ["allAgents", renaming.serverId] });
+    },
+    [client, queryClient, renaming.agentId, renaming.serverId, t],
+  );
+  return (
+    <WorkspaceTabRenameModal renamingTab={renamingTab} onClose={onClose} onSubmit={handleSubmit} />
   );
 }
 
@@ -346,6 +495,26 @@ export const BoardPane = memo(function BoardPane({
     }
   }, [activeOrigin, onOpenInWorkspace]);
 
+  const paneTabIds = useMemo(() => paneTabs.map((tab) => tab.tabId), [paneTabs]);
+  const handleCloseTabs = useCallback(
+    (tabId: string, scope: BoardTabCloseScope) => {
+      for (const id of resolveBoardTabsToClose(paneTabIds, tabId, scope)) {
+        onCloseTab(id);
+      }
+    },
+    [onCloseTab, paneTabIds],
+  );
+  const [renaming, setRenaming] = useState<BoardRenamingAgent | null>(null);
+  const handleRenameTab = useCallback((tab: WorkspaceTabDescriptor, origin: BoardTabOrigin) => {
+    if (tab.target.kind !== "agent") {
+      return;
+    }
+    const { agentId } = tab.target;
+    const agent = useSessionStore.getState().sessions[origin.serverId]?.agents?.get(agentId);
+    setRenaming({ serverId: origin.serverId, agentId, currentTitle: agent?.title ?? "" });
+  }, []);
+  const handleRenameClose = useCallback(() => setRenaming(null), []);
+
   const handleNewAgent = useCallback(() => onNewAgent(paneId), [onNewAgent, paneId]);
   const handleRemoveWorkspace = useCallback(
     () => onRemoveWorkspace?.(paneId),
@@ -454,7 +623,7 @@ export const BoardPane = memo(function BoardPane({
             onScroll={handleStripScroll}
             scrollEventThrottle={16}
           >
-            {paneTabs.map((tab) => {
+            {paneTabs.map((tab, index) => {
               const origin = origins[tab.tabId];
               if (!origin) {
                 return null;
@@ -471,8 +640,12 @@ export const BoardPane = memo(function BoardPane({
                     }
                     isActive={tab.tabId === activeTab?.tabId}
                     isPaneFocused={isFocused && isScreenFocused}
+                    index={index}
+                    tabCount={paneTabs.length}
                     onSelectTab={onSelectTab}
                     onCloseTab={onCloseTab}
+                    onCloseTabs={handleCloseTabs}
+                    onRenameTab={handleRenameTab}
                   />
                 </BoardTabChipSlot>
               );
@@ -507,6 +680,9 @@ export const BoardPane = memo(function BoardPane({
           )}
         </View>
         {dragEnabled ? <BoardPaneDropOverlay paneId={paneId} /> : null}
+        {renaming ? (
+          <BoardAgentRenameModal renaming={renaming} onClose={handleRenameClose} />
+        ) : null}
       </View>
     </RenderProfile>
   );

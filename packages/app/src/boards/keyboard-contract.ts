@@ -16,6 +16,8 @@ export const BOARD_ROUTED_ACTION_IDS = [
   "workspace.pane.focus.up",
   "workspace.pane.focus.down",
   "workspace.tab.close.current",
+  // Copies the focused pane's session id (Views have no workspace handler of their own).
+  "workspace.tab.copy.id",
   // Next/previous and nth tab act inside the focused pane (one workspace in a split view).
   "workspace.tab.navigate.relative",
   "workspace.tab.navigate.index",

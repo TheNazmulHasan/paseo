@@ -16,6 +16,7 @@ import {
   findBoardPane,
   resolveAdjacentBoardPaneId,
   resolveBoardKeyCommand,
+  resolveBoardTabAgentId,
   resolveIndexedTabId,
   resolvePaneActiveTabId,
   resolveRelativeTabId,
@@ -23,6 +24,7 @@ import {
 } from "@/boards/screen-helpers";
 import type { Board } from "@/boards/types";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+import { useCopyAgentId } from "@/hooks/use-agent-tab-actions";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 
 /** Same priority a workspace's own handlers use; only one of the two screens is ever focused. */
@@ -38,10 +40,12 @@ interface UseBoardKeyboardInput {
 /**
  * Registers the one handler that serves every action the keyboard router sends to a board route
  * (BOARD_ROUTED_ACTION_IDS): arrange presets, restore, equalize, pane focus, new agent (draft in the
- * focused pane), close tab, and next/previous/nth tab inside the focused pane.
+ * focused pane), close tab, copy the focused session's id, and next/previous/nth tab inside the
+ * focused pane.
  */
 export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboardInput) {
   const boardId = board.id;
+  const copyAgentId = useCopyAgentId();
   const handle = useCallback(
     (action: KeyboardActionDefinition): boolean => {
       const command = resolveBoardKeyCommand(action);
@@ -88,6 +92,10 @@ export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboa
             removeBoardTab(boardId, activeTabId);
           }
           return true;
+        case "copy-id": {
+          void copyAgentId(resolveBoardTabAgentId(board.origins, activeTabId));
+          return true;
+        }
         case "tab-relative":
         case "tab-index": {
           if (!focusedPane) {
@@ -111,6 +119,7 @@ export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboa
       board.layout.root,
       board.origins,
       boardId,
+      copyAgentId,
       getViewport,
     ],
   );
