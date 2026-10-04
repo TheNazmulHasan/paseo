@@ -5,6 +5,7 @@ import { useLiveBoardSync } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { goBackFromBoard } from "@/boards/navigation";
 import { openSplitPicker } from "@/boards/split-picker-store";
+import { useSplitBoardSync } from "@/boards/split-sync";
 import { WorkspacePicker } from "@/boards/workspace-picker";
 import { useBoardsCommandCenterActions } from "@/command-center/boards-registration";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -14,12 +15,14 @@ const SPLIT_ACTIONS: readonly KeyboardActionId[] = ["workspace.board.split"];
 
 /**
  * Everything Boards needs mounted once at app level (fork mod #13): the Live view keeps itself in
- * step with running agents, Ctrl+Cmd+O and the Command Center open the split picker (on a view
- * the same key goes back to the workspace instead, Esc being the agents'), and the Command
- * Center lists the views. One element in the root layout instead of four.
+ * step with running agents, split views keep in step with their workspaces' tabs, Ctrl+Cmd+O and
+ * the Command Center open the split picker (on a view the same key goes back to the workspace
+ * instead, Esc being the agents'), and the Command Center lists the views. One element in the
+ * root layout instead of four.
  */
 export function BoardsHost() {
   useLiveBoardSync();
+  useSplitBoardSync();
   useBoardsCommandCenterActions();
   const pathname = usePathname();
   // Follow the route, so a view always knows where it came from.

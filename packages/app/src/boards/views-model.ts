@@ -26,3 +26,33 @@ export function showRowActions(input: {
 }): boolean {
   return input.active || input.hovered || !input.canHover;
 }
+
+/**
+ * One inline rename, from open to settled. Enter and clicking away both save, Escape cancels,
+ * and whichever comes first wins: Enter blurs the input a moment later, and an unmounting input
+ * can blur too, so a second event must never undo or repeat the first. Saving what is in the box
+ * (even unchanged) is the caller's call; `resolveRename` decides whether it says anything new.
+ */
+export function createRenameSession(input: {
+  initialValue: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  let draft = input.initialValue;
+  let settled = false;
+  const settle = (action: () => void) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    action();
+  };
+  return {
+    change: (text: string) => {
+      draft = text;
+    },
+    submit: () => settle(() => input.onCommit(draft)),
+    blur: () => settle(() => input.onCommit(draft)),
+    cancel: () => settle(input.onCancel),
+  };
+}

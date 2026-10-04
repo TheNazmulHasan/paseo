@@ -33,6 +33,7 @@ import {
   type BoardSplitGroup,
   type BoardSplitLayout,
 } from "@/boards/model";
+import { closeSessionInWorkspace, rememberWorkspaceTabs } from "@/boards/split-sync";
 import {
   LIVE_BOARD_ID,
   type Board,
@@ -152,8 +153,17 @@ export function addSessionsToBoard(boardId: string, sessions: readonly BoardSess
   return addedTabIds.length;
 }
 
+/**
+ * Closes a tab in the view. On a split view the tab closes in its workspace too (the two stay
+ * in step both ways; see split-sync.ts). The Live view only drops its own tab.
+ */
 export function removeBoardTab(boardId: string, tabId: string): void {
-  updateBoard(boardId, (board) => removeTabFromBoard(board, tabId));
+  const board = readBoard(boardId);
+  const origin = board?.origins[tabId];
+  updateBoard(boardId, (current) => removeTabFromBoard(current, tabId));
+  if (board?.kind === "user" && origin) {
+    closeSessionInWorkspace(origin);
+  }
 }
 
 export function focusBoardPane(boardId: string, paneId: string): void {
@@ -232,7 +242,21 @@ export function openDraftInPane(boardId: string, paneId: string): string | null 
 
 /** Swaps a tab's target in place (a draft that became an agent), keeping its id and slot. */
 export function retargetBoardTab(boardId: string, tabId: string, target: WorkspaceTabTarget): void {
-  updateBoard(boardId, (board) => retargetBoardTabModel(board, tabId, target));
+  updateBoard(boardId, (board) => {
+    const origin = board.origins[tabId];
+    // The workspace may announce the new agent (split-sync appends it) before the draft is
+    // retargeted. The draft keeps the user's place; the appended twin goes.
+    const twinTabId =
+      origin && target.kind === "agent"
+        ? findBoardTabId(board, { ...origin, agentId: target.agentId })
+        : null;
+    if (!twinTabId || twinTabId === tabId) {
+      return retargetBoardTabModel(board, tabId, target);
+    }
+    const retargeted = retargetBoardTabModel(removeTabFromBoard(board, twinTabId), tabId, target);
+    const pane = findPaneContainingTab(retargeted.layout.root, tabId);
+    return pane ? selectBoardTabModel(retargeted, pane.id, tabId) : retargeted;
+  });
 }
 
 export function setBoardExplorerOpen(boardId: string, open: boolean): void {
@@ -488,6 +512,7 @@ export function splitWorkspaces(input: {
     };
     boardStore().putBoard(board);
     boardStore().setSplitPair(setKey, board.id);
+    refs.forEach(rememberWorkspaceTabs);
     return board.id;
   }
 
@@ -510,6 +535,7 @@ export function splitWorkspaces(input: {
   boardStore().putBoard(next);
   // The layout was rebuilt, so a restore point from before would describe another arrangement.
   boardStore().patchArrange(existing.id, { snapshot: null, lastPreset: null });
+  refs.forEach(rememberWorkspaceTabs);
   return existing.id;
 }
 
@@ -567,6 +593,7 @@ export function addWorkspacesToBoard(
   }
   boardStore().putBoard(added.board);
   rememberSplitSet(added.board);
+  refs.forEach(rememberWorkspaceTabs);
   // The snapshot stays (Restore reconciles it with the new panes); the preset no longer
   // describes the layout, so pressing it again re-arranges instead of restoring.
   boardStore().patchArrange(boardId, { lastPreset: null });

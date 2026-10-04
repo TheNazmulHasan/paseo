@@ -1052,3 +1052,95 @@ export function retargetBoardTabModel(
     origins: { ...board.origins, [tabId]: nextOrigin },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Following a workspace live (split views)
+// ---------------------------------------------------------------------------
+
+function workspaceKeyOf(origin: Pick<BoardTabOrigin, "serverId" | "workspaceId">): string {
+  return `${origin.serverId}\n${origin.workspaceId}`;
+}
+
+/** The pane that holds most of a workspace's tabs (first in tree order on a tie), or null. */
+function findWorkspacePane(board: Board, workspace: WorkspaceRef): PaneWithTabs | null {
+  const wanted = workspaceKeyOf(workspace);
+  let best: PaneWithTabs | null = null;
+  let bestCount = 0;
+  for (const node of collectPaneNodes(board.layout.root as NodeWithTabs)) {
+    if (node.kind !== "pane") {
+      continue;
+    }
+    const count = node.pane.tabIds.filter((tabId) => {
+      const origin = board.origins[tabId];
+      return origin ? workspaceKeyOf(origin) === wanted : false;
+    }).length;
+    if (count > bestCount) {
+      best = node.pane;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * A session the workspace just gained: appended to the end of that workspace's pane and made
+ * the pane's active tab. The board's focused pane does not move (the user may be typing in
+ * another one) and every existing tab keeps its id, so open panels do not remount. Null when
+ * the session is already on the board or the board has no pane for that workspace.
+ */
+export function appendSessionToWorkspacePane(
+  board: Board,
+  session: BoardSessionRef,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  const key = boardSessionKey(session);
+  if (Object.values(board.origins).some((origin) => boardSessionKey(origin) === key)) {
+    return null;
+  }
+  const pane = findWorkspacePane(board, session);
+  if (!pane) {
+    return null;
+  }
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: boardTabTarget(session),
+    createdAt: ids.now(),
+  };
+  const root = updatePane(board.layout.root as NodeWithTabs, pane.id, (current) =>
+    makePane(current.id, [...current.tabs, tab], tab.tabId),
+  );
+  return {
+    ...board,
+    origins: { ...board.origins, [tab.tabId]: originOf(session) },
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+  };
+}
+
+/**
+ * Closes the board's tab for a session the workspace no longer has. Only a tab that belongs to
+ * that workspace counts, and a draft (no agent, no file) is never one. Same board when absent.
+ */
+export function removeSessionFromBoard(board: Board, session: BoardSessionRef): Board {
+  const key = boardSessionKey(session);
+  const wanted = workspaceKeyOf(session);
+  for (const [tabId, origin] of Object.entries(board.origins)) {
+    if (
+      (origin.agentId !== undefined || origin.path !== undefined) &&
+      boardSessionKey(origin) === key &&
+      workspaceKeyOf(origin) === wanted
+    ) {
+      return removeTabFromBoard(board, tabId);
+    }
+  }
+  return board;
+}
+
+/** Whether the session has a tab on the board (a draft never counts). */
+export function boardHasSession(board: Board, session: BoardSessionRef): boolean {
+  const key = boardSessionKey(session);
+  return Object.values(board.origins).some(
+    (origin) =>
+      (origin.agentId !== undefined || origin.path !== undefined) &&
+      boardSessionKey(origin) === key,
+  );
+}

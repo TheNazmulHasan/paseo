@@ -1,14 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { usePathname } from "expo-router";
 import { useTranslation } from "react-i18next";
-import {
-  Pressable,
-  Text,
-  View,
-  type NativeSyntheticEvent,
-  type PressableStateCallbackType,
-  type TextInputKeyPressEventData,
-} from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   ChevronDown,
@@ -18,7 +11,6 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react-native";
-import { AdaptiveTextInput } from "@/components/adaptive-text-input";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { DeskIconButton } from "@/desk/desk-icon-button";
@@ -27,6 +19,7 @@ import { deleteBoard, renameBoard, useBoards } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { navigateToBoard } from "@/boards/navigation";
 import { useViewsSidebarStore } from "@/boards/sidebar-store";
+import { ViewRenameField } from "@/boards/view-rename-field";
 import { openSplitPicker } from "@/boards/split-picker-store";
 import { LIVE_BOARD_ID, type BoardSummary } from "@/boards/types";
 import { isViewActive, orderViewRows, resolveRename, showRowActions } from "@/boards/views-model";
@@ -49,43 +42,6 @@ interface ViewRowProps {
   onCancelRename: () => void;
   onCommitRename: (boardId: string, name: string) => void;
   onDelete: (board: BoardSummary) => void;
-}
-
-function RenameField({
-  initialValue,
-  onCommit,
-  onCancel,
-}: {
-  initialValue: string;
-  onCommit: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(initialValue);
-  const handleSubmit = useCallback(() => onCommit(draft), [draft, onCommit]);
-  const handleKeyPress = useCallback(
-    (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-      if (event.nativeEvent.key === "Escape") {
-        onCancel();
-      }
-    },
-    [onCancel],
-  );
-  return (
-    <AdaptiveTextInput
-      autoFocus
-      initialValue={initialValue}
-      onChangeText={setDraft}
-      onSubmitEditing={handleSubmit}
-      onBlur={onCancel}
-      onKeyPress={handleKeyPress}
-      placeholder={t("boards.sidebar.namePlaceholder")}
-      autoCapitalize="none"
-      autoCorrect={false}
-      style={styles.renameInput}
-      testID="sidebar-view-rename-input"
-    />
-  );
 }
 
 const ViewRow = memo(function ViewRow({
@@ -121,6 +77,27 @@ const ViewRow = memo(function ViewRow({
   const accessibilityState = useMemo(() => ({ selected: active }), [active]);
   const label = isLive ? t("boards.sidebar.live") : board.name;
 
+  if (editing && !isLive) {
+    // Not a Pressable while renaming: inside the pressable row a click in the box also opened
+    // the view (and its panes took the focus), and the box lost what was typed.
+    return (
+      <View
+        style={[styles.row, active && styles.rowActive]}
+        testID={`sidebar-view-row-${board.id}`}
+      >
+        <ThemedLayoutGrid size={ROW_ICON_SIZE} uniProps={foregroundMutedColorMapping} />
+        <View style={styles.nameSlot}>
+          <ViewRenameField
+            initialValue={board.name}
+            placeholder={t("boards.sidebar.namePlaceholder")}
+            onCommit={handleCommit}
+            onCancel={onCancelRename}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <Pressable
       style={rowStyle}
@@ -137,27 +114,13 @@ const ViewRow = memo(function ViewRow({
           ) : (
             <ThemedLayoutGrid size={ROW_ICON_SIZE} uniProps={foregroundMutedColorMapping} />
           )}
-          {editing && !isLive ? (
-            <View style={styles.nameSlot}>
-              <RenameField
-                initialValue={board.name}
-                onCommit={handleCommit}
-                onCancel={onCancelRename}
-              />
-            </View>
-          ) : (
-            <Text style={styles.name} numberOfLines={1}>
-              {label}
-            </Text>
-          )}
-          {editing ? null : (
-            <Text style={styles.count} testID={`sidebar-view-count-${board.id}`}>
-              {board.sessionCount}
-            </Text>
-          )}
-          {!isLive &&
-          !editing &&
-          showRowActions({ active, hovered: Boolean(hovered), canHover }) ? (
+          <Text style={styles.name} numberOfLines={1}>
+            {label}
+          </Text>
+          <Text style={styles.count} testID={`sidebar-view-count-${board.id}`}>
+            {board.sessionCount}
+          </Text>
+          {!isLive && showRowActions({ active, hovered: Boolean(hovered), canHover }) ? (
             <View style={styles.rowActions}>
               <DeskIconButton
                 icon={Pencil}
@@ -347,15 +310,5 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-  },
-  renameInput: {
-    paddingVertical: 0,
-    paddingHorizontal: theme.spacing[1],
-    fontSize: theme.fontSize.base,
-    color: theme.colors.foreground,
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
   },
 }));
