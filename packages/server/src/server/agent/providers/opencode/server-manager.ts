@@ -11,7 +11,7 @@ import { spawnProcess, type SpawnProcessOptions } from "../../../../utils/spawn.
 import { terminateWithTreeKill, type ProcessTerminator } from "../../../../utils/tree-kill.js";
 import type { ManagedProcessRegistry } from "../../../managed-processes/managed-processes.js";
 import {
-  createProviderEnvSpec,
+  createProviderEnv,
   resolveProviderCommandPrefix,
   type ProviderRuntimeSettings,
 } from "../../provider-launch-config.js";
@@ -30,6 +30,7 @@ const OPENCODE_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5_000;
 const OPENCODE_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
 
 export interface OpenCodeServerAcquisition {
+  environment: Record<string, string>;
   server: { port: number; url: string };
   events: OpenCodeEventSource;
   release: () => Promise<void>;
@@ -45,6 +46,7 @@ export interface OpenCodeServerManagerLike {
 }
 
 export interface OpenCodeServerGeneration {
+  environment: Record<string, string>;
   process: ChildProcess;
   port: number;
   url: string;
@@ -220,6 +222,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     return {
       server: { port: server.port, url: server.url },
       events: server.events,
+      environment: server.environment,
       release: async () => {
         if (releasePromise) {
           return releasePromise;
@@ -338,20 +341,22 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       (typeof this.baseEnv?.OPENCODE_CONFIG_CONTENT === "string"
         ? this.baseEnv.OPENCODE_CONFIG_CONTENT
         : process.env.OPENCODE_CONFIG_CONTENT);
+    // Fork: the gateway decorator may be async (it resolves the CLIProxyAPI provider record).
     const bridgeEnv = this.decorateServerEnv
       ? await this.decorateServerEnv(
           existingConfigContent ? { OPENCODE_CONFIG_CONTENT: existingConfigContent } : {},
         )
       : undefined;
+    const environment = createProviderEnv({
+      baseEnv: this.baseEnv,
+      runtimeSettings: this.runtimeSettings,
+      overlays: [launchEnv, bridgeEnv],
+    });
     const serverProcess = this.spawnServerProcess(launchPrefix.command, serverArgs, {
       cwd: serverCwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
-      ...createProviderEnvSpec({
-        baseEnv: this.baseEnv,
-        runtimeSettings: this.runtimeSettings,
-        overlays: [launchEnv, bridgeEnv],
-      }),
+      baseEnv: environment,
     });
     const managedProcessRecord = this.recordManagedServerProcess({
       process: serverProcess,
@@ -363,14 +368,26 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     const processExit = new Promise<Error>((resolve) => {
       resolveProcessExit = resolve;
     });
+    let resolveListening!: () => void;
+    let rejectListening!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveListening = resolve;
+      rejectListening = reject;
+    });
     const server: OpenCodeServerGeneration = {
+      environment,
       process: serverProcess,
       port,
       url,
       refCount: 0,
       retired: false,
       ready: Promise.resolve(),
-      events: this.createEventSource({ serverUrl: url, processExit, logger: this.logger }),
+      events: this.createEventSource({
+        serverUrl: url,
+        processExit,
+        logger: this.logger,
+        listening: ready,
+      }),
       managedProcessRecord,
     };
     this.logger.info(
@@ -409,7 +426,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       return sections.join("\n");
     };
 
-    const ready = new Promise<void>((resolve, reject) => {
+    {
       let timeout: ReturnType<typeof setTimeout>;
       const failStartup = (error: Error) => {
         if (settled) {
@@ -417,7 +434,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
         }
         settled = true;
         clearTimeout(timeout);
-        reject(error);
+        rejectListening(error);
       };
       timeout = setTimeout(() => {
         if (!started) {
@@ -432,7 +449,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
           started = true;
           settled = true;
           clearTimeout(timeout);
-          resolve();
+          resolveListening();
         }
       });
 
@@ -468,7 +485,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
           }
         }
       });
-    });
+    }
 
     server.ready = ready.catch(async (error) => {
       await this.killServer(server);

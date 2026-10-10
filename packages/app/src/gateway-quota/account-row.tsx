@@ -5,11 +5,11 @@
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ModelProviderGlyph } from "@/components/model-browser";
-import { formatResetLabel } from "@/provider-usage/format";
-import { ProviderUsageWindowBar } from "@/provider-usage/window-bar";
+import { formatResetLabel } from "@/usage/format";
 import { ICON_SIZE } from "@/styles/theme";
 import { gatewayQuotaCopy } from "./copy";
 import type { GatewayQuotaAccount } from "./types";
+import { GatewayQuotaWindowBar } from "./window-bar";
 
 const ACCOUNT_ICON_IDS: Record<string, string> = {
   anthropic: "claude",
@@ -88,7 +88,7 @@ export function GatewayQuotaAccountRow({
       {windows.length > 0 ? (
         <View style={[styles.windows, compact && styles.windowsCompact]}>
           {windows.map((window) => (
-            <ProviderUsageWindowBar key={window.id} window={window} />
+            <GatewayQuotaWindowBar key={window.id} window={window} />
           ))}
         </View>
       ) : null}

@@ -2,8 +2,7 @@ import { Fragment } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { GatewayStatsSample } from "@getpaseo/protocol/messages";
-import { formatAgo } from "@/provider-usage/format";
-import { formatDuration, formatThroughput, gatewayStatsCopy } from "./copy";
+import { formatAgo, formatDuration, formatThroughput, gatewayStatsCopy } from "./copy";
 
 export interface StatsTableRow {
   label: string;
@@ -29,7 +28,7 @@ export function buildStatsTableRows(sample: GatewayStatsSample): StatsTableRow[]
     { label: gatewayStatsCopy.throughput, value: formatThroughput(sample.tps), measured: false },
   ];
   // The record's timestamp is validated on the daemon, so a missing age only
-  // drops a row rather than inventing copy — same handling as provider-usage/card.
+  // drops a row rather than inventing copy — same handling as the old provider-usage card.
   const servedAgo = formatAgo(sample.at);
   if (servedAgo) {
     rows.push({ label: gatewayStatsCopy.ran, value: servedAgo, measured: false });

@@ -1,6 +1,7 @@
 // Desk (fork mod #12): the working set between Pinned (permanent) and the Shelf (everything).
 // Everything here is pure so the sidebar projection, the store hook, the switcher and the tests
 // share one definition of "which workspace is where".
+import type { TFunction } from "i18next";
 import { buildStatusGroups, type StatusBucket } from "@/hooks/sidebar-status-view-model";
 import { sortSidebarWorkspacesByRecentActivity } from "@/hooks/sidebar-workspaces-view-model";
 import type {
@@ -274,6 +275,7 @@ export function buildDeskGroups(input: {
   rows: readonly SidebarWorkspaceEntry[];
   grouping: DeskGrouping;
   projectNamesByViewKey: Map<string, string>;
+  t: TFunction;
 }): DeskGroup[] {
   const { rows, grouping } = input;
   if (rows.length === 0) {
@@ -283,7 +285,7 @@ export function buildDeskGroups(input: {
     case "recent":
       return [{ key: "recent", label: null, bucket: null, rows: [...rows] }];
     case "status":
-      return buildStatusGroups([...rows], input.projectNamesByViewKey).map((group) => ({
+      return buildStatusGroups([...rows], input.projectNamesByViewKey, input.t).map((group) => ({
         key: group.bucket,
         label: group.label,
         bucket: group.bucket,

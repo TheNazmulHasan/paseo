@@ -314,6 +314,9 @@ export function Tooltip({
   }, [cancelPendingClose, cancelPendingOpen]);
 
   const isCompact = useIsCompactFormFactor();
+  const opensOnPress = isNative || isCompact;
+  // Fork: the mobile flag follows the compact breakpoint, not the platform, so a native tablet
+  // keeps desktop tooltips (opened by press).
   const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;
 
   const value = useMemo<TooltipContextValue>(
@@ -323,7 +326,7 @@ export function Tooltip({
       triggerRef,
       contentRef,
       enabled,
-      openOnPress: isCompact || isNative,
+      openOnPress: opensOnPress,
       interactive,
       scheduleOpen,
       cancelPendingOpen,
@@ -334,7 +337,7 @@ export function Tooltip({
       isOpen,
       setIsOpen,
       enabled,
-      isCompact,
+      opensOnPress,
       interactive,
       scheduleOpen,
       cancelPendingOpen,
@@ -594,6 +597,7 @@ export function TooltipContent({
       entering={FadeIn.duration(80)}
       exiting={FadeOut.duration(80)}
       collapsable={false}
+      role="tooltip"
       testID={testID}
       onLayout={handleLayout}
       style={contentStyle}
@@ -624,7 +628,7 @@ export function TooltipContent({
       statusBarTranslucent={Platform.OS === "android"}
       onRequestClose={handleDismiss}
     >
-      <Pressable style={styles.overlay} onPress={handleDismiss}>
+      <Pressable testID="tooltip-dismiss" style={styles.overlay} onPress={handleDismiss}>
         {surface}
       </Pressable>
     </Modal>

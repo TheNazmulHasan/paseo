@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, Pause, Play, Trash2 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { getProviderIcon } from "@/components/provider-icons";
+import { useProviderIcon } from "@/components/provider-icons";
 import { ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -193,10 +193,14 @@ function HeartbeatsTrackRow({
 
 function HeartbeatLeadingIcon({ row }: { row: HeartbeatRow }): ReactElement {
   if (row.kind === "provider") {
-    const Icon = getProviderIcon(row.provider);
-    return <Icon size={ROW_ICON_SIZE} color={styles.providerIcon.color} />;
+    return <HeartbeatProviderIcon provider={row.provider} />;
   }
   return <ThemedCalendarClock size={ROW_ICON_SIZE} uniProps={foregroundMutedColorMapping} />;
+}
+
+function HeartbeatProviderIcon({ provider }: { provider: string }): ReactElement {
+  const Icon = useProviderIcon(provider);
+  return <Icon size={ROW_ICON_SIZE} color={styles.providerIcon.color} />;
 }
 
 function HeartbeatRowActions({

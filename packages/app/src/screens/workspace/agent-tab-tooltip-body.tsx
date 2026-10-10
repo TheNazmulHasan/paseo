@@ -2,17 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useCopyAgentId } from "@/hooks/use-agent-tab-actions";
 import { useSessionStore } from "@/stores/session-store";
+import { formatCompactTimeAgoAsProse } from "@/utils/time";
 
 const COPIED_FEEDBACK_MS = 1200;
-
-export function formatAgentTooltipActivity(compactActivity: string): string {
-  if (compactActivity === "now") return "just now";
-  if (/^\d/.test(compactActivity)) return `${compactActivity} ago`;
-  return compactActivity;
-}
 
 /**
  * The hover card of an agent tab (workspace tabs and Views tabs): title, short id, last activity.
@@ -38,7 +33,7 @@ export function AgentTabTooltipBody({
     return state.agentLastActivity.get(agentId) ?? agent?.lastActivityAt ?? null;
   });
   const compactActivity = useCompactTimeAgo(lastActivityAt);
-  const activity = formatAgentTooltipActivity(compactActivity);
+  const activity = formatCompactTimeAgoAsProse(compactActivity);
 
   useEffect(
     () => () => {

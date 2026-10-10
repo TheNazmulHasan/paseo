@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { i18n } from "@/i18n/i18next";
 import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
@@ -162,13 +163,23 @@ describe("desk rows and grouping", () => {
   });
 
   it("Recent is one flat group with no header", () => {
-    const groups = buildDeskGroups({ rows, grouping: "recent", projectNamesByViewKey: names });
+    const groups = buildDeskGroups({
+      rows,
+      grouping: "recent",
+      projectNamesByViewKey: names,
+      t: i18n.t,
+    });
     expect(groups).toHaveLength(1);
     expect(groups[0]?.label).toBeNull();
   });
 
   it("Project groups by project, freshest project first, rows still recent-first", () => {
-    const groups = buildDeskGroups({ rows, grouping: "project", projectNamesByViewKey: names });
+    const groups = buildDeskGroups({
+      rows,
+      grouping: "project",
+      projectNamesByViewKey: names,
+      t: i18n.t,
+    });
     expect(groups.map((g) => [g.label, g.rows.map((r) => r.workspaceKey)])).toEqual([
       ["Beta", ["s:new"]],
       ["Alpha", ["s:mid", "s:old"]],
@@ -176,7 +187,12 @@ describe("desk rows and grouping", () => {
   });
 
   it("Status uses the sidebar's status groups", () => {
-    const groups = buildDeskGroups({ rows, grouping: "status", projectNamesByViewKey: names });
+    const groups = buildDeskGroups({
+      rows,
+      grouping: "status",
+      projectNamesByViewKey: names,
+      t: i18n.t,
+    });
     expect(groups.map((g) => g.bucket)).toEqual(["running", "done"]);
     expect(flattenDeskGroups(groups).map((r) => r.workspaceKey)).toEqual([
       "s:mid",
@@ -186,9 +202,9 @@ describe("desk rows and grouping", () => {
   });
 
   it("an empty Desk has no groups", () => {
-    expect(buildDeskGroups({ rows: [], grouping: "status", projectNamesByViewKey: names })).toEqual(
-      [],
-    );
+    expect(
+      buildDeskGroups({ rows: [], grouping: "status", projectNamesByViewKey: names, t: i18n.t }),
+    ).toEqual([]);
   });
 });
 

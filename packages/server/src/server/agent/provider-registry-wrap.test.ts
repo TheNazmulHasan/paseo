@@ -6,6 +6,9 @@ import type {
   AgentSession,
   AgentStreamEvent,
   AgentRuntimeInfo,
+  SteerActiveTurnOptions,
+  SteerResult,
+  ImportedTimelineEntry,
 } from "./agent-sdk-types.js";
 import { wrapSessionProvider } from "./provider-registry.js";
 
@@ -18,6 +21,7 @@ type OptionalAgentSessionMethodName = {
 }[keyof AgentSession];
 
 const OPTIONAL_AGENT_SESSION_METHOD_NAMES = [
+  "steerActiveTurn",
   "listCommands",
   "setModel",
   "setThinkingOption",
@@ -25,7 +29,6 @@ const OPTIONAL_AGENT_SESSION_METHOD_NAMES = [
   "revertConversation",
   "revertFiles",
   "revertBoth",
-  "steerActiveTurn",
   "tryHandleOutOfBand",
   "stopBackgroundTask",
   "readBackgroundTaskOutput",
@@ -60,8 +63,12 @@ const RUNTIME_INFO: AgentRuntimeInfo = {
 
 class FakeSession implements AgentSession {
   readonly provider = "claude";
-  readonly id = "session-1";
-  readonly capabilities = CAPABILITIES;
+  id = "session-1";
+  capabilities = CAPABILITIES;
+  initialTimeline: ImportedTimelineEntry[] = [
+    { item: { type: "assistant_message", id: "initial", text: "Provider setup" } },
+  ];
+  readonly steers: Array<{ prompt: AgentPromptInput; options: SteerActiveTurnOptions }> = [];
   readonly features = [];
   readonly recordedCalls: string[] = [];
 
@@ -73,6 +80,15 @@ class FakeSession implements AgentSession {
   async startTurn() {
     this.recordedCalls.push("startTurn");
     return { turnId: "turn-1" };
+  }
+
+  async steerActiveTurn(
+    prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    this.recordedCalls.push("steerActiveTurn");
+    this.steers.push({ prompt, options });
+    return { status: "accepted" };
   }
 
   subscribe(_callback: (event: AgentStreamEvent) => void) {
@@ -164,11 +180,6 @@ class FakeSession implements AgentSession {
     };
   }
 
-  async steerActiveTurn() {
-    this.recordedCalls.push("steerActiveTurn");
-    return { status: "accepted" as const };
-  }
-
   async stopBackgroundTask() {
     this.recordedCalls.push("stopBackgroundTask");
   }
@@ -195,6 +206,7 @@ describe("wrapSessionProvider", () => {
     const session = new FakeSession();
     const wrapped = wrapSessionProvider("custom-claude", session);
 
+    await wrapped.steerActiveTurn?.("follow-up", { expectedTurnId: "turn-1" });
     await wrapped.listCommands?.();
     await wrapped.setModel?.("sonnet");
     await wrapped.setThinkingOption?.("high");
@@ -204,12 +216,15 @@ describe("wrapSessionProvider", () => {
     await wrapped.revertBoth?.({ messageId: "message-1" });
     const handler = wrapped.tryHandleOutOfBand?.("/compact");
     await handler?.run({ emit: () => {} });
-    await wrapped.steerActiveTurn?.("nudge", { expectedTurnId: "turn-1" });
     await wrapped.stopBackgroundTask?.("task-1");
     await wrapped.readBackgroundTaskOutput?.({ outputFile: "/tmp/out" });
     await wrapped.resolveNativeForkUpToMessageId?.("msg_1");
 
+    expect(session.steers).toEqual([
+      { prompt: "follow-up", options: { expectedTurnId: "turn-1" } },
+    ]);
     expect(session.recordedCalls).toEqual([
+      "steerActiveTurn",
       "listCommands",
       "setModel",
       "setThinkingOption",
@@ -219,7 +234,6 @@ describe("wrapSessionProvider", () => {
       "revertBoth",
       "tryHandleOutOfBand",
       "tryHandleOutOfBand.run",
-      "steerActiveTurn",
       "stopBackgroundTask",
       "readBackgroundTaskOutput",
       "resolveNativeForkUpToMessageId",
@@ -235,5 +249,36 @@ describe("wrapSessionProvider", () => {
 
     await wrapped.steerActiveTurn?.("nudge", { expectedTurnId: "turn-1" });
     expect(session.recordedCalls).toEqual(["steerActiveTurn"]);
+  });
+
+  test("keeps provider-owned session values live", () => {
+    const session = new FakeSession();
+    const wrapped = wrapSessionProvider("custom-claude", session);
+    session.id = "session-2";
+    session.capabilities = { ...CAPABILITIES, supportsMcpServers: false };
+    expect(wrapped.id).toBe("session-2");
+    expect(wrapped.capabilities).toEqual(session.capabilities);
+    expect(wrapped.initialTimeline).toEqual(session.initialTimeline);
+  });
+
+  test("propagates steering failure without interrupting or replacing the turn", async () => {
+    const error = new Error("Provider steer transport failed");
+    class RejectingSession extends FakeSession {
+      override async steerActiveTurn(): Promise<SteerResult> {
+        throw error;
+      }
+    }
+    const session = new RejectingSession();
+    const wrapped = wrapSessionProvider("custom-claude", session);
+    await expect(wrapped.steerActiveTurn!("follow-up", { expectedTurnId: "turn-1" })).rejects.toBe(
+      error,
+    );
+    expect(session.recordedCalls).toEqual([]);
+  });
+
+  test("leaves steering unavailable when the provider has no implementation", () => {
+    const session: AgentSession = new FakeSession();
+    session.steerActiveTurn = undefined;
+    expect(wrapSessionProvider("custom-claude", session).steerActiveTurn).toBeUndefined();
   });
 });

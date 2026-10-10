@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
 import {
   splitPinnedSidebarGroups,
@@ -66,6 +67,7 @@ export interface SidebarProjectionInput {
   deskCollapsed?: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
+  t: TFunction;
 }
 
 export function buildSidebarProjection(input: SidebarProjectionInput): SidebarProjection {
@@ -90,6 +92,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     }),
     grouping: input.deskGrouping ?? "recent",
     projectNamesByViewKey: input.projectNamesByViewKey,
+    t: input.t,
   });
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(
@@ -145,7 +148,7 @@ function buildWorkspaceGroups(
       return [];
     case "status":
       return statusWorkspaceGroups(
-        buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey),
+        buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey, input.t),
       );
   }
 }

@@ -81,7 +81,7 @@ export function useFileLink(
         ? assistantFileLinkQueryKey({
             serverId,
             workspaceRoot,
-            ambiguousQuery: resolution.ambiguousQuery,
+            token: resolution.token,
           })
         : DISABLED_QUERY_KEY,
     [resolution, serverId, workspaceRoot],
@@ -228,7 +228,7 @@ function openAssistantFileLink(input: {
   const capturedQueryKey = assistantFileLinkQueryKey({
     serverId: capturedConfig.serverId,
     workspaceRoot: capturedConfig.workspaceRoot,
-    ambiguousQuery: capturedResolution.ambiguousQuery,
+    token: capturedResolution.token,
   });
 
   const run = async () => {
@@ -294,14 +294,9 @@ function useStableSource(source: AssistantFileLinkSource): AssistantFileLinkSour
 function assistantFileLinkQueryKey(input: {
   serverId?: string;
   workspaceRoot?: string;
-  ambiguousQuery: string;
+  token: string;
 }): AssistantFileLinkQueryKey {
-  return [
-    "assistantFileLink",
-    input.serverId ?? null,
-    input.workspaceRoot ?? null,
-    input.ambiguousQuery,
-  ];
+  return ["assistantFileLink", input.serverId ?? null, input.workspaceRoot ?? null, input.token];
 }
 
 async function dispatchResolvedLink(input: {

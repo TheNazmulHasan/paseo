@@ -19,9 +19,9 @@ describe("getBuiltInLaunchOrder", () => {
   it("leads with companion tools in a supporting pane", () => {
     expect(getBuiltInLaunchOrder("supporting")).toEqual([
       "changes",
+      "terminal",
       "diff",
       "files",
-      "terminal",
       "agent",
       "browser",
       "codeServer",

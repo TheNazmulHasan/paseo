@@ -37,6 +37,7 @@ interface FakeTheme {
     "4xl": number;
   };
   lineHeight: { diff: number };
+  contentMaxWidth: number;
   colors: {
     foreground: string;
     surfaceWorkspace: string;
@@ -61,6 +62,7 @@ function makeFakeTheme(): FakeTheme {
       "4xl": 26,
     },
     lineHeight: { diff: 22 },
+    contentMaxWidth: 820,
     colors: { foreground: "#ffffff", surfaceWorkspace: "#000000", syntax: {} },
   };
 }
@@ -73,6 +75,7 @@ function makeInput(overrides: Partial<AppearanceInput> = {}): AppearanceInput {
     contentFontSize: 15,
     contentTextTone: 100,
     codeFontSize: 12,
+    contentMaxWidth: 820,
     syntaxTheme: "one",
     ...overrides,
   };
@@ -106,6 +109,12 @@ describe("applyAppearance", () => {
       "darkPureBlack",
       ...ALL_THEME_KEYS.filter((key) => key !== "darkPureBlack"),
     ]);
+  });
+
+  it("patches the content max width into the theme", () => {
+    applyAppearance(makeInput({ contentMaxWidth: 1600 }));
+
+    expect(runCapturedUpdater().contentMaxWidth).toBe(1600);
   });
 
   it("resolves an empty UI font family to the default stack", () => {
