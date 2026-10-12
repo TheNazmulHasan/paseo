@@ -20,4 +20,12 @@ export interface FileDropSink {
   onFiles: (images: ImageAttachment[]) => void;
   onGenericFiles?: (items: DroppedItem[]) => void;
   onWorkspaceFile?: (payload: WorkspaceFileDragPayload) => void;
+  /**
+   * Skip the raster-image persistence branch: every dropped file arrives only
+   * via `onGenericFiles`. For consumers that handle raw bytes themselves (e.g.
+   * the file explorer uploading into the workspace).
+   */
+  skipImagePersistence?: boolean;
+  /** Dropped folders are never delivered as files; their count arrives here. */
+  onSkippedDirectories?: (count: number) => void;
 }

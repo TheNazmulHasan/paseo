@@ -327,6 +327,32 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
     [client, normalizedWorkspaceRoot, requestDirectoryListing],
   );
 
+  const uploadEntry = useCallback(
+    async (input: {
+      parentPath: string;
+      name: string;
+      mimeType: string;
+      bytes: Uint8Array;
+      overwrite?: boolean;
+    }) => {
+      if (!client || !normalizedWorkspaceRoot) {
+        return null;
+      }
+      const payload = await client.uploadFileEntry({
+        cwd: normalizedWorkspaceRoot,
+        ...input,
+      });
+      if (payload.success) {
+        await requestDirectoryListing(input.parentPath, {
+          recordHistory: false,
+          setCurrentPath: false,
+        });
+      }
+      return payload;
+    },
+    [client, normalizedWorkspaceRoot, requestDirectoryListing],
+  );
+
   const selectExplorerEntry = useCallback(
     (path: string | null) => {
       updateExplorerState((state) => ({
@@ -346,6 +372,7 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
     renameEntry,
     duplicateEntry,
     deleteEntry,
+    uploadEntry,
     selectExplorerEntry,
   };
 }
