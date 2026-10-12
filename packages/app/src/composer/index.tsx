@@ -140,6 +140,7 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
+import { ScheduleFormSheet } from "@/components/schedules/schedule-form-sheet";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
@@ -2200,6 +2201,34 @@ function ComposerContentImpl({
     [cursorPublication, cursor],
   );
 
+  const [isSchedulePromptSheetOpen, setIsSchedulePromptSheetOpen] = useState(false);
+  const supportsScheduledPrompt = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.scheduledPrompt !== false,
+  );
+  const canSchedulePrompt = Boolean(
+    hasAgent && inputMode !== "terminal" && supportsScheduledPrompt,
+  );
+  const handleOpenSchedulePrompt = useCallback(() => {
+    setIsSchedulePromptSheetOpen(true);
+  }, []);
+  const handleCloseSchedulePrompt = useCallback(() => {
+    setIsSchedulePromptSheetOpen(false);
+  }, []);
+  const scheduleAgentTarget = useMemo(
+    () => ({
+      agentId,
+      initialPrompt: textSource.getSnapshot().trim(),
+      asUserMessage: true,
+    }),
+    [agentId, textSource],
+  );
+  const handlePromptScheduled = useCallback(() => {
+    replaceUserInput("");
+    clearDraft("sent");
+    setIsSchedulePromptSheetOpen(false);
+    toast.show(t("composer.schedule.scheduledSuccess"), { variant: "success" });
+  }, [clearDraft, replaceUserInput, t, toast]);
+
   const handleFocusChange = useCallback(
     (focused: boolean) => {
       setIsMessageInputFocused(focused);
@@ -2365,6 +2394,16 @@ function ComposerContentImpl({
       />
       <View style={animatedStaticStyles.container}>
         <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
+        {hasAgent && (
+          <ScheduleFormSheet
+            serverId={serverId}
+            visible={isSchedulePromptSheetOpen}
+            onClose={handleCloseSchedulePrompt}
+            mode="create"
+            agentTarget={scheduleAgentTarget}
+            onScheduled={handlePromptScheduled}
+          />
+        )}
         {/* Input area */}
         <View style={inputAreaContainerStyle}>
           <View style={styles.inputAreaContent}>
@@ -2435,6 +2474,8 @@ function ComposerContentImpl({
                   readOnly={readOnly}
                   textReplacement={textReplacement}
                   submitLabel={submitLabel}
+                  onSchedulePrompt={handleOpenSchedulePrompt}
+                  canSchedulePrompt={canSchedulePrompt}
                 />
               </RenderProfile>
               <Combobox
