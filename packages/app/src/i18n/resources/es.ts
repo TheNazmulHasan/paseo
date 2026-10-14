@@ -411,6 +411,7 @@ export const es: TranslationResources = {
       completed: "Contexto compactado",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "Reanudado tras un apagado inesperado",
       manual: "Reanudado",
     },
@@ -657,6 +658,7 @@ export const es: TranslationResources = {
       updateHost: "Actualiza el host para usar el renderizador de terminal nativo.",
       unableToSubscribe: "No se puede suscribir al terminal",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "Cargando...",
       modified: "Cambios sin guardar",
@@ -681,6 +683,7 @@ export const es: TranslationResources = {
         copyAgentId: "Copiar ID del agente",
         copyTerminalId: "Copiar ID del terminal",
         copyFilePath: "Copy file path",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "Rebautizar",
         closeAbove: "Cerrar pestañas arriba",
         closeBelow: "Cerrar pestañas a continuación",
@@ -2819,6 +2822,12 @@ export const es: TranslationResources = {
           update: "Actualizar habilidad",
           delete: "Eliminar habilidad",
         },
+      },
+      rateLimitAutoResume: {
+        title: "Reanudar automáticamente ante límites de velocidad",
+        hint: "Reanudar automáticamente las sesiones del agente tras el enfriamiento del límite de velocidad o la recuperación del modelo",
+        accessibilityLabel: "Reanudar automáticamente ante límites de velocidad",
+        error: "No se pudo actualizar el ajuste de reanudación automática",
       },
       orchestration: {
         title: "Orquestación",

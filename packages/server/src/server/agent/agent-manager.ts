@@ -1,3 +1,5 @@
+import type { AgentRateLimitAutoResumeManager } from "./agent-rate-limit-auto-resume.js";
+import { AGENT_LABEL_RATE_LIMIT_AUTO_RESUME } from "@getpaseo/protocol/agent-labels";
 import { projectTimelineRows } from "./timeline-projection.js";
 import type { PluginLifecycle } from "../plugins/lifecycle/index.js";
 import { describeHookAgent, publishAgentStream } from "../plugins/lifecycle/index.js";
@@ -365,6 +367,7 @@ export interface AgentManagerOptions {
     agentId: string;
     expectedTurnId: string;
   }) => Promise<void>;
+  rateLimitAutoResumeManager?: AgentRateLimitAutoResumeManager | null;
   logger: Logger;
 }
 
@@ -743,6 +746,18 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
+export const RATE_LIMIT_ERROR_HEURISTIC =
+  /(?:429|rate[_\s-]?limit|cooldown|cooling down|quota|too many requests)/i;
+
+function resolveRescueTimeouts(
+  timeouts?: AgentManagerRescueTimeouts,
+): Required<AgentManagerRescueTimeouts> {
+  return {
+    reloadSessionCloseMs: timeouts?.reloadSessionCloseMs ?? RELOAD_SESSION_CLOSE_TIMEOUT_MS,
+    interruptSessionMs: timeouts?.interruptSessionMs ?? INTERRUPT_SESSION_TIMEOUT_MS,
+  };
+}
+
 export class AgentManager {
   private readonly pluginLifecycle: PluginLifecycle | undefined;
   private readonly clients = new Map<AgentProvider, AgentClient>();
@@ -782,6 +797,7 @@ export class AgentManager {
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
+  private rateLimitAutoResumeManager: AgentRateLimitAutoResumeManager | null = null;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private readonly beforeSteerUnavailableFallback?: AgentManagerOptions["beforeSteerUnavailableFallback"];
   private acceptingAgentRegistrations = true;
@@ -799,12 +815,8 @@ export class AgentManager {
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
-    this.rescueTimeouts = {
-      reloadSessionCloseMs:
-        options.rescueTimeouts?.reloadSessionCloseMs ?? RELOAD_SESSION_CLOSE_TIMEOUT_MS,
-      interruptSessionMs:
-        options.rescueTimeouts?.interruptSessionMs ?? INTERRUPT_SESSION_TIMEOUT_MS,
-    };
+    this.rateLimitAutoResumeManager = options.rateLimitAutoResumeManager ?? null;
+    this.rescueTimeouts = resolveRescueTimeouts(options.rescueTimeouts);
     this.beforeSteerUnavailableFallback = options.beforeSteerUnavailableFallback;
     this.agentStreamCoalescer = new AgentStreamCoalescer({
       windowMs: options.agentStreamCoalesceWindowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS,
@@ -823,6 +835,14 @@ export class AgentManager {
   private configurePaseoTools(options: AgentManagerOptions): void {
     this.paseoToolsEnabled = options.paseoToolsEnabled ?? true;
     this.paseoToolCatalogFactory = options.paseoToolCatalogFactory ?? null;
+  }
+
+  setRateLimitAutoResumeManager(manager: AgentRateLimitAutoResumeManager | null): void {
+    this.rateLimitAutoResumeManager = manager;
+  }
+
+  getRateLimitAutoResumeManager(): AgentRateLimitAutoResumeManager | null {
+    return this.rateLimitAutoResumeManager;
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -1888,6 +1908,7 @@ export class AgentManager {
   }
 
   private async closeAgentRuntime(agentId: string): Promise<void> {
+    this.rateLimitAutoResumeManager?.cancel(agentId);
     const agent = this.requireAgent(agentId);
     this.logger.trace(
       {
@@ -2024,6 +2045,7 @@ export class AgentManager {
     record: StoredAgentRecord,
     archivedAt = new Date().toISOString(),
   ): Promise<ArchivedStoredAgentRecord> {
+    this.rateLimitAutoResumeManager?.cancel(record.id);
     const archivedRecord = await this.persistArchivedRecord(record, {
       archivedAt,
       updatedAt: archivedAt,
@@ -2490,6 +2512,9 @@ export class AgentManager {
         await this.setTitle(agentId, updates.title);
       }
       if (updates.labels) {
+        if (updates.labels[AGENT_LABEL_RATE_LIMIT_AUTO_RESUME] === "false") {
+          this.rateLimitAutoResumeManager?.cancel(agentId);
+        }
         await this.writeLabels(agentId, updates.labels);
       }
       return;
@@ -2645,6 +2670,8 @@ export class AgentManager {
     options?: AgentRunOptions;
   }): Promise<string> {
     const { agent, agentId, pendingRun, prompt, options } = params;
+    this.rateLimitAutoResumeManager?.cancel(agentId);
+    this.rateLimitAutoResumeManager?.resetConsecutiveResumes(agentId);
     try {
       const result = await agent.session.startTurn(prompt, options);
       if (pendingRun.settled) {
@@ -3224,6 +3251,7 @@ export class AgentManager {
   }
 
   private async cancelAgentRunNow(agentId: string): Promise<AgentRunCancellationResult> {
+    this.rateLimitAutoResumeManager?.cancel(agentId);
     const agent = this.requireSessionAgent(agentId);
     const run =
       this.runs.getRun(agentId) ??
@@ -4805,6 +4833,18 @@ export class AgentManager {
     flags.shouldNotifyWaiters = true;
   }
 
+  private async checkRateLimitAutoResumeOnIdle(agentId: string): Promise<void> {
+    if (!this.rateLimitAutoResumeManager) return;
+    try {
+      const lastMessage = await this.getLastAssistantMessage(agentId);
+      if (lastMessage && RATE_LIMIT_ERROR_HEURISTIC.test(lastMessage)) {
+        this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, lastMessage);
+      }
+    } catch (error) {
+      this.logger.debug({ err: error, agentId }, "Failed to check rate limit auto resume on idle");
+    }
+  }
+
   private onStreamTurnCompleted(params: {
     agent: ActiveManagedAgent;
     event: Extract<AgentStreamEvent, { type: "turn_completed" }>;
@@ -4841,6 +4881,7 @@ export class AgentManager {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.emitState(agent);
     }
+    void this.checkRateLimitAutoResumeOnIdle(agent.id);
     void this.refreshRuntimeInfo(agent);
   }
 
@@ -4873,12 +4914,14 @@ export class AgentManager {
       agent.lifecycle = "error";
     }
     agent.lastError = event.error;
-    await this.appendSystemErrorTimelineMessage(
-      agent,
-      event.provider,
-      this.formatTurnFailedMessage(event),
-      options,
-    );
+    const failureMessage = this.formatTurnFailedMessage(event);
+    await this.appendSystemErrorTimelineMessage(agent, event.provider, failureMessage, options);
+    const failureCandidates = [event.error, event.diagnostic, failureMessage];
+    for (const text of failureCandidates) {
+      if (text && this.rateLimitAutoResumeManager?.scheduleIfNeeded(agent.id, text)) {
+        break;
+      }
+    }
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Turn failed");
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
@@ -4887,6 +4930,7 @@ export class AgentManager {
 
   private onStreamTurnCanceled(params: {
     agent: ActiveManagedAgent;
+
     event: Extract<AgentStreamEvent, { type: "turn_canceled" }>;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
@@ -4911,6 +4955,7 @@ export class AgentManager {
       "agent.manager.turn.canceled",
     );
     if (terminalDisposition === "stale") return;
+    this.rateLimitAutoResumeManager?.cancel(agent.id);
     if (!isForegroundEvent && !agent.activeForegroundTurnId && !agent.pendingReplacement) {
       agent.lifecycle = "idle";
     }

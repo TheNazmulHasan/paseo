@@ -1038,6 +1038,7 @@ test("advertises client capabilities in hello", async () => {
       timeline_notifications: true,
       plugin_timeline_items: true,
       resume_timeline_items: true,
+      rate_limit_resume_reason: true,
       workspace_setup_blocked: true,
       hello_rejection: true,
       browser_host: {

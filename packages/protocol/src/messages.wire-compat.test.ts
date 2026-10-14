@@ -436,3 +436,24 @@ test("usage login errors are additive and older reports still parse", () => {
   expect(SessionOutboundMessageSchema.parse(newMessage)).toEqual(newMessage);
   expect(legacy.parse(newMessage)).toEqual(oldMessage);
 });
+
+test("resume timeline item wire compatibility across client versions", () => {
+  const legacyResumeSchema = z.object({
+    type: z.literal("resume"),
+    reason: z.enum(["power_cut", "manual"]),
+    interruptedAt: z.string().optional(),
+  });
+
+  const modernItem = {
+    type: "resume",
+    reason: "rate_limit_retry",
+  };
+  expect(AgentTimelineItemPayloadSchema.parse(modernItem)).toEqual(modernItem);
+
+  const downgradedItem = {
+    type: "resume",
+    reason: "manual",
+  };
+  expect(legacyResumeSchema.parse(downgradedItem)).toEqual(downgradedItem);
+  expect(AgentTimelineItemPayloadSchema.parse(downgradedItem)).toEqual(downgradedItem);
+});

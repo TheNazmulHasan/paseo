@@ -41,6 +41,7 @@ import {
   Plus,
   TriangleAlertIcon,
   Scissors,
+  Clock,
   Power,
   MicVocal,
   FileSymlink,
@@ -2366,7 +2367,7 @@ export const CompactionMarker = memo(function CompactionMarker({
 });
 
 interface ResumeMarkerProps {
-  reason: "power_cut" | "manual";
+  reason: "power_cut" | "manual" | "rate_limit_retry";
 }
 
 const resumeStylesheet = StyleSheet.create((theme) => ({
@@ -2396,12 +2397,13 @@ const resumeStylesheet = StyleSheet.create((theme) => ({
 
 export const ResumeMarker = memo(function ResumeMarker({ reason }: ResumeMarkerProps) {
   const label = getResumeMarkerLabel({ reason });
+  const Icon = reason === "rate_limit_retry" ? Clock : Power;
 
   return (
     <View style={resumeStylesheet.container}>
       <View style={resumeStylesheet.line} />
       <View style={resumeStylesheet.label}>
-        <Power size={12} color="#a1a1aa" />
+        <Icon size={12} color="#a1a1aa" />
         <Text style={resumeStylesheet.text}>{label}</Text>
       </View>
       <View style={resumeStylesheet.line} />
