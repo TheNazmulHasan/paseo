@@ -28,6 +28,11 @@ import {
   findActiveFileMention,
   type FileMentionRange,
 } from "@/utils/file-mention-autocomplete";
+import {
+  applySessionMentionReplacement,
+  filterSessionMentionSuggestions,
+  type SessionMentionSuggestion,
+} from "@/utils/session-mention-autocomplete";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -64,6 +69,11 @@ type AgentAutocompleteOption =
       type: "workspace_entry";
       entryPath: string;
       mention: FileMentionRange;
+    })
+  | (AutocompleteOption & {
+      type: "session_mention";
+      agentId: string;
+      sessionTitle: string;
     });
 
 interface AgentAutocompleteResult {
@@ -200,6 +210,8 @@ interface BuildAutocompleteOptionsInput {
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
   fileSuggestions: DirectorySuggestionEntry[];
+  /** Sessions offered after `@`, best first. Listed above the files, so files stay nearest the input. */
+  sessionSuggestions: SessionMentionSuggestion[];
   t: TFunction;
 }
 
@@ -243,14 +255,29 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   const activeFileMention = input.activeFileMention;
   if (input.mode === "file" && activeFileMention) {
     const orderedEntries = orderAutocompleteOptions(input.fileSuggestions);
-    return orderedEntries.map((entry) => ({
-      type: "workspace_entry" as const,
-      id: `${entry.kind}:${entry.path}`,
-      label: entry.path,
-      kind: entry.kind,
-      entryPath: entry.path,
-      mention: activeFileMention,
-    }));
+    const fileOptions = orderedEntries.map(
+      (entry): AgentAutocompleteOption => ({
+        type: "workspace_entry",
+        id: `${entry.kind}:${entry.path}`,
+        label: entry.path,
+        kind: entry.kind,
+        entryPath: entry.path,
+        mention: activeFileMention,
+      }),
+    );
+    const sessionOptions = orderAutocompleteOptions(input.sessionSuggestions).map(
+      (entry): AgentAutocompleteOption => ({
+        type: "session_mention",
+        id: `session:${entry.agentId}`,
+        label: entry.title,
+        kind: "session",
+        detail: entry.agentId.slice(0, 7),
+        description: entry.workspaceHint ?? undefined,
+        agentId: entry.agentId,
+        sessionTitle: entry.title,
+      }),
+    );
+    return [...sessionOptions, ...fileOptions];
   }
 
   return [];
@@ -479,6 +506,26 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     placeholderData: keepPreviousData,
   });
 
+  // Sessions of this host, read only while an `@` mention is open so streaming agents do not
+  // re-render the composer the rest of the time.
+  const sessionAgents = useSessionStore((state) =>
+    mode === "file" ? state.sessions[serverId]?.agents : undefined,
+  );
+  const sessionSuggestions = useMemo(() => {
+    if (!sessionAgents) return [];
+    return filterSessionMentionSuggestions({
+      candidates: Array.from(sessionAgents.values(), (agent) => ({
+        agentId: agent.id,
+        title: agent.title,
+        lastActivityAt: agent.lastActivityAt,
+        archivedAt: agent.archivedAt,
+        cwd: agent.cwd,
+      })),
+      query: fileFilterQuery,
+      excludeAgentId: agentId,
+    });
+  }, [agentId, fileFilterQuery, sessionAgents]);
+
   const options = useMemo<AgentAutocompleteOption[]>(
     () =>
       buildCommandAutocompleteOptions({
@@ -488,6 +535,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         pluginCommands: pluginClientSlashCommands,
         activeSlashCommand,
         fileSuggestions: fileSuggestionsQuery.data ?? [],
+        sessionSuggestions,
         isDraftContext,
         isVisible,
         mode,
@@ -500,6 +548,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       commands,
       pluginClientSlashCommands,
       fileSuggestionsQuery.data,
+      sessionSuggestions,
       isDraftContext,
       isVisible,
       mode,
@@ -545,6 +594,20 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
           commandName: selected.id,
         });
         setUserInput(nextInput);
+        onAutocompleteApplied?.();
+        return;
+      }
+
+      if (selected.type === "session_mention") {
+        if (!current.fileMention) return;
+        setUserInput(
+          applySessionMentionReplacement({
+            text: current.text,
+            mention: current.fileMention,
+            title: selected.sessionTitle,
+            agentId: selected.agentId,
+          }),
+        );
         onAutocompleteApplied?.();
         return;
       }
