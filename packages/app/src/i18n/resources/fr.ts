@@ -2521,6 +2521,10 @@ export const fr: TranslationResources = {
         contentSizeHint: "Utilisée pour le texte de la discussion et le Markdown rendu",
         contentSizeAccessibility: "Taille de police du contenu",
         codeFont: "Police du code",
+        contentContrast: "Contraste du contenu",
+        contentContrastHint:
+          "Luminosité du texte de discussion et du Markdown affiché. Plus bas fatigue moins les yeux",
+        contentContrastAccessibility: "Contraste du contenu",
         codeFontHint:
           "Utilisée pour le code, les diffs et la sortie du terminal. Laissez vide pour utiliser la police par défaut du système",
         codeFontAccessibility: "Famille de police du code",
