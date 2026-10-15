@@ -104,6 +104,14 @@ export const MAX_FONT_FAMILY_LENGTH = 200;
 export { DEFAULT_CONTENT_MAX_WIDTH };
 export const MIN_CONTENT_MAX_WIDTH = 600;
 export const MAX_CONTENT_MAX_WIDTH = 4000;
+/**
+ * Contrast of chat prose and rendered Markdown, as a percent of the theme's
+ * full-strength foreground. 100 = unchanged; lower blends toward the workspace
+ * surface for less glare. App chrome is never affected.
+ */
+export const DEFAULT_CONTENT_TEXT_TONE = 100;
+export const MIN_CONTENT_TEXT_TONE = 40;
+export const MAX_CONTENT_TEXT_TONE = 100;
 
 export interface AppSettings {
   theme: ThemePreference;
@@ -121,6 +129,7 @@ export interface AppSettings {
   codeFontSize: number; // clamped px, default 12
   /** Max width of chat and markdown content in px; null follows the current default. */
   contentMaxWidth: number | null;
+  contentTextTone: number; // clamped percent, default 100
   syntaxTheme: SyntaxThemeId; // default "one"
   workspaceTitleSource: WorkspaceTitleSource;
   sidebarWorkspaceTrailing: SidebarWorkspaceTrailing;
@@ -198,6 +207,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   contentFontSize: DEFAULT_CONTENT_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
   contentMaxWidth: null,
+  contentTextTone: DEFAULT_CONTENT_TEXT_TONE,
   syntaxTheme: "one",
   workspaceTitleSource: "title",
   sidebarWorkspaceTrailing: "timestamp",
@@ -299,6 +309,9 @@ const StoredAppSettingsSchema = z
       .null()
       .or(clampedNumber(MIN_CONTENT_MAX_WIDTH, MAX_CONTENT_MAX_WIDTH))
       .catch(null),
+    contentTextTone: clampedNumber(MIN_CONTENT_TEXT_TONE, MAX_CONTENT_TEXT_TONE).catch(
+      DEFAULT_CONTENT_TEXT_TONE,
+    ),
     syntaxTheme: z.string().refine(isSyntaxThemeId).catch("one"),
     workspaceTitleSource: z.enum(["title", "branch"]).catch("title"),
     sidebarWorkspaceTrailing: z.enum(["diff", "timestamp", "none"]).catch("timestamp"),
