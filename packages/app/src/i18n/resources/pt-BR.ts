@@ -504,6 +504,9 @@ export const ptBR: TranslationResources = {
       expiresAccessibilityLabel: "O cache de prompts expira em {{countdown}}",
       missesAccessibilityLabel: "Falhas do cache de prompts nesta sessão: {{count}}",
     },
+    workspaceSwitcher: {
+      title: "Workspaces recentes",
+    },
     tabSwitcher: {
       title: "Abas recentes",
     },
@@ -3130,6 +3133,7 @@ export const ptBR: TranslationResources = {
         toggleFocusMode: "Alternar modo de foco",
         cycleTheme: "Alternar tema",
         switchRecentTabs: "Alternar abas recentes",
+        switchRecentWorkspaces: "Alternar workspaces recentes",
         focusMessageInput: "Focar entrada de mensagem",
         cycleAgentMode: "Alternar modo do agente",
         toggleVoiceMode: "Alternar modo de voz",

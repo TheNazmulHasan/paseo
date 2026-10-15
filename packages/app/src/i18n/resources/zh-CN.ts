@@ -499,6 +499,9 @@ export const zhCN: TranslationResources = {
       expiresAccessibilityLabel: "提示缓存将在 {{countdown}} 后过期",
       missesAccessibilityLabel: "本会话的提示缓存未命中：{{count}}",
     },
+    workspaceSwitcher: {
+      title: "最近的工作区",
+    },
     tabSwitcher: {
       title: "最近的标签页",
     },
@@ -3057,6 +3060,7 @@ export const zhCN: TranslationResources = {
         toggleFocusMode: "切换专注模式",
         cycleTheme: "循环切换主题",
         switchRecentTabs: "切换最近的标签页",
+        switchRecentWorkspaces: "切换最近的工作区",
         focusMessageInput: "聚焦消息输入框",
         cycleAgentMode: "循环切换代理模式",
         toggleVoiceMode: "切换语音模式",
