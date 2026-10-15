@@ -37,6 +37,7 @@ import { SidebarFooterIconHighlight } from "@/components/sidebar/sidebar-footer-
 import { SidebarBacklogRow } from "@/components/sidebar/sidebar-backlog-row";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarBringToFrontToggle } from "@/components/sidebar/sidebar-bring-to-front-toggle";
+import { SidebarAttentionBanner } from "@/components/attention-banner-host";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { DensityIcon } from "@/components/ui/density-icon";
 import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
@@ -791,6 +792,8 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        <SidebarAttentionBanner />
 
         <SidebarFooter
           handleOpenProject={handleOpenProject}
