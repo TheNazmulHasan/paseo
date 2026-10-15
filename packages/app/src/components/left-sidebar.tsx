@@ -27,6 +27,7 @@ import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
 import { SidebarBacklogRow } from "@/components/sidebar/sidebar-backlog-row";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
+import { SidebarAttentionBanner } from "@/components/attention-banner-host";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { buttonControlHeight } from "@/components/ui/control-geometry";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -795,6 +796,8 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        <SidebarAttentionBanner />
 
         <SidebarFooter
           theme={theme}
