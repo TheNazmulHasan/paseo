@@ -13,6 +13,7 @@ import {
   ShieldOff,
   ShieldPlus,
   ShieldQuestionMark,
+  User,
   Zap,
 } from "lucide-react-native";
 import { getModeVisuals, type AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
@@ -43,6 +44,7 @@ const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   flame: Flame,
   "list-todo": ListTodo,
   "shield-check": ShieldCheck,
+  user: User,
   zap: Zap,
 };
 
