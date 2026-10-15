@@ -497,6 +497,9 @@ export const en = {
       expiresAccessibilityLabel: "Prompt cache expires in {{countdown}}",
       missesAccessibilityLabel: "Prompt cache misses this session: {{count}}",
     },
+    tabSwitcher: {
+      title: "Recent tabs",
+    },
     route: {
       loading: "Loading workspace",
       connecting: "Connecting",
@@ -3214,6 +3217,7 @@ export const en = {
         toggleSettings: "Toggle settings",
         toggleFocusMode: "Toggle focus mode",
         cycleTheme: "Cycle theme",
+        switchRecentTabs: "Switch recent tabs",
         focusMessageInput: "Focus message input",
         cycleAgentMode: "Cycle agent mode",
         toggleVoiceMode: "Toggle voice mode",

@@ -500,6 +500,9 @@ export const ar: TranslationResources = {
       expiresAccessibilityLabel: "تنتهي ذاكرة التخزين المؤقت للموجّه بعد {{countdown}}",
       missesAccessibilityLabel: "إخفاقات ذاكرة التخزين المؤقت للموجّه في هذه الجلسة: {{count}}",
     },
+    tabSwitcher: {
+      title: "علامات التبويب الأخيرة",
+    },
     route: {
       loading: "جارٍ تحميل مساحة العمل",
       connecting: "الاتصال",
@@ -3130,6 +3133,7 @@ export const ar: TranslationResources = {
         toggleSettings: "تبديل الإعدادات",
         toggleFocusMode: "تبديل وضع التركيز",
         cycleTheme: "موضوع الدورة",
+        switchRecentTabs: "التبديل بين علامات التبويب الأخيرة",
         focusMessageInput: "التركيز على إدخال الرسالة",
         cycleAgentMode: "تبديل وضع الوكيل",
         toggleVoiceMode: "تبديل الوضع الصوتي",

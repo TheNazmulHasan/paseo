@@ -505,6 +505,9 @@ export const es: TranslationResources = {
       expiresAccessibilityLabel: "La caché de prompts caduca en {{countdown}}",
       missesAccessibilityLabel: "Fallos de la caché de prompts en esta sesión: {{count}}",
     },
+    tabSwitcher: {
+      title: "Pestañas recientes",
+    },
     route: {
       loading: "Cargando espacio de trabajo",
       connecting: "Conectando",
@@ -3146,6 +3149,7 @@ export const es: TranslationResources = {
         toggleSettings: "Alternar configuración",
         toggleFocusMode: "Alternar modo de enfoque",
         cycleTheme: "Tema del ciclo",
+        switchRecentTabs: "Cambiar entre pestañas recientes",
         focusMessageInput: "Entrada de mensaje de enfoque",
         cycleAgentMode: "Alternar modo del agente",
         toggleVoiceMode: "Alternar modo de voz",
