@@ -376,6 +376,23 @@ describe("routeKeyboardShortcut — callbacks and pickers", () => {
   });
 });
 
+describe("routeKeyboardShortcut — workspace switcher", () => {
+  it("routes the dedicated workspace switcher action", () => {
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.switcher.cycle", payload: { delta: 1 } },
+        makeCtx(),
+      ),
+    ).toEqual<ShortcutAction>({ kind: "workspace-switcher-cycle", delta: 1 });
+  });
+
+  it("does not route without a delta", () => {
+    expect(
+      routeKeyboardShortcut({ action: "workspace.switcher.cycle", payload: null }, makeCtx()),
+    ).toEqual<ShortcutAction>({ kind: "none" });
+  });
+});
+
 describe("routeKeyboardShortcut — toggle dialogs", () => {
   it("opens the command center scoped to files from a workspace", () => {
     expect(

@@ -471,6 +471,9 @@ export const fr: TranslationResources = {
     cacheWarm: {
       accessibilityLabel: "Prochain préchauffage du cache dans {{countdown}}",
     },
+    workspaceSwitcher: {
+      title: "Espaces de travail récents",
+    },
     tabSwitcher: {
       title: "Onglets récents",
     },
@@ -2627,6 +2630,7 @@ export const fr: TranslationResources = {
         queueMessage: "Mettre le message en file d’attente",
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
         switchRecentTabs: "Changer d'onglet récent",
+        switchRecentWorkspaces: "Changer d'espace de travail récent",
         switchProject: "Changer de projet",
       },
       helpNotes: {

@@ -463,6 +463,9 @@ export const en = {
     cacheWarm: {
       accessibilityLabel: "Next prompt cache warm-up in {{countdown}}",
     },
+    workspaceSwitcher: {
+      title: "Recent workspaces",
+    },
     tabSwitcher: {
       title: "Recent tabs",
     },
@@ -2695,6 +2698,7 @@ export const en = {
         toggleFocusMode: "Toggle focus mode",
         cycleTheme: "Cycle theme",
         switchRecentTabs: "Switch recent tabs",
+        switchRecentWorkspaces: "Switch recent workspaces",
         focusMessageInput: "Focus message input",
         cycleAgentMode: "Cycle agent mode",
         toggleVoiceMode: "Toggle voice mode",

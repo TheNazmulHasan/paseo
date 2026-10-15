@@ -466,6 +466,9 @@ export const ar: TranslationResources = {
     cacheWarm: {
       accessibilityLabel: "تسخين ذاكرة التخزين المؤقت التالي بعد {{countdown}}",
     },
+    workspaceSwitcher: {
+      title: "مساحات العمل الأخيرة",
+    },
     tabSwitcher: {
       title: "علامات التبويب الأخيرة",
     },
@@ -2568,6 +2571,7 @@ export const ar: TranslationResources = {
         toggleFocusMode: "تبديل وضع التركيز",
         cycleTheme: "موضوع الدورة",
         switchRecentTabs: "التبديل بين علامات التبويب الأخيرة",
+        switchRecentWorkspaces: "التبديل بين مساحات العمل الأخيرة",
         focusMessageInput: "التركيز على إدخال الرسالة",
         cycleAgentMode: "تبديل وضع الوكيل",
         toggleVoiceMode: "تبديل الوضع الصوتي",
