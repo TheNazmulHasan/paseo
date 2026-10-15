@@ -15,3 +15,6 @@ export {
 } from "./provider";
 export type { AssistantFileLinkSource } from "./resolver";
 export { useAssistantFileLinkActions } from "./use-file-link";
+export { classifyCodeQuickAction, getRevealParentPath } from "./quick-action";
+export { useRevealInFileManager } from "./use-reveal-in-file-manager";
+export { AssistantLinkInlineActions, useAssistantLinkActions } from "./link-actions";

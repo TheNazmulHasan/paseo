@@ -76,11 +76,30 @@ export function getEditorTarget(
   return target;
 }
 
+/**
+ * Chat replies often write paths as `~/…`. Finder/Explorer need a real absolute path, so expand
+ * the leading tilde against the runtime's home directory before validation.
+ */
+export function expandHomePath(targetPath: string, runtime: EditorTargetRuntime): string {
+  if (targetPath !== "~" && !targetPath.startsWith("~/") && !targetPath.startsWith("~\\")) {
+    return targetPath;
+  }
+  const home = runtime.env.HOME ?? runtime.env.USERPROFILE;
+  if (!home) return targetPath;
+  const trimmedHome = home.replace(/[\\/]+$/, "");
+  return targetPath === "~" ? trimmedHome : `${trimmedHome}${targetPath.slice(1)}`;
+}
+
 export async function openEditorTarget(
-  input: EditorTargetLaunchInput & { editorId: string },
+  rawInput: EditorTargetLaunchInput & { editorId: string },
   runtime: EditorTargetRuntime,
   targets: readonly EditorTarget[] = EDITOR_TARGETS,
 ): Promise<void> {
+  const input = {
+    ...rawInput,
+    workspacePath: expandHomePath(rawInput.workspacePath, runtime),
+    filePath: rawInput.filePath ? expandHomePath(rawInput.filePath, runtime) : undefined,
+  };
   if (!runtime.isAbsolutePath(input.workspacePath)) {
     throw new Error("Editor target workspace path must be an absolute local path");
   }
