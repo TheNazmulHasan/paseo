@@ -457,6 +457,9 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "Espaces de travail récents",
+    },
     tabSwitcher: {
       title: "Onglets récents",
     },
@@ -2613,6 +2616,7 @@ export const fr: TranslationResources = {
         queueMessage: "Mettre le message en file d’attente",
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
         switchRecentTabs: "Changer d'onglet récent",
+        switchRecentWorkspaces: "Changer d'espace de travail récent",
         switchProject: "Changer de projet",
       },
       helpNotes: {

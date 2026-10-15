@@ -453,6 +453,9 @@ export const ko: TranslationResources = {
     },
   },
   workspace: {
+    workspaceSwitcher: {
+      title: "최근 워크스페이스",
+    },
     tabSwitcher: {
       title: "최근 탭",
     },
@@ -2565,6 +2568,7 @@ export const ko: TranslationResources = {
         toggleFocusMode: "집중 모드 토글",
         cycleTheme: "테마 순환",
         switchRecentTabs: "최근 탭 전환",
+        switchRecentWorkspaces: "최근 워크스페이스 전환",
         focusMessageInput: "메시지 입력란에 포커스",
         cycleAgentMode: "에이전트 모드 전환",
         toggleVoiceMode: "음성 모드 토글",
