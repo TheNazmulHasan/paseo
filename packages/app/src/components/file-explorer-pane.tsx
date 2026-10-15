@@ -69,6 +69,7 @@ import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { ExplorerRowActions } from "@/components/file-explorer-row-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
@@ -394,6 +395,12 @@ function TreeRowItem({
             {entry.name}
           </Text>
         </View>
+        <ExplorerRowActions
+          onCopyPath={handleCopy}
+          onReveal={onRevealEntry ? handleReveal : undefined}
+          revealTargetName={revealTargetName}
+          testID={testID}
+        />
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
@@ -622,8 +629,9 @@ export function FileExplorerPane({
           entryPath: path,
         }),
       );
+      toast.copied();
     },
-    [normalizedWorkspaceRoot],
+    [normalizedWorkspaceRoot, toast],
   );
 
   const handleCopyRelativePath = useCallback(async (path: string) => {
