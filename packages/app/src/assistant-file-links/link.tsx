@@ -8,6 +8,8 @@ import { AssistantLinkPressProvider, type AssistantLinkPress } from "./link-pres
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
+import { AssistantLinkInlineActions } from "./link-actions";
+import { AssistantLinkContextMenu } from "./link-context-menu";
 import { useAssistantFileLinkResolverContext } from "./provider";
 import type { AssistantFileLinkSource } from "./resolver";
 import { formatFileLinkTooltipPath } from "./tooltip-path";
@@ -31,7 +33,10 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, onHoverIn, onPress } = useFileLink(source);
+  // Chips resolve bare names up front so the icon row can say found / not found immediately.
+  const { target, externalUrl, fileStatus, onHoverIn, onPress } = useFileLink(source, {
+    resolveEagerly: !isNative,
+  });
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -99,7 +104,30 @@ export function AssistantMarkdownLink({
     </a>
   );
 
-  return <FileLinkHoverTooltip filePath={tooltipPath}>{anchor}</FileLinkHoverTooltip>;
+  const filePath = target?.path ?? null;
+  const fallbackCopyText = source.text?.trim() || source.href;
+  return (
+    <>
+      <FileLinkHoverTooltip filePath={tooltipPath}>
+        <AssistantLinkContextMenu
+          externalUrl={externalUrl}
+          filePath={filePath}
+          fallbackCopyText={fallbackCopyText}
+          onOpen={onPress}
+          fileStatus={fileStatus}
+        >
+          {anchor}
+        </AssistantLinkContextMenu>
+      </FileLinkHoverTooltip>
+      <AssistantLinkInlineActions
+        externalUrl={externalUrl}
+        filePath={filePath}
+        fallbackCopyText={fallbackCopyText}
+        onOpen={onPress}
+        fileStatus={fileStatus}
+      />
+    </>
+  );
 }
 
 interface AssistantMarkdownCodeLinkProps {

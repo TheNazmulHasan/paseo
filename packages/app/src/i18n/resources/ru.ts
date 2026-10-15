@@ -339,6 +339,8 @@ export const ru: TranslationResources = {
     },
     actions: {
       copyCode: "Скопировать код",
+      openLink: "Открыть ссылку",
+      copyLink: "Скопировать ссылку",
       copyTurn: "Скопировать ответ",
       copyMessage: "Копировать сообщение",
       forkMenu: "Форкнуть чат отсюда",

@@ -332,6 +332,8 @@ export const en = {
     },
     actions: {
       copyCode: "Copy code",
+      openLink: "Open link",
+      copyLink: "Copy link",
       copyTurn: "Copy turn",
       copyMessage: "Copy message",
       forkMenu: "Fork chat from here",
