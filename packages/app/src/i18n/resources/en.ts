@@ -1246,7 +1246,7 @@ export const en = {
         labels: "Labels",
       },
       projectSort: {
-        label: "Sort projects",
+        label: "Sort by",
         manual: "Manual",
         recent: "Recent activity",
       },

@@ -8,8 +8,9 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 export type SidebarGroupMode = "project" | "status";
 
 /**
- * How the project sections are ordered. "manual" is the persisted drag order;
- * "recent" puts the project with the freshest workspace activity first.
+ * How the sidebar is ordered. "manual" is the persisted drag order; "recent" puts the
+ * freshest activity first — project sections, the rows inside each project, and the Pinned
+ * section alike. The fork defaults to "recent" (upstream #4140 defaults to "manual").
  */
 export type SidebarProjectSortMode = "manual" | "recent";
 
@@ -134,7 +135,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
   if (!result.success) {
     return {
       groupMode: "project",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
@@ -146,7 +147,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
   if (legacyGroupMode) {
     return {
       groupMode: legacyGroupMode,
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
@@ -155,7 +156,7 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
 
   return {
     groupMode: state.groupMode === "status" ? "status" : "project",
-    projectSort: state.projectSort ?? "manual",
+    projectSort: state.projectSort ?? "recent",
     hostFilters: readHostFilters(state),
     projectFilters: state.projectFilters ?? [],
     labelFilter: state.labelFilter
@@ -193,7 +194,7 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
   persist(
     (set) => ({
       groupMode: "project",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
