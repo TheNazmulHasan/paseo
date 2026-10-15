@@ -9,7 +9,7 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
+import type { SidebarGroupMode, SidebarProjectSortMode } from "@/stores/sidebar-view-store";
 import {
   resolveSidebarProjectIconTargets,
   type SidebarProjectIconTarget,
@@ -43,6 +43,8 @@ export interface SidebarProjectionInput {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
+  /** Absent means manual: the pinned section keeps its pinned-at + drag order. */
+  projectSort?: SidebarProjectSortMode;
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -54,6 +56,8 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     projects: input.projects,
     keys: input.pinnedKeys,
     pinnedWorkspaceOrder: input.pinnedWorkspaceOrder,
+    sortMode: input.projectSort,
+    workspaceEntriesByKey: input.workspaceEntriesByKey,
   });
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(

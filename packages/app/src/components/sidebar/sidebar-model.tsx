@@ -7,7 +7,10 @@ import {
   type SidebarWorkspacesListResult,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarWorkspaceEntries } from "@/hooks/use-sidebar-workspace-entries";
-import { sortSidebarProjectsByRecentActivity } from "@/hooks/sidebar-workspaces-view-model";
+import {
+  sortSidebarProjectsByRecentActivity,
+  sortSidebarProjectWorkspacesByRecentActivity,
+} from "@/hooks/sidebar-workspaces-view-model";
 import { usePinnedSidebarKeys, type PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import {
@@ -144,13 +147,18 @@ export function SidebarModelProvider({
     list.projects,
     visibleWorkspaceKeys,
   ]);
-  // Recency sorts the whole (filtered) project list; timestamps come from the unfiltered
-  // entries map so a label filter can't change which workspace stands for a project.
+  // Recency sorts the whole (filtered) project list AND the rows inside each project, so the
+  // workspace you just touched is the first row of the first section. Timestamps come from
+  // the unfiltered entries map so a label filter can't change which workspace stands for a
+  // project.
   const orderedProjects = useMemo(
     () =>
       projectSort === "recent"
         ? sortSidebarProjectsByRecentActivity({
-            projects: filteredProjects,
+            projects: sortSidebarProjectWorkspacesByRecentActivity({
+              projects: filteredProjects,
+              workspaceEntriesByKey,
+            }),
             workspaceEntriesByKey,
           })
         : filteredProjects,
@@ -165,6 +173,7 @@ export function SidebarModelProvider({
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
+      projectSort,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -179,6 +188,7 @@ export function SidebarModelProvider({
       pinnedCollapsed,
       pinnedKeys,
       pinnedWorkspaceOrder,
+      projectSort,
       filteredWorkspaceEntriesByKey,
       t,
     ],
