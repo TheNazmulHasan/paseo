@@ -466,6 +466,9 @@ export const ko: TranslationResources = {
     cacheWarm: {
       accessibilityLabel: "다음 캐시 워밍업까지 {{countdown}}",
     },
+    tabSwitcher: {
+      title: "최근 탭",
+    },
     route: {
       loading: "워크스페이스 불러오는 중",
       connecting: "연결 중",
@@ -2574,6 +2577,7 @@ export const ko: TranslationResources = {
         toggleSettings: "설정 토글",
         toggleFocusMode: "집중 모드 토글",
         cycleTheme: "테마 순환",
+        switchRecentTabs: "최근 탭 전환",
         focusMessageInput: "메시지 입력란에 포커스",
         cycleAgentMode: "에이전트 모드 전환",
         toggleVoiceMode: "음성 모드 토글",

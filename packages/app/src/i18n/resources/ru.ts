@@ -470,6 +470,9 @@ export const ru: TranslationResources = {
     cacheWarm: {
       accessibilityLabel: "Следующий прогрев кэша через {{countdown}}",
     },
+    tabSwitcher: {
+      title: "Недавние вкладки",
+    },
     route: {
       loading: "Загрузка рабочего пространства",
       connecting: "Подключение",
@@ -2605,6 +2608,7 @@ export const ru: TranslationResources = {
         toggleSettings: "Переключить настройки",
         toggleFocusMode: "Переключить режим фокусировки",
         cycleTheme: "Переключить тему",
+        switchRecentTabs: "Переключение недавних вкладок",
         focusMessageInput: "Перейти к полю ввода сообщения",
         cycleAgentMode: "Переключить режим агента",
         toggleVoiceMode: "Переключить голосовой режим",

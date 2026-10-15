@@ -33,7 +33,8 @@ export type ShortcutAction =
   | { kind: "open-project-picker" }
   | { kind: "callback"; name: ShortcutCallbackName }
   | { kind: "command-center-toggle"; nextOpen: boolean; scope?: "files" }
-  | { kind: "shortcuts-dialog-toggle"; nextOpen: boolean };
+  | { kind: "shortcuts-dialog-toggle"; nextOpen: boolean }
+  | { kind: "tab-switcher-cycle"; delta: number };
 
 const NONE: ShortcutAction = { kind: "none" };
 
@@ -117,6 +118,11 @@ function routeWorkspaceTabNavigateRelative(payload: KeyboardShortcutPayload): Sh
   });
 }
 
+function routeTabSwitcherCycle(payload: KeyboardShortcutPayload): ShortcutAction {
+  if (!hasPayloadKey(payload, "delta")) return NONE;
+  return { kind: "tab-switcher-cycle", delta: payload.delta };
+}
+
 function routeWorkspaceNavigateIndex(
   payload: KeyboardShortcutPayload,
   ctx: ShortcutRoutingContext,
@@ -198,6 +204,8 @@ export function routeKeyboardShortcut(
       return routeWorkspaceTabNavigateIndex(input.payload);
     case "workspace.tab.navigate.relative":
       return routeWorkspaceTabNavigateRelative(input.payload);
+    case "workspace.tab.switcher.cycle":
+      return routeTabSwitcherCycle(input.payload);
     case "workspace.navigate.index":
       return routeWorkspaceNavigateIndex(input.payload, ctx);
     case "workspace.navigate.relative":

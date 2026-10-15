@@ -28,6 +28,7 @@ export type KeyboardActionId =
   | "workspace.tab.close.current"
   | "workspace.tab.navigate.index"
   | "workspace.tab.navigate.relative"
+  | "workspace.tab.switcher.cycle"
   | "workspace.pane.split.right"
   | "workspace.pane.split.down"
   | "workspace.pane.focus.left"

@@ -470,6 +470,9 @@ export const ptBR: TranslationResources = {
     cacheWarm: {
       accessibilityLabel: "Próximo aquecimento de cache em {{countdown}}",
     },
+    tabSwitcher: {
+      title: "Abas recentes",
+    },
     route: {
       loading: "Carregando workspace",
       connecting: "Conectando",
@@ -2597,6 +2600,7 @@ export const ptBR: TranslationResources = {
         toggleSettings: "Alternar Configurações",
         toggleFocusMode: "Alternar modo de foco",
         cycleTheme: "Alternar tema",
+        switchRecentTabs: "Alternar abas recentes",
         focusMessageInput: "Focar entrada de mensagem",
         cycleAgentMode: "Alternar modo do agente",
         toggleVoiceMode: "Alternar modo de voz",

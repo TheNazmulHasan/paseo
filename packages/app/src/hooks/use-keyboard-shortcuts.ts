@@ -20,6 +20,7 @@ import {
   shouldPublishBrowserShortcutPolicy,
 } from "@/desktop/browser/shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
+import { cycleTabSwitcher } from "@/tab-switcher/controller";
 import {
   routeKeyboardShortcut,
   type ShortcutAction,
@@ -65,8 +66,12 @@ export function useKeyboardShortcuts({
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const isDesktopApp = getIsElectronRuntime();
+  const shortcutsAvailable = keyboardShortcutsAvailable({
+    isNative,
+    isCompact: isMobile,
+    isDesktop: isDesktopApp,
+  });
   const isMac = getShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
@@ -211,6 +216,8 @@ export function useKeyboardShortcuts({
       case "shortcuts-dialog-toggle":
         useKeyboardShortcutsStore.getState().setShortcutsDialogOpen(action.nextOpen);
         return true;
+      case "tab-switcher-cycle":
+        return cycleTabSwitcher(action.delta);
     }
   };
 
