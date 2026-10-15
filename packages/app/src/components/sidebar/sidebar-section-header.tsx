@@ -15,6 +15,7 @@ export function SidebarSectionHeader({
   onToggle,
   testID,
   titleAccessory,
+  chevronAlwaysVisible,
   onLayout,
   children,
 }: {
@@ -24,6 +25,8 @@ export function SidebarSectionHeader({
   testID?: string;
   /** Sits right after the title, e.g. the Workspaces group-mode control. */
   titleAccessory?: ReactNode;
+  /** Fork (Desk/Shelf): show the fold chevron without hovering, so it is a visible affordance. */
+  chevronAlwaysVisible?: boolean;
   onLayout?: (event: LayoutChangeEvent) => void;
   children?: ReactNode;
 }) {
@@ -33,6 +36,7 @@ export function SidebarSectionHeader({
       collapsed={collapsed ?? false}
       onToggle={onToggle}
       testID={testID}
+      chevronAlwaysVisible={chevronAlwaysVisible}
     />
   ) : (
     <Text style={styles.title} numberOfLines={1} testID={testID}>
@@ -59,11 +63,13 @@ function CollapsibleTitle({
   collapsed,
   onToggle,
   testID,
+  chevronAlwaysVisible,
 }: {
   title: string;
   collapsed: boolean;
   onToggle: () => void;
   testID?: string;
+  chevronAlwaysVisible?: boolean;
 }) {
   const isCompact = useIsCompactFormFactor();
   const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
@@ -79,7 +85,7 @@ function CollapsibleTitle({
       {({ hovered }) => (
         <>
           <Text style={styles.title}>{title}</Text>
-          {hovered || isNative || isCompact ? (
+          {hovered || isNative || isCompact || chevronAlwaysVisible ? (
             <DensityIcon
               icon={collapsed ? ChevronRight : ChevronDown}
               size="xs"

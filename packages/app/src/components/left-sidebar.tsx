@@ -40,7 +40,6 @@ import { SidebarBringToFrontToggle } from "@/components/sidebar/sidebar-bring-to
 import { SidebarAttentionBanner } from "@/components/attention-banner-host";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { DensityIcon } from "@/components/ui/density-icon";
-import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
@@ -72,6 +71,7 @@ import { UsageSidebarItem, UsageSidebarRoot, useUsageSummary, useOpenSidebarUsag
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import { ShelfSectionHeader } from "@/desk/shelf-title";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
@@ -832,11 +832,7 @@ function WorkspacesSectionHeader() {
     [showGroupMode],
   );
   return (
-    <SidebarSectionHeader
-      title="Workspaces"
-      onLayout={handleHeaderLayout}
-      titleAccessory={groupModeControl}
-    >
+    <ShelfSectionHeader onLayout={handleHeaderLayout} titleAccessory={groupModeControl}>
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <View>
@@ -847,7 +843,7 @@ function WorkspacesSectionHeader() {
           <IconTooltipContent label="Display preferences" />
         </TooltipContent>
       </Tooltip>
-    </SidebarSectionHeader>
+    </ShelfSectionHeader>
   );
 }
 

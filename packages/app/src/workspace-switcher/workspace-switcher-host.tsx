@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { ProjectIconView } from "@/components/project-icon-view";
+import { useDeskStore } from "@/desk/desk-store";
+import { orderKeysDeskFirst, toKeySet } from "@/desk/model";
 import { isWeb } from "@/constants/platform";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
@@ -103,6 +105,8 @@ function useWorkspaceCandidateSync(): void {
   const { projects } = useProjects({ enabled: true });
   const { agents } = useAggregatedAgents({ demand: false });
   const layoutByWorkspace = useWorkspaceLayoutStore((state) => state.layoutByWorkspace);
+  const deskKeyList = useDeskStore((state) => state.deskKeys);
+  const deskKeys = useMemo(() => toKeySet(deskKeyList), [deskKeyList]);
 
   const { workspaceTitleByKey, projectByWorkspaceKey } = useMemo(() => {
     const titles = new Map<string, string>();
@@ -156,13 +160,18 @@ function useWorkspaceCandidateSync(): void {
     const validHistoryKeys = history
       .map((visit) => workspaceVisitKey(visit))
       .filter((key) => placementByKey.has(key) && key !== activeKey);
-    const orderedKeys = mergeWorkspaceOrder(
-      activeKey && placementByKey.has(activeKey)
-        ? [activeKey, ...validHistoryKeys]
-        : validHistoryKeys,
-      workspacePlacements.map((workspace) => workspace.workspaceKey),
-      WORKSPACE_SWITCHER_VISIBLE_LIMIT,
-    );
+    const rowZeroIsCurrent = Boolean(activeKey && placementByKey.has(activeKey));
+    // Desk first (fork mod #12), after row 0 and the workspace just left, which stay put so a
+    // quick tap still lands on it. The cut to the visible limit comes after the reorder.
+    const orderedKeys = orderKeysDeskFirst(
+      mergeWorkspaceOrder(
+        rowZeroIsCurrent && activeKey ? [activeKey, ...validHistoryKeys] : validHistoryKeys,
+        workspacePlacements.map((workspace) => workspace.workspaceKey),
+        Number.POSITIVE_INFINITY,
+      ),
+      deskKeys,
+      rowZeroIsCurrent ? 2 : 1,
+    ).slice(0, WORKSPACE_SWITCHER_VISIBLE_LIMIT);
 
     const rows: WorkspaceSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
@@ -190,6 +199,7 @@ function useWorkspaceCandidateSync(): void {
   }, [
     activeKey,
     agents,
+    deskKeys,
     history,
     iconDataByProjectViewKey,
     layoutByWorkspace,

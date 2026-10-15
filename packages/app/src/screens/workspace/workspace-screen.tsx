@@ -39,7 +39,7 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "expo-router/react-navigation";
-import { BackHandler, Text, View } from "react-native";
+import { BackHandler, Text, View, useWindowDimensions } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -58,6 +58,12 @@ import {
   MobileWorkspaceTabSwitcher,
 } from "@/screens/workspace/compact-workspace-header";
 import { WorkspaceHeaderProjectRow } from "@/screens/workspace/workspace-header-project-row";
+import { ArrangeMenu } from "@/arrange/arrange-menu";
+import { useLiveWatch } from "@/arrange/controller";
+import { openArrangeMenu } from "@/arrange/menu-store";
+import { arrangeCommandFromActionId, runArrangeCommand } from "@/arrange/run-command";
+import { useArrangeSelectionStore } from "@/arrange/selection-store";
+import { resolveArrangeViewport, useMeasuredArrangeViewport } from "@/arrange/viewport";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import {
   FloatingPanelPortalHost,
@@ -1322,6 +1328,34 @@ function WorkspaceScreenContent({
     explorerSidebarPaneId,
   });
   const lastMainPaneId = lastMainPaneRef.current.paneId;
+
+  // Arrange (fork mod #11): the split area's measured size, with the window minus the Explorer
+  // dock as the answer before the first layout pass.
+  const measuredArrangeViewport = useMeasuredArrangeViewport(persistenceKey);
+  const arrangeWindowSize = useWindowDimensions();
+  const arrangeExplorerWidth = useWorkspaceLayoutStore((state) =>
+    persistenceKey && explorerSidebarPaneId
+      ? (state.explorerSidebarWidthByWorkspace[persistenceKey] ?? 0)
+      : 0,
+  );
+  const arrangeViewport = useMemo(
+    () =>
+      resolveArrangeViewport({
+        measured: measuredArrangeViewport,
+        windowSize: { width: arrangeWindowSize.width, height: arrangeWindowSize.height },
+        explorerWidth: arrangeExplorerWidth,
+      }),
+    [
+      arrangeExplorerWidth,
+      arrangeWindowSize.height,
+      arrangeWindowSize.width,
+      measuredArrangeViewport,
+    ],
+  );
+  const arrangeViewportRef = useRef(arrangeViewport);
+  arrangeViewportRef.current = arrangeViewport;
+  const getArrangeViewport = useCallback(() => arrangeViewportRef.current, []);
+  useLiveWatch(persistenceKey, arrangeViewport);
   const hasHydratedWorkspaceLayoutStore = useWorkspaceLayoutStoreHydrated();
   const workspaceSetupStatus = getWorkspaceSetupStatus(workspaceDescriptor);
   const claimFailedSetupSurface = useWorkspaceSetupStore((state) => state.claimFailedSetupSurface);
@@ -2874,6 +2908,35 @@ function WorkspaceScreenContent({
     ],
   );
 
+  const handleWorkspaceArrangeAction = useCallback(
+    (action: KeyboardActionDefinition): boolean => {
+      if (!persistenceKey) {
+        return true;
+      }
+      if (action.id === "workspace.arrange.menu") {
+        openArrangeMenu(persistenceKey);
+        return true;
+      }
+      if (action.id === "workspace.arrange.select-tab") {
+        const focusedTabId = focusedPaneTabState.activeTabId;
+        if (focusedTabId) {
+          useArrangeSelectionStore.getState().toggleTab(persistenceKey, focusedTabId);
+        }
+        return true;
+      }
+      const command = arrangeCommandFromActionId(action.id);
+      if (!command) {
+        return false;
+      }
+      runArrangeCommand(command, {
+        workspaceKey: persistenceKey,
+        viewport: arrangeViewportRef.current,
+      });
+      return true;
+    },
+    [focusedPaneTabState.activeTabId, persistenceKey],
+  );
+
   // Shared by every handler below: these actions only exist on a focused workspace route.
   const workspaceActionsEnabled = Boolean(
     isRouteFocused && normalizedServerId && normalizedWorkspaceId,
@@ -2991,6 +3054,29 @@ function WorkspaceScreenContent({
     priority: 100,
     isActive: () => true,
     handle: handleWorkspacePaneAction,
+  });
+
+  useKeyboardActionHandler({
+    handlerId: buildWorkspaceKeyboardHandlerId({
+      name: "workspace-arrange-actions",
+      serverId: normalizedServerId,
+      workspaceId: normalizedWorkspaceId,
+    }),
+    actions: [
+      "workspace.arrange.single",
+      "workspace.arrange.columns2",
+      "workspace.arrange.columns3",
+      "workspace.arrange.grid",
+      "workspace.arrange.watch",
+      "workspace.arrange.restore",
+      "workspace.arrange.equalize",
+      "workspace.arrange.menu",
+      "workspace.arrange.select-tab",
+    ] as const,
+    enabled: workspaceActionsEnabled,
+    priority: 100,
+    isActive: () => true,
+    handle: handleWorkspaceArrangeAction,
   });
 
   useKeyboardActionHandler({
@@ -3355,6 +3441,9 @@ function WorkspaceScreenContent({
             hideLabels
           />
         ) : null}
+        {persistenceKey && supportsDesktopPaneSplits() ? (
+          <ArrangeMenu workspaceKey={persistenceKey} getViewport={getArrangeViewport} />
+        ) : null}
         {workspaceDirectory ? (
           <>
             <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
@@ -3372,6 +3461,8 @@ function WorkspaceScreenContent({
       </View>
     ),
     [
+      persistenceKey,
+      getArrangeViewport,
       workspaceDescriptor,
       normalizedServerId,
       normalizedWorkspaceId,

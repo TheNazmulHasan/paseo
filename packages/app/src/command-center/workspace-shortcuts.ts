@@ -9,6 +9,30 @@ interface ResolveWorkspaceCommandCenterShortcutsInput {
   platform: { isMac: boolean; isDesktop: boolean };
 }
 
+function resolveArrangeCommandCenterShortcuts({
+  overrides,
+  platform,
+}: ResolveWorkspaceCommandCenterShortcutsInput): Partial<WorkspaceCommandCenterShortcuts> {
+  return {
+    arrangeOnePane:
+      resolveShortcutKeysForAction("workspace-arrange-single", overrides, platform) ?? undefined,
+    arrangeColumns2:
+      resolveShortcutKeysForAction("workspace-arrange-columns2", overrides, platform) ?? undefined,
+    arrangeColumns3:
+      resolveShortcutKeysForAction("workspace-arrange-columns3", overrides, platform) ?? undefined,
+    arrangeGrid:
+      resolveShortcutKeysForAction("workspace-arrange-grid", overrides, platform) ?? undefined,
+    arrangeWatch:
+      resolveShortcutKeysForAction("workspace-arrange-watch", overrides, platform) ?? undefined,
+    arrangeRestore:
+      resolveShortcutKeysForAction("workspace-arrange-restore", overrides, platform) ?? undefined,
+    arrangeEqualize:
+      resolveShortcutKeysForAction("workspace-arrange-equalize", overrides, platform) ?? undefined,
+    arrangeMenu:
+      resolveShortcutKeysForAction("workspace-arrange-menu", overrides, platform) ?? undefined,
+  };
+}
+
 export function resolveWorkspaceCommandCenterShortcuts({
   overrides,
   platform,
@@ -34,7 +58,9 @@ export function resolveWorkspaceCommandCenterShortcuts({
     toggleFocusMode: resolveShortcutKeysForAction("toggle-focus", overrides, platform) ?? undefined,
     toggleExplorerSidebar:
       resolveShortcutKeysForAction("toggle-right-sidebar", overrides, platform) ?? undefined,
+    ...resolveArrangeCommandCenterShortcuts({ overrides, platform }),
     // Workspace management shortcuts
     pinWorkspace: resolveShortcutKeysForAction("pin-workspace", overrides, platform) ?? undefined,
+    toggleDesk: resolveShortcutKeysForAction("desk-toggle", overrides, platform) ?? undefined,
   };
 }

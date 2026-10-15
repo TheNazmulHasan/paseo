@@ -52,6 +52,7 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.project.pick": { id: "workspace.project.pick", scope: "workspace" },
   "workspace.archive": { id: "workspace.archive", scope: "sidebar" },
   "workspace.pin": { id: "workspace.pin", scope: "sidebar" },
+  "workspace.desk.toggle": { id: "workspace.desk.toggle", scope: "sidebar" },
   "worktree.new": { id: "worktree.new", scope: "sidebar" },
   "workspace.terminal.new": { id: "workspace.terminal.new", scope: "workspace" },
   "workspace.tab.close.current": { id: "workspace.tab.close-current", scope: "workspace" },
@@ -67,6 +68,15 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.pane.move-tab.up": { id: "workspace.pane.move-tab.up", scope: "workspace" },
   "workspace.pane.move-tab.down": { id: "workspace.pane.move-tab.down", scope: "workspace" },
   "workspace.pane.close": { id: "workspace.pane.close", scope: "workspace" },
+  "workspace.arrange.single": { id: "workspace.arrange.single", scope: "workspace" },
+  "workspace.arrange.columns2": { id: "workspace.arrange.columns2", scope: "workspace" },
+  "workspace.arrange.columns3": { id: "workspace.arrange.columns3", scope: "workspace" },
+  "workspace.arrange.grid": { id: "workspace.arrange.grid", scope: "workspace" },
+  "workspace.arrange.watch": { id: "workspace.arrange.watch", scope: "workspace" },
+  "workspace.arrange.restore": { id: "workspace.arrange.restore", scope: "workspace" },
+  "workspace.arrange.equalize": { id: "workspace.arrange.equalize", scope: "workspace" },
+  "workspace.arrange.menu": { id: "workspace.arrange.menu", scope: "workspace" },
+  "workspace.arrange.select-tab": { id: "workspace.arrange.select-tab", scope: "workspace" },
   "view.toggle.focus": { id: "workspace.focus.toggle", scope: "workspace" },
 };
 

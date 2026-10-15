@@ -12,6 +12,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useArrangeViewportReporter } from "@/arrange/viewport";
 import { View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -233,12 +234,13 @@ export function SplitContainer({
       ? removeWindowChromeCorner(inheritedWindowChromeCorners, "top-right")
       : inheritedWindowChromeCorners;
   const mainColumnStyle = styles.mainColumn;
+  const handleArrangeViewportLayout = useArrangeViewportReporter(workspaceKey);
   const renderRoot = useMemo(() => wrapRootPaneForStableMount(splitRoot.root), [splitRoot.root]);
   return (
     <RenderProfile id="SplitContainer">
       <View style={styles.workspaceShell}>
         <WindowChromeRegion corners={mainColumnWindowChromeCorners}>
-          <View style={mainColumnStyle}>
+          <View style={mainColumnStyle} onLayout={handleArrangeViewportLayout}>
             {renderMainHeader?.()}
             {splitRoot.usesFallbackStrip && <WindowChromeSafeArea placement="below" />}
             {renderRoot ? (

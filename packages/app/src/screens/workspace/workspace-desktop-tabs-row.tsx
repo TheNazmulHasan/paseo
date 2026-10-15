@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
   type Dispatch,
+  type RefObject,
   type SetStateAction,
 } from "react";
 import { Pressable, Text, View, type LayoutChangeEvent, type ScrollView } from "react-native";
@@ -23,6 +24,7 @@ import {
   Settings,
   Columns2,
   Rows2,
+  Check,
   Ellipsis,
   Maximize,
   Minimize,
@@ -64,6 +66,14 @@ import {
 } from "@/screens/workspace/workspace-tab-presentation";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
 import { useCanPinWorkspaceTab, useSetWorkspaceTabPinned } from "@/workspace-tabs/use-pinned-tabs";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { orderedWorkspaceTabIds, type SelectionGesture } from "@/arrange/selection-helpers";
+import { useArrangeSelectionStore } from "@/arrange/selection-store";
+import {
+  useArrangeSelectionLifecycle,
+  useSelectionPointerGesture,
+} from "@/arrange/use-selection-gestures";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import {
   buildWorkspaceDesktopTabActions,
   type WorkspaceDesktopTabActions,
@@ -148,9 +158,13 @@ const ThemedRows2 = withUnistyles(Rows2);
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedMaximize = withUnistyles(Maximize);
 const ThemedMinimize = withUnistyles(Minimize);
+const ThemedCheck = withUnistyles(Check);
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const extraMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground ?? theme.colors.foreground,
+});
 
 function updateMeasuredWidth(
   setWidth: React.Dispatch<React.SetStateAction<number>>,
@@ -756,9 +770,72 @@ function TabHandleContent({
   );
 }
 
+/**
+ * Fork (Arrange): whether this tab is in the workspace's Arrange selection, and the Cmd/Ctrl-click
+ * and Shift-click gestures that change it. A modifier-click on the close button still just closes.
+ */
+function useTabArrangeSelection(input: {
+  workspaceKey: string | null;
+  tabId: string;
+  closeButtonTestId: string;
+  gestureRef: RefObject<View | null>;
+}): boolean {
+  const { workspaceKey, tabId, closeButtonTestId, gestureRef } = input;
+  const isSelected = useArrangeSelectionStore((state) =>
+    workspaceKey ? state.byWorkspace[workspaceKey]?.tabIds.includes(tabId) === true : false,
+  );
+  const handleSelectionGesture = useCallback(
+    (gesture: SelectionGesture) => {
+      if (!workspaceKey) {
+        return;
+      }
+      const selection = useArrangeSelectionStore.getState();
+      if (gesture === "toggle") {
+        selection.toggleTab(workspaceKey, tabId);
+        return;
+      }
+      const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
+      selection.selectTabRange(
+        workspaceKey,
+        layout ? orderedWorkspaceTabIds(layout) : [tabId],
+        tabId,
+      );
+    },
+    [tabId, workspaceKey],
+  );
+  const shouldIgnoreSelectionTarget = useCallback(
+    (target: EventTarget | null) =>
+      target instanceof Element && target.closest(`[data-testid="${closeButtonTestId}"]`) !== null,
+    [closeButtonTestId],
+  );
+  useSelectionPointerGesture(gestureRef, {
+    allowRange: true,
+    shouldIgnoreTarget: shouldIgnoreSelectionTarget,
+    onGesture: handleSelectionGesture,
+  });
+  return isSelected;
+}
+
+/** Fork (Arrange): accent check in the chip's corner, always visible so selection reads without hovering. */
+function TabSelectedBadge({ selected, testIdentity }: { selected: boolean; testIdentity: string }) {
+  if (!selected) {
+    return null;
+  }
+  return (
+    <View
+      pointerEvents="none"
+      style={styles.tabSelectedBadge}
+      testID={`workspace-tab-selected-${testIdentity}`}
+    >
+      <ThemedCheck size={9} strokeWidth={3} uniProps={accentForegroundColorMapping} />
+    </View>
+  );
+}
+
 function TabChip({
   serverId,
   workspaceId,
+  workspaceKey,
   tab,
   isActive,
   isDragging,
@@ -780,6 +857,8 @@ function TabChip({
 }: {
   serverId: string;
   workspaceId: string;
+  /** Arrange selection scope; null when the workspace has no persistence key. */
+  workspaceKey: string | null;
   tab: WorkspaceTabDescriptor;
   isActive: boolean;
   isDragging: boolean;
@@ -819,12 +898,20 @@ function TabChip({
   );
   const isCompact = useIsCompactFormFactor();
   const [hovered, setHovered] = useState(false);
+  const isSelected = useTabArrangeSelection({
+    workspaceKey,
+    tabId: tab.tabId,
+    closeButtonTestId,
+    gestureRef: middleClickRef,
+  });
   // An active tab in a pane that does not have focus stays legible but quiet: it keeps the fill of
   // a hovered chip and the muted label, so only one chip in the window reads as the live one.
   const isActiveFocused = isActive && isFocused;
   const isHovered = hovered || isCloseHovered;
   const isHighlighted = isActiveFocused || isHovered;
-  const isFilled = isActive || isHovered;
+  // Fork (Arrange): a selected tab is filled like a hovered one even when idle; the accent badge
+  // in its corner (always visible) is what tells selection apart from the active fill.
+  const isFilled = isActive || isHovered || isSelected;
   const chipBackdrop: SurfaceBackdrop = resolveWorkspaceTabChipBackdrop({
     rail,
     isActiveFocused,
@@ -1009,6 +1096,7 @@ function TabChip({
           })}
         </ContextMenuContent>
       </ContextMenu>
+      <TabSelectedBadge selected={isSelected} testIdentity={testIdentity} />
     </View>
   );
 }
@@ -1110,6 +1198,20 @@ function ResolvedWorkspaceDesktopTabsRow({
 }: ResolvedWorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
+  const arrangeWorkspaceKey = buildWorkspaceTabPersistenceKey({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+  });
+  useArrangeSelectionLifecycle({
+    workspaceKey: arrangeWorkspaceKey,
+    handlerId: buildWorkspaceKeyboardHandlerId({
+      name: "workspace-arrange-selection-escape",
+      serverId: normalizedServerId,
+      workspaceId: normalizedWorkspaceId,
+      paneId,
+    }),
+    enabled: isFocused,
+  });
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const tabsScrollRef = useRef<ScrollView>(null);
@@ -1369,6 +1471,7 @@ function ResolvedWorkspaceDesktopTabsRow({
           key={`${item.tab.key}:${item.tab.kind}`}
           serverId={normalizedServerId}
           workspaceId={normalizedWorkspaceId}
+          workspaceKey={arrangeWorkspaceKey}
           item={item}
           isFocused={isFocused}
           isDragging={isActive}
@@ -1400,6 +1503,7 @@ function ResolvedWorkspaceDesktopTabsRow({
     },
     [
       activeDragTabId,
+      arrangeWorkspaceKey,
       isFocused,
       layout.closeButtonPolicy,
       layout.items,
@@ -1530,6 +1634,7 @@ function ResolvedWorkspaceDesktopTabsRow({
 function ResolvedDesktopTabChip({
   serverId,
   workspaceId,
+  workspaceKey,
   item,
   isFocused,
   isDragging,
@@ -1559,6 +1664,7 @@ function ResolvedDesktopTabChip({
 }: {
   serverId: string;
   workspaceId: string;
+  workspaceKey: string | null;
   item: ResolvedWorkspaceDesktopTabRowItem;
   isFocused: boolean;
   isDragging: boolean;
@@ -1655,6 +1761,7 @@ function ResolvedDesktopTabChip({
       <TabChip
         serverId={serverId}
         workspaceId={workspaceId}
+        workspaceKey={workspaceKey}
         tab={item.tab}
         isActive={item.isActive}
         isDragging={isDragging}
@@ -1747,6 +1854,19 @@ const styles = StyleSheet.create((theme) => ({
   tabFill: (backdrop: SurfaceBackdrop) => ({
     backgroundColor: theme.colors[backdrop],
   }),
+  // Corner badge on the chip, always visible: the selection must read without hovering.
+  tabSelectedBadge: {
+    position: "absolute",
+    top: 1,
+    left: 1,
+    width: 12,
+    height: 12,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
+  },
   tabHoverFrame: {
     position: "relative",
   },

@@ -37,6 +37,7 @@ import { useWorkspaceHasRunningBackgroundTasks } from "@/hooks/use-workspace-bac
 import { useWorkspaceHeartbeatRows } from "@/hooks/use-workspace-heartbeat";
 import { buildHeartbeatPillPresentation } from "@/heartbeats/track-presentation";
 import { useWorkspaceCacheWarm } from "@/prompt-cache/use-workspace-cache-warm";
+import { DeskRowToggle } from "@/desk/desk-row-toggle";
 
 const needsInputColorMapping = (theme: Theme) => ({
   color: theme.colors.surface0,
@@ -202,7 +203,19 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             <Text style={workspaceBranchTextStyle} numberOfLines={1}>
               {workspaceLabel}
             </Text>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={sidebarWorkspaceRowStyles.rowRight}>
+              {children}
+              {/* After the slot, not before: the kebab overlays leftwards from the slot's edge,
+                  so a button to its left would sit under it. The Cmd+N badge owns this corner. */}
+              {showShortcutBadge && shortcutNumber !== null ? null : (
+                <DeskRowToggle
+                  workspaceKey={workspace.workspaceKey}
+                  serverId={workspace.serverId}
+                  workspaceId={workspace.workspaceId}
+                  isHovered={isHovered}
+                />
+              )}
+            </View>
           </View>
           <WorkspaceMetaRow
             currentBranch={workspace.currentBranch}
