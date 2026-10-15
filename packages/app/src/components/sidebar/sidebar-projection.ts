@@ -9,6 +9,7 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
+import type { WorkspaceSort } from "@/projects/workspace-structure";
 import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
 import {
   resolveSidebarProjectIconTargets,
@@ -43,6 +44,8 @@ export interface SidebarProjectionInput {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
+  /** Only "recent" changes the pinned section; anything else keeps its pinned-at + drag order. */
+  workspaceSort?: WorkspaceSort;
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -54,6 +57,8 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     projects: input.projects,
     keys: input.pinnedKeys,
     pinnedWorkspaceOrder: input.pinnedWorkspaceOrder,
+    sortMode: input.workspaceSort,
+    workspaceEntriesByKey: input.workspaceEntriesByKey,
   });
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(

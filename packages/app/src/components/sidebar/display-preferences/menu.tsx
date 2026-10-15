@@ -380,7 +380,9 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
             <MenuSubTrigger
               id="sort"
               value={
-                workspaceSortSupported || preferences.workspaceSort === "manual"
+                workspaceSortSupported ||
+                preferences.workspaceSort === "manual" ||
+                preferences.workspaceSort === "recent"
                   ? t(`sidebar.display.sort.${preferences.workspaceSort}`)
                   : undefined
               }
@@ -476,10 +478,15 @@ function SortPage({
   const selectManual = useCallback(() => setWorkspaceSort("manual"), [setWorkspaceSort]);
   const selectCreated = useCallback(() => setWorkspaceSort("created"), [setWorkspaceSort]);
   const selectLastPrompt = useCallback(() => setWorkspaceSort("lastPrompt"), [setWorkspaceSort]);
+  const selectRecent = useCallback(() => setWorkspaceSort("recent"), [setWorkspaceSort]);
   return (
     <>
       <MenuItem selected={preferences.workspaceSort === "manual"} onSelect={selectManual}>
         {t("sidebar.display.sort.manual")}
+      </MenuItem>
+      {/* Fork: ordered client-side by latest activity, so it needs no host support. */}
+      <MenuItem selected={preferences.workspaceSort === "recent"} onSelect={selectRecent}>
+        {t("sidebar.display.sort.recent")}
       </MenuItem>
       {automaticSortSupported ? (
         <>

@@ -1400,6 +1400,7 @@ export const zhCN: TranslationResources = {
         created: "创建时间",
         manual: "手动",
         lastPrompt: "最近提示词",
+        recent: "最近活动",
         updateHost: "请更新主机以排序工作区",
       },
       grouping: {

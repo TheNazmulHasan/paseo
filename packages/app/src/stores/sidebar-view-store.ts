@@ -9,8 +9,10 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 export type SidebarGroupMode = "project" | "status";
 
 /**
- * How the project sections are ordered. "manual" is the persisted drag order;
- * "recent" puts the project with the freshest workspace activity first.
+ * How the project sections are ordered. "manual" is the persisted drag order; "recent" puts
+ * the project with the freshest workspace activity first. The fork defaults to "recent"
+ * (upstream #4140 defaults to "manual"). Rows inside a project and the Pinned section follow
+ * upstream's `workspaceSort` instead, which has its own "recent" option.
  */
 export type SidebarProjectSortMode = "manual" | "recent";
 
@@ -101,7 +103,7 @@ const SidebarLabelFilterSchema = z.object({
   labels: z.array(z.string()),
 });
 const SidebarViewPersistedStateSchema = z.strictObject({
-  workspaceSort: z.enum(["manual", "created", "lastPrompt"]).optional(),
+  workspaceSort: z.enum(["manual", "created", "lastPrompt", "recent"]).optional(),
   showBackground: z.boolean().optional(),
   groupMode: PersistedSidebarGroupModeSchema.optional(),
   projectSort: PersistedSidebarProjectSortSchema.optional(),
@@ -144,8 +146,8 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
     return {
       showBackground: false,
       groupMode: "project",
-      workspaceSort: "created",
-      projectSort: "manual",
+      workspaceSort: "recent",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
@@ -158,8 +160,8 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
     return {
       showBackground: false,
       groupMode: legacyGroupMode,
-      workspaceSort: "created",
-      projectSort: "manual",
+      workspaceSort: "recent",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),
@@ -169,8 +171,8 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
   return {
     showBackground: state.showBackground ?? false,
     groupMode: state.groupMode === "status" ? "status" : "project",
-    workspaceSort: state.workspaceSort ?? "created",
-    projectSort: state.projectSort ?? "manual",
+    workspaceSort: state.workspaceSort ?? "recent",
+    projectSort: state.projectSort ?? "recent",
     hostFilters: readHostFilters(state),
     projectFilters: state.projectFilters ?? [],
     labelFilter: state.labelFilter
@@ -209,8 +211,8 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
     (set) => ({
       showBackground: false,
       groupMode: "project",
-      workspaceSort: "created",
-      projectSort: "manual",
+      workspaceSort: "recent",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: emptyLabelFilter(),

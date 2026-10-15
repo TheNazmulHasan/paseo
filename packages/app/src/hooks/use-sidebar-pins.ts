@@ -5,7 +5,12 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import { applyStoredOrdering } from "@/hooks/sidebar-workspaces-view-model";
+import {
+  applyStoredOrdering,
+  sortSidebarWorkspacesByRecentActivity,
+  type SidebarWorkspaceEntry,
+} from "@/hooks/sidebar-workspaces-view-model";
+import type { WorkspaceSort } from "@/projects/workspace-structure";
 import { useSessionStore } from "@/stores/session-store";
 
 export interface PinnedSidebarKeys {
@@ -110,11 +115,14 @@ export function usePinnedSidebarKeys(projects: SidebarProjectEntry[]): PinnedSid
 }
 
 // Splits the sidebar into a dedicated Pinned section (chats) and the regular list below.
-// Pinned chats are ordered most-recently-pinned first.
+// Pinned chats are ordered most-recently-pinned first, then by the manual drag order — or,
+// under `workspaceSort === "recent"`, by the freshest activity (`statusEnteredAt`), where the drag order is deliberately ignored.
 export function splitPinnedSidebarGroups(input: {
   projects: SidebarProjectEntry[];
   keys: PinnedSidebarKeys;
   pinnedWorkspaceOrder: string[];
+  sortMode?: WorkspaceSort;
+  workspaceEntriesByKey?: ReadonlyMap<string, SidebarWorkspaceEntry>;
 }): PinnedSidebarGroups {
   const { projects, keys, pinnedWorkspaceOrder } = input;
   if (keys.pinnedWorkspaceKeys.length === 0) {
@@ -138,6 +146,16 @@ export function splitPinnedSidebarGroups(input: {
       keys.pinnedAtByKey[a.workspaceKey] ?? "",
     ),
   );
+
+  if (input.sortMode === "recent" && input.workspaceEntriesByKey) {
+    return {
+      pinnedChats: sortSidebarWorkspacesByRecentActivity({
+        workspaces: pinnedChats,
+        workspaceEntriesByKey: input.workspaceEntriesByKey,
+      }),
+      unpinnedProjects,
+    };
+  }
 
   return {
     pinnedChats: applyStoredOrdering({

@@ -1420,6 +1420,7 @@ export const en = {
         created: "Created",
         manual: "Manual",
         lastPrompt: "Last prompt",
+        recent: "Recent activity",
         updateHost: "Update hosts to sort workspaces",
       },
       grouping: {

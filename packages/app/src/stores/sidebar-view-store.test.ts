@@ -86,10 +86,10 @@ describe("sidebar view store", () => {
         },
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "recent",
       showBackground: false,
       groupMode: "status",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: { labels: [] },
@@ -103,10 +103,10 @@ describe("sidebar view store", () => {
         hostFilter: "host-a",
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "recent",
       showBackground: false,
       groupMode: "status",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: ["host-a"],
       projectFilters: [],
       labelFilter: { labels: [] },
@@ -120,10 +120,10 @@ describe("sidebar view store", () => {
         hostFilters: ["host-a", "host-b"],
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "recent",
       showBackground: false,
       groupMode: "status",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: ["host-a", "host-b"],
       projectFilters: [],
       labelFilter: { labels: [] },
@@ -233,10 +233,10 @@ describe("sidebar view store", () => {
         projectFilters: ["project-a", "project-b"],
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "recent",
       showBackground: false,
       groupMode: "project",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: ["host-a"],
       projectFilters: ["project-a", "project-b"],
       labelFilter: { labels: [] },
@@ -245,10 +245,10 @@ describe("sidebar view store", () => {
 
   it("never keeps project filters from state the schema rejects", () => {
     expect(migrateSidebarViewState({ projectFilters: "project-a" })).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "recent",
       showBackground: false,
       groupMode: "project",
-      projectSort: "manual",
+      projectSort: "recent",
       hostFilters: [],
       projectFilters: [],
       labelFilter: { labels: [] },
@@ -299,8 +299,9 @@ describe("sidebar view store", () => {
   });
 });
 
-it("defaults to Created and persists the Last prompt choice across migration", () => {
-  expect(migrateSidebarViewState({}).workspaceSort).toBe("created");
+it("defaults to Recent and persists the Last prompt choice across migration", () => {
+  expect(migrateSidebarViewState({}).workspaceSort).toBe("recent");
+  expect(migrateSidebarViewState({ workspaceSort: "created" }).workspaceSort).toBe("created");
   expect(
     migrateSidebarViewState({ workspaceSort: "lastPrompt", groupMode: "status" }),
   ).toMatchObject({ workspaceSort: "lastPrompt", groupMode: "status" });

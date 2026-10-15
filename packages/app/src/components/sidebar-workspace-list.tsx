@@ -2085,6 +2085,12 @@ export function SidebarWorkspaceList({
   const setPinnedWorkspaceOrder = useSidebarOrderStore((state) => state.setPinnedWorkspaceOrder);
   const handlePinnedWorkspaceReorder = useCallback(
     (reorderedWorkspaces: SidebarWorkspacePlacement[]) => {
+      // Under the recent sort Pinned is ordered by activity; a drop must not overwrite the
+      // manual order that Manual mode will restore. (Rows inside a project need no guard:
+      // upstream's `manualSort` gate already hides their drag handles.)
+      if (useSidebarViewStore.getState().workspaceSort === "recent") {
+        return;
+      }
       const reorderedWorkspaceKeys = reorderedWorkspaces.map((workspace) => workspace.workspaceKey);
       const currentOrder = getPinnedWorkspaceOrder();
       if (

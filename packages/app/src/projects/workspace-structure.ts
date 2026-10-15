@@ -30,7 +30,12 @@ interface WorkspaceStructureSession {
   workspaces: Iterable<WorkspaceDescriptor>;
 }
 
-export type WorkspaceSort = "manual" | "created" | "lastPrompt";
+/**
+ * "recent" (fork) orders rows by latest activity. The structure builder only sees descriptors,
+ * so it falls back to creation time (like "created"); the sidebar view-model then re-sorts by
+ * the hydrated `statusEnteredAt`, which the descriptor does not carry.
+ */
+export type WorkspaceSort = "manual" | "created" | "lastPrompt" | "recent";
 
 interface WorkspaceSortItem {
   workspaceName: string;

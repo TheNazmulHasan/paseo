@@ -1415,6 +1415,7 @@ export const ko: TranslationResources = {
         created: "생성일",
         manual: "수동",
         lastPrompt: "마지막 프롬프트",
+        recent: "최근 활동",
         updateHost: "작업 공간을 정렬하려면 호스트를 업데이트하세요",
       },
       grouping: {

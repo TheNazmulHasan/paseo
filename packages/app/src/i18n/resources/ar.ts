@@ -1409,6 +1409,7 @@ export const ar: TranslationResources = {
         created: "تاريخ الإنشاء",
         manual: "يدوي",
         lastPrompt: "آخر طلب",
+        recent: "النشاط الأخير",
         updateHost: "حدّث المضيفين لترتيب مساحات العمل",
       },
       grouping: {
