@@ -26,6 +26,7 @@ export type KeyboardActionId =
   | "workspace.tab.target.changes"
   | "workspace.tab.target.files"
   | "workspace.tab.close.current"
+  | "workspace.tab.copy.id"
   | "workspace.tab.navigate.index"
   | "workspace.tab.navigate.relative"
   | "workspace.tab.switcher.cycle"
@@ -66,6 +67,7 @@ export type KeyboardActionId =
   | "workspace.archive"
   | "workspace.pin"
   | "workspace.desk.toggle"
+  | "workspace.board.split"
   | "view.toggle.focus"
   | "theme.cycle"
   | "message-input.action";

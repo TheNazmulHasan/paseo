@@ -123,6 +123,57 @@ describe("workspace switcher shortcut isolation", () => {
   });
 });
 
+describe("Hyper+Arrow pane focus", () => {
+  const CASES = [
+    ["left", "ArrowLeft"],
+    ["right", "ArrowRight"],
+    ["up", "ArrowUp"],
+    ["down", "ArrowDown"],
+  ] as const;
+
+  it.each(CASES)("Hyper+%s focuses a pane on mac even while typing in a field", (dir, key) => {
+    for (const focusScope of ["message-input", "editable"] as const) {
+      expectShortcutResolution({
+        event: { key, code: key, metaKey: true, ctrlKey: true, altKey: true, shiftKey: true },
+        context: { isMac: true, focusScope },
+        action: `workspace.pane.focus.${dir}`,
+      });
+    }
+  });
+
+  it.each(CASES)("Ctrl+Alt+Shift+%s focuses a pane on non-mac while typing", (dir, key) => {
+    expectShortcutResolution({
+      event: { key, code: key, ctrlKey: true, altKey: true, shiftKey: true },
+      context: { isMac: false, focusScope: "message-input" },
+      action: `workspace.pane.focus.${dir}`,
+    });
+  });
+
+  it("keeps the Cmd+Shift+Arrow bindings", () => {
+    const combos = DEFAULT_BINDINGS.filter(
+      (binding) => binding.action === "workspace.pane.focus.left",
+    ).map((binding) => binding.combo);
+    expect(combos).toContain("Cmd+Shift+ArrowLeft");
+    expect(combos).toContain("Cmd+Ctrl+Alt+Shift+ArrowLeft");
+    expect(combos).toContain("Ctrl+Alt+Shift+ArrowLeft");
+  });
+
+  it("has unique binding ids and no combo shared by two different actions", () => {
+    const ids = DEFAULT_BINDINGS.map((binding) => binding.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const byCombo = new Map<string, Set<string>>();
+    for (const binding of DEFAULT_BINDINGS) {
+      if (binding.when?.mac === undefined || binding.when.focusScope !== undefined) continue;
+      const key = `${binding.when.mac}:${binding.combo}:${JSON.stringify(binding.when)}`;
+      const actions = byCombo.get(key) ?? new Set<string>();
+      actions.add(binding.action);
+      byCombo.set(key, actions);
+    }
+    const clashes = [...byCombo.entries()].filter(([, actions]) => actions.size > 1);
+    expect(clashes).toEqual([]);
+  });
+});
+
 describe("workspace arrange shortcuts", () => {
   const ARRANGE_CASES = [
     ["single", "1", "Digit1"],
@@ -301,6 +352,50 @@ describe("workspace desk toggle shortcut", () => {
     expect(
       resolveShortcutKeysForAction("desk-toggle", overrides, { isMac: true, isDesktop: true }),
     ).toEqual([["mod", "ctrl", "Y"]]);
+  });
+});
+
+describe("workspace board split shortcut", () => {
+  it("maps Ctrl+Cmd+O on mac to workspace.board.split, even while typing", () => {
+    for (const focusScope of ["other", "message-input", "terminal"] as const) {
+      expectShortcutResolution({
+        event: { key: "o", code: "KeyO", ctrlKey: true, metaKey: true },
+        context: { isMac: true, isDesktop: true, focusScope },
+        action: "workspace.board.split",
+      });
+    }
+  });
+
+  it("maps Ctrl+Alt+O on non-mac to workspace.board.split, but not while typing", () => {
+    expectShortcutResolution({
+      event: { key: "o", code: "KeyO", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "other" },
+      action: "workspace.board.split",
+    });
+    expectNoShortcutResolution({
+      event: { key: "o", code: "KeyO", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "message-input" },
+    });
+  });
+
+  it("shares its default chords with no other binding", () => {
+    const combos = new Set(
+      DEFAULT_BINDINGS.filter((binding) => binding.action === "workspace.board.split").map(
+        (binding) => binding.combo,
+      ),
+    );
+    expect(combos.size).toBe(2);
+    expect(
+      DEFAULT_BINDINGS.filter(
+        (binding) => binding.action !== "workspace.board.split" && combos.has(binding.combo),
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists the action in the workspaces help section", () => {
+    const sections = buildKeyboardShortcutHelpSections({ isMac: true, isDesktop: true });
+    const rows = sections.find((section) => section.id === "workspaces")?.rows ?? [];
+    expect(rows.some((row) => row.id === "workspace-board-split")).toBe(true);
   });
 });
 

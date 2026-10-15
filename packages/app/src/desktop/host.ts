@@ -195,6 +195,13 @@ export interface DesktopInvokeBridge {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface DesktopKeybindingsBridge {
+  /** Raw entries of ~/.paseo/keybindings.json (validated in the renderer). */
+  get?: () => Promise<{ entries: unknown[] }>;
+  /** Writes ~/.paseo/keybindings.defaults.json; main skips the write when unchanged. */
+  writeDefaults?: (content: string) => Promise<void>;
+}
+
 export interface DesktopHostBridge {
   platform?: string;
   windowChromeMode?: string;
@@ -202,6 +209,7 @@ export interface DesktopHostBridge {
   getPendingOpenProject?: () => Promise<string | null>;
   agentNavigation?: DesktopAgentNavigationBridge;
   events?: DesktopEventsBridge;
+  keybindings?: DesktopKeybindingsBridge;
   window?: DesktopWindowModuleBridge;
   dialog?: DesktopDialogBridge;
   notification?: DesktopNotificationBridge;

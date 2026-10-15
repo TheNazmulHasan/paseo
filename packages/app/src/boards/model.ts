@@ -1,0 +1,1146 @@
+// Pure board math. No stores, no React: every rule here is tested against plain boards, and
+// the controller only wires results into the store. A board's layout is a normal
+// WorkspaceLayout with no Explorer, so Arrange's own model runs on it unchanged.
+import {
+  arrangeLayoutTabs,
+  collectArrangeTabs,
+  computeGridShape,
+  equalizeLayout,
+  pruneSplitSizes,
+  reconcileSnapshot,
+} from "@/arrange/model";
+import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
+import type { Board, BoardSessionRef, BoardTabOrigin } from "@/boards/types";
+import { generateDraftId } from "@/stores/draft-keys";
+import { defaultWorkspaceLayoutIds } from "@/stores/workspace-layout-ids";
+import type { WorkspaceLayoutNodeIdPrefix } from "@/stores/workspace-layout-ids";
+import {
+  clampNormalizedSizes,
+  closeTabInLayout,
+  collectAllPanes,
+  findPaneById,
+  findPaneContainingTab,
+  focusPaneInLayout,
+  getTreeDepth,
+  moveTabToPaneInLayout,
+  selectTabInPaneInLayout,
+  type SplitNode,
+  type SplitPane,
+  type WorkspaceLayout,
+} from "@/stores/workspace-layout-actions";
+import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import {
+  createWorkspaceFileTabTarget,
+  normalizeWorkspaceFileLocation,
+  type WorkspaceFileLocation,
+} from "@/workspace/file-open";
+
+/** Passed to Arrange's model wherever it asks for the Explorer: a board has none. */
+export const NO_EXPLORER_PANE_ID = "__no_explorer__";
+
+/** Beyond this many panes on one axis the minimum split size (0.1) cannot hold equal widths. */
+const MAX_SPLIT_AXIS = 10;
+
+/** Same ceiling the workspace layout store puts on its split tree. */
+const MAX_BOARD_TREE_DEPTH = 5;
+
+export type BoardSplitLayout = "columns" | "grid";
+
+export interface BoardIds {
+  createTabId: () => string;
+  createNodeId: (prefix: WorkspaceLayoutNodeIdPrefix) => string;
+  now: () => number;
+  /** Id of a new draft agent tab; defaults to the app's generateDraftId. */
+  createDraftId?: () => string;
+}
+
+export const DEFAULT_BOARD_IDS: BoardIds = {
+  createTabId: () => `boardtab_${defaultWorkspaceLayoutIds.createNodeId("pane").slice(5)}`,
+  createNodeId: defaultWorkspaceLayoutIds.createNodeId,
+  now: () => Date.now(),
+};
+
+interface PaneWithTabs extends SplitPane {
+  tabs: WorkspaceTab[];
+}
+
+type NodeWithTabs =
+  | { kind: "pane"; pane: PaneWithTabs }
+  | {
+      kind: "group";
+      group: {
+        id: string;
+        direction: "horizontal" | "vertical";
+        children: NodeWithTabs[];
+        sizes: number[];
+      };
+    };
+
+type BoardEntryRef = Pick<BoardTabOrigin, "serverId" | "workspaceId" | "agentId" | "path">;
+
+/**
+ * Two entries are the same when they are the same agent on a host, or the same file path in
+ * the same workspace (a file belongs to one workspace, an agent is addressed by host alone).
+ */
+export function boardSessionKey(ref: BoardEntryRef): string {
+  if (ref.agentId === undefined) {
+    return `file\n${ref.serverId}\n${ref.workspaceId}\n${ref.path ?? ""}`;
+  }
+  return `${ref.serverId}\n${ref.agentId}`;
+}
+
+/** The layout tab target for a board entry: the file when it has a path, else the agent. */
+export function boardTabTarget(ref: BoardEntryRef): WorkspaceTabTarget {
+  if (ref.agentId === undefined) {
+    return createWorkspaceFileTabTarget({ path: ref.path ?? "" });
+  }
+  return { kind: "agent", agentId: ref.agentId };
+}
+
+function originOf(ref: BoardSessionRef): BoardTabOrigin {
+  return ref.agentId === undefined
+    ? { serverId: ref.serverId, workspaceId: ref.workspaceId, path: ref.path }
+    : { serverId: ref.serverId, workspaceId: ref.workspaceId, agentId: ref.agentId };
+}
+
+function equalSizes(count: number): number[] {
+  return Array.from({ length: count }, () => 1 / count);
+}
+
+function makePane(id: string, tabs: WorkspaceTab[], focusedTabId?: string | null): PaneWithTabs {
+  const tabIds = tabs.map((tab) => tab.tabId);
+  return {
+    id,
+    tabs,
+    tabIds,
+    focusedTabId:
+      focusedTabId && tabIds.includes(focusedTabId) ? focusedTabId : (tabIds[0] ?? null),
+  };
+}
+
+function paneNode(id: string, tabs: WorkspaceTab[], focusedTabId?: string | null): NodeWithTabs {
+  return { kind: "pane", pane: makePane(id, tabs, focusedTabId) };
+}
+
+function groupNode(
+  id: string,
+  direction: "horizontal" | "vertical",
+  children: NodeWithTabs[],
+): NodeWithTabs {
+  return { kind: "group", group: { id, direction, children, sizes: equalSizes(children.length) } };
+}
+
+function asLayoutRoot(node: NodeWithTabs): SplitNode {
+  return node as SplitNode;
+}
+
+function firstPaneId(root: NodeWithTabs): string | null {
+  if (root.kind === "pane") {
+    return root.pane.id;
+  }
+  for (const child of root.group.children) {
+    const found = firstPaneId(child);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** One pane, no tabs: what a new board starts as. */
+export function createEmptyBoardLayout(ids: BoardIds = DEFAULT_BOARD_IDS): WorkspaceLayout {
+  const pane = paneNode(ids.createNodeId("pane"), []);
+  return { root: asLayoutRoot(pane), focusedPaneId: firstPaneId(pane) };
+}
+
+/** Every tab on the board, in on-screen order. */
+export function listBoardTabs(layout: WorkspaceLayout): WorkspaceTab[] {
+  return collectArrangeTabs(layout, NO_EXPLORER_PANE_ID);
+}
+
+export function countBoardSessions(board: Board): number {
+  return listBoardTabs(board.layout).length;
+}
+
+export function findBoardTabId(board: Board, ref: BoardSessionRef): string | null {
+  const key = boardSessionKey(ref);
+  for (const [tabId, origin] of Object.entries(board.origins)) {
+    if (boardSessionKey(origin) === key) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+function updatePane(
+  node: NodeWithTabs,
+  paneId: string,
+  update: (pane: PaneWithTabs) => PaneWithTabs,
+): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node.pane.id === paneId ? { kind: "pane", pane: update(node.pane) } : node;
+  }
+  return {
+    kind: "group",
+    group: {
+      ...node.group,
+      children: node.group.children.map((child) => updatePane(child, paneId, update)),
+    },
+  };
+}
+
+function resolveLandingPane(layout: WorkspaceLayout): SplitPane | null {
+  const visible = collectAllPanes(layout.root);
+  return (
+    visible.find((pane) => pane.id === layout.focusedPaneId) ??
+    visible[0] ??
+    findPaneById(layout.root, layout.focusedPaneId)
+  );
+}
+
+/**
+ * Adds sessions (agent or file tabs) at the end of the focused pane (the last one added becomes the
+ * selected tab). Sessions already on the board, or repeated in `sessions`, are skipped.
+ */
+export function addSessionsToBoardModel(
+  board: Board,
+  sessions: readonly BoardSessionRef[],
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; addedTabIds: string[] } {
+  const known = new Set(Object.values(board.origins).map(boardSessionKey));
+  const origins = { ...board.origins };
+  const added: WorkspaceTab[] = [];
+  for (const session of sessions) {
+    const key = boardSessionKey(session);
+    if (known.has(key)) {
+      continue;
+    }
+    known.add(key);
+    const tab: WorkspaceTab = {
+      tabId: ids.createTabId(),
+      target: boardTabTarget(session),
+      createdAt: ids.now(),
+    };
+    added.push(tab);
+    origins[tab.tabId] = originOf(session);
+  }
+  const landing = resolveLandingPane(board.layout);
+  if (added.length === 0 || !landing) {
+    return { board, addedTabIds: [] };
+  }
+  const root = updatePane(board.layout.root as NodeWithTabs, landing.id, (pane) =>
+    makePane(pane.id, [...pane.tabs, ...added], added[added.length - 1]?.tabId),
+  );
+  return {
+    board: {
+      ...board,
+      origins,
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: landing.id },
+    },
+    addedTabIds: added.map((tab) => tab.tabId),
+  };
+}
+
+function dropNewTabs(node: NodeWithTabs): NodeWithTabs {
+  if (node.kind === "group") {
+    return {
+      kind: "group",
+      group: { ...node.group, children: node.group.children.map(dropNewTabs) },
+    };
+  }
+  const tabs = node.pane.tabs.filter((tab) => tab.target.kind !== "new_tab");
+  return tabs.length === node.pane.tabs.length
+    ? node
+    : paneNode(node.pane.id, tabs, node.pane.focusedTabId);
+}
+
+/** Closes a tab, forgets its origin, and collapses a pane it empties (never the last pane). */
+export function removeTabFromBoard(board: Board, tabId: string): Board {
+  const closed = closeTabInLayout({ layout: board.layout, tabId, explorerSidebarPaneId: null });
+  if (!closed) {
+    return board;
+  }
+  // The workspace layout refills its last pane with a "new tab" placeholder; a board has no
+  // such tab (every tab is an agent), so the pane is left empty instead.
+  const layout = { ...closed, root: asLayoutRoot(dropNewTabs(closed.root as NodeWithTabs)) };
+  const { [tabId]: _removed, ...origins } = board.origins;
+  return { ...board, layout, origins };
+}
+
+export function moveBoardTab(board: Board, tabId: string, toPaneId: string): Board {
+  const layout = moveTabToPaneInLayout({ layout: board.layout, tabId, toPaneId });
+  return layout ? { ...board, layout } : board;
+}
+
+export function focusBoardPaneModel(board: Board, paneId: string): Board {
+  const layout = focusPaneInLayout({ layout: board.layout, paneId });
+  return layout ? { ...board, layout } : board;
+}
+
+/** Selects the tab in its pane and makes that pane the focused one, like clicking it. */
+export function selectBoardTabModel(board: Board, paneId: string, tabId: string): Board {
+  const selected = selectTabInPaneInLayout({ layout: board.layout, paneId, tabId });
+  const focused = focusPaneInLayout({ layout: selected ?? board.layout, paneId });
+  const layout = focused ?? selected;
+  return layout ? { ...board, layout } : board;
+}
+
+function findGroupChildCount(node: SplitNode, groupId: string): number | null {
+  if (node.kind === "pane") {
+    return null;
+  }
+  if (node.group.id === groupId) {
+    return node.group.children.length;
+  }
+  for (const child of node.group.children) {
+    const found = findGroupChildCount(child, groupId);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** Stores a dragged divider as an override, clamped like the workspace store does. */
+export function resizeBoardSplitModel(board: Board, groupId: string, sizes: number[]): Board {
+  if (findGroupChildCount(board.layout.root, groupId) !== sizes.length) {
+    return board;
+  }
+  return { ...board, splitSizes: { ...board.splitSizes, [groupId]: clampNormalizedSizes(sizes) } };
+}
+
+/**
+ * Re-deals the board's TABS into fresh panes (all of them, in on-screen order unless `tabIds`
+ * says otherwise). Only the Live board's own growth/refresh uses this; a user's Arrange
+ * preset goes through arrangeBoardPanes, which keeps every pane.
+ */
+export function arrangeBoardTabs(
+  board: Board,
+  input: { preset: ArrangePreset; viewport: ArrangeViewport; tabIds?: readonly string[] },
+): Board | null {
+  const tabIds = input.tabIds ?? listBoardTabs(board.layout).map((tab) => tab.tabId);
+  const layout = arrangeLayoutTabs(board.layout, {
+    tabIds,
+    preset: input.preset,
+    viewport: input.viewport,
+    explorerPaneId: NO_EXPLORER_PANE_ID,
+  });
+  return layout ? { ...board, layout, splitSizes: {} } : null;
+}
+
+export function equalizeBoardLayout(board: Board): Board {
+  // Dragged dividers live in split-size overrides; clearing them is what makes it equal.
+  return {
+    ...board,
+    layout: equalizeLayout(board.layout, NO_EXPLORER_PANE_ID),
+    splitSizes: {},
+  };
+}
+
+/** Puts a saved layout back, minus tabs closed since and plus tabs opened since. */
+export function restoreBoardLayout(
+  board: Board,
+  snapshot: { layout: WorkspaceLayout; splitSizes: Record<string, number[]> },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board {
+  const layout = reconcileSnapshot(snapshot.layout, listBoardTabs(board.layout), {
+    explorerPaneId: NO_EXPLORER_PANE_ID,
+    currentExplorerPane: null,
+    createNodeId: ids.createNodeId,
+  });
+  return { ...board, layout, splitSizes: pruneSplitSizes(layout, snapshot.splitSizes) };
+}
+
+/**
+ * Deals groups onto `cells` panes: one each, then the overflow round-robin as extra tabs.
+ * A pane keeps the focused tab of the group that owns the cell.
+ */
+function dealIntoCells(
+  groups: ReadonlyArray<{ tabs: WorkspaceTab[]; focusedTabId: string | null }>,
+  cells: number,
+): Array<{ tabs: WorkspaceTab[]; focusedTabId: string | null }> {
+  const panes = Array.from({ length: Math.min(cells, groups.length) }, () => ({
+    tabs: [] as WorkspaceTab[],
+    focusedTabId: null as string | null,
+  }));
+  groups.forEach((group, index) => {
+    const pane = panes[index < panes.length ? index : (index - panes.length) % panes.length];
+    if (!pane) {
+      return;
+    }
+    pane.tabs.push(...group.tabs);
+    if (index < panes.length) {
+      pane.focusedTabId = group.focusedTabId;
+    }
+  });
+  return panes;
+}
+
+/** One pane's worth of sessions; `focused` is the tab that shows (default: the first). */
+export interface BoardSplitGroup {
+  sessions: readonly BoardSessionRef[];
+  focused?: BoardSessionRef | null;
+}
+
+/**
+ * One pane per group of sessions, each pane a tab strip. "columns" puts the panes side by
+ * side with equal widths; "grid" lays them out like Arrange's grid for this viewport.
+ * `keepTabIds` (session key → tab id) lets a rebuild keep the tabs that already exist, so
+ * their agent panels do not remount.
+ */
+export function buildWorkspaceSplit(input: {
+  groups: readonly BoardSplitGroup[];
+  layout: BoardSplitLayout;
+  viewport: ArrangeViewport;
+  keepTabIds?: ReadonlyMap<string, string>;
+  ids?: BoardIds;
+}): { layout: WorkspaceLayout; origins: Record<string, BoardTabOrigin> } {
+  const ids = input.ids ?? DEFAULT_BOARD_IDS;
+  const origins: Record<string, BoardTabOrigin> = {};
+  const seen = new Set<string>();
+  const tabGroups = input.groups.map((group) => {
+    const focusedKey = group.focused ? boardSessionKey(group.focused) : null;
+    let focusedTabId: string | null = null;
+    const tabs = group.sessions.flatMap((session) => {
+      const key = boardSessionKey(session);
+      if (seen.has(key)) {
+        return [];
+      }
+      seen.add(key);
+      const tab: WorkspaceTab = {
+        tabId: input.keepTabIds?.get(key) ?? ids.createTabId(),
+        target: boardTabTarget(session),
+        createdAt: ids.now(),
+      };
+      origins[tab.tabId] = originOf(session);
+      if (key === focusedKey) {
+        focusedTabId = tab.tabId;
+      }
+      return [tab];
+    });
+    return { tabs, focusedTabId };
+  });
+  if (tabGroups.length === 0) {
+    return { layout: createEmptyBoardLayout(ids), origins };
+  }
+
+  const shape =
+    input.layout === "grid"
+      ? computeGridShape(tabGroups.length, input.viewport).rowCounts
+      : [Math.min(tabGroups.length, MAX_SPLIT_AXIS)];
+  const cells = shape.reduce((sum, count) => sum + count, 0);
+  const panes = dealIntoCells(tabGroups, cells).map(({ tabs, focusedTabId }) =>
+    paneNode(ids.createNodeId("pane"), tabs, focusedTabId),
+  );
+
+  let cursor = 0;
+  const rows = shape.map((count) => {
+    const rowPanes = panes.slice(cursor, cursor + count);
+    cursor += count;
+    return rowPanes.length === 1 && rowPanes[0]
+      ? rowPanes[0]
+      : groupNode(ids.createNodeId("group"), "horizontal", rowPanes);
+  });
+  const root =
+    rows.length === 1 && rows[0] ? rows[0] : groupNode(ids.createNodeId("group"), "vertical", rows);
+  return {
+    layout: { root: asLayoutRoot(root), focusedPaneId: firstPaneId(root) },
+    origins,
+  };
+}
+
+/**
+ * The Live board's growth step: newly active sessions join and the board is re-gridded over
+ * (current tabs in order + the newcomers). Nothing is ever removed here; finished sessions
+ * stay until a refresh. Returns null when nobody is new.
+ */
+export function appendActiveSessions(
+  board: Board,
+  active: readonly BoardSessionRef[],
+  viewport: ArrangeViewport,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  const current = listBoardTabs(board.layout).map((tab) => tab.tabId);
+  const { board: grown, addedTabIds } = addSessionsToBoardModel(board, active, ids);
+  if (addedTabIds.length === 0) {
+    return null;
+  }
+  return (
+    arrangeBoardTabs(grown, { preset: "grid", viewport, tabIds: [...current, ...addedTabIds] }) ??
+    grown
+  );
+}
+
+/**
+ * The Live board's reset: a grid of exactly `active`. Sessions that were already on the board
+ * keep their tab (and on-screen order); the rest follow in the order given.
+ */
+export function rebuildLiveBoard(
+  board: Board,
+  active: readonly BoardSessionRef[],
+  viewport: ArrangeViewport,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board {
+  const wanted = new Map(active.map((session) => [boardSessionKey(session), session]));
+  const kept: BoardSessionRef[] = [];
+  const keepTabIds = new Map<string, string>();
+  for (const tab of listBoardTabs(board.layout)) {
+    const origin = board.origins[tab.tabId];
+    const key = origin ? boardSessionKey(origin) : null;
+    if (origin && key && wanted.has(key) && !keepTabIds.has(key)) {
+      keepTabIds.set(key, tab.tabId);
+      kept.push(origin);
+    }
+  }
+  const ordered = [...kept, ...active];
+  const grouped = buildWorkspaceSplit({
+    groups: [{ sessions: ordered }],
+    layout: "columns",
+    viewport,
+    keepTabIds,
+    ids,
+  });
+  const single: Board = { ...board, layout: grouped.layout, origins: grouped.origins };
+  return (
+    arrangeBoardTabs({ ...single, splitSizes: {} }, { preset: "grid", viewport }) ?? {
+      ...single,
+      splitSizes: {},
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Arranging panes (never tabs)
+// ---------------------------------------------------------------------------
+
+function collectPaneNodes(node: NodeWithTabs): NodeWithTabs[] {
+  return node.kind === "pane" ? [node] : node.group.children.flatMap(collectPaneNodes);
+}
+
+function distribute(total: number, parts: number): number[] {
+  const base = Math.floor(total / parts);
+  const extra = total % parts;
+  return Array.from({ length: parts }, (_, index) => base + (index < extra ? 1 : 0));
+}
+
+/** Row sizes for the grid preset that always hold exactly `count` panes. */
+function gridRowCounts(count: number, viewport: ArrangeViewport): number[] {
+  const shape = computeGridShape(count, viewport).rowCounts;
+  const counts: number[] = [];
+  let remaining = count;
+  for (const rowCount of shape) {
+    const take = Math.min(rowCount, remaining);
+    if (take > 0) {
+      counts.push(take);
+      remaining -= take;
+    }
+  }
+  // A screen too small for every pane still keeps them all: spread the rest over the rows.
+  return remaining > 0 ? distribute(count, Math.max(1, shape.length)) : counts;
+}
+
+function chunkNodes(
+  panes: NodeWithTabs[],
+  counts: readonly number[],
+  direction: "horizontal" | "vertical",
+  ids: BoardIds,
+): NodeWithTabs[] {
+  let cursor = 0;
+  return counts.map((count) => {
+    const chunk = panes.slice(cursor, cursor + count);
+    cursor += count;
+    return chunk.length === 1 && chunk[0]
+      ? chunk[0]
+      : groupNode(ids.createNodeId("group"), direction, chunk);
+  });
+}
+
+function wrapNodes(
+  nodes: NodeWithTabs[],
+  direction: "horizontal" | "vertical",
+  ids: BoardIds,
+): NodeWithTabs {
+  return nodes.length === 1 && nodes[0]
+    ? nodes[0]
+    : groupNode(ids.createNodeId("group"), direction, nodes);
+}
+
+/**
+ * Re-lays out the board's PANES for a preset. Panes are never created, merged or deleted and
+ * keep their tabs and selected tab: "single" = one row, "columns-2/3" = panes dealt into 2 / 3
+ * columns (vertical stacks) in current order, "grid" = Arrange's grid rows for the viewport.
+ * Null when the board has no tabs.
+ */
+export function arrangeBoardPanes(
+  board: Board,
+  input: { preset: ArrangePreset; viewport: ArrangeViewport },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  if (listBoardTabs(board.layout).length === 0) {
+    return null;
+  }
+  const panes = collectPaneNodes(board.layout.root as NodeWithTabs);
+  if (panes.length === 0) {
+    return null;
+  }
+  let root: NodeWithTabs;
+  if (input.preset === "single") {
+    root = wrapNodes(panes, "horizontal", ids);
+  } else if (input.preset === "grid") {
+    const rows = chunkNodes(panes, gridRowCounts(panes.length, input.viewport), "horizontal", ids);
+    root = wrapNodes(rows, "vertical", ids);
+  } else {
+    const columnCount = Math.min(input.preset === "columns-2" ? 2 : 3, panes.length);
+    const columns = chunkNodes(panes, distribute(panes.length, columnCount), "vertical", ids);
+    root = wrapNodes(columns, "horizontal", ids);
+  }
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Moving panes (drag and drop)
+// ---------------------------------------------------------------------------
+
+export type BoardPaneDropPosition = "left" | "right" | "above" | "below" | "swap";
+
+/** Writes stored divider overrides into the tree so the move works on what is on screen. */
+function bakeSplitSizes(node: NodeWithTabs, overrides: Record<string, number[]>): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const children = node.group.children.map((child) => bakeSplitSizes(child, overrides));
+  const override = overrides[node.group.id];
+  const sizes = override?.length === children.length ? override : node.group.sizes;
+  return { kind: "group", group: { ...node.group, children, sizes } };
+}
+
+function removePaneNode(node: NodeWithTabs, paneId: string): NodeWithTabs | null {
+  if (node.kind === "pane") {
+    return node.pane.id === paneId ? null : node;
+  }
+  const kept: Array<{ node: NodeWithTabs; size: number }> = [];
+  node.group.children.forEach((child, index) => {
+    const next = removePaneNode(child, paneId);
+    if (next) {
+      kept.push({ node: next, size: node.group.sizes[index] ?? 1 / node.group.children.length });
+    }
+  });
+  if (kept.length === 0) {
+    return null;
+  }
+  if (kept.length === 1 && kept[0]) {
+    return kept[0].node;
+  }
+  const total = kept.reduce((sum, entry) => sum + entry.size, 0);
+  return {
+    kind: "group",
+    group: {
+      ...node.group,
+      children: kept.map((entry) => entry.node),
+      sizes: kept.map((entry) => (total > 0 ? entry.size / total : 1 / kept.length)),
+    },
+  };
+}
+
+/** A group directly inside a group of the same direction is spliced into its parent. */
+function flattenSameDirection(node: NodeWithTabs): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const children: NodeWithTabs[] = [];
+  const sizes: number[] = [];
+  node.group.children.forEach((rawChild, index) => {
+    const child = flattenSameDirection(rawChild);
+    const size = node.group.sizes[index] ?? 1 / node.group.children.length;
+    if (child.kind === "group" && child.group.direction === node.group.direction) {
+      child.group.children.forEach((grand, grandIndex) => {
+        children.push(grand);
+        sizes.push(size * (child.group.sizes[grandIndex] ?? 1 / child.group.children.length));
+      });
+      return;
+    }
+    children.push(child);
+    sizes.push(size);
+  });
+  return { kind: "group", group: { ...node.group, children, sizes } };
+}
+
+function insertBesideTarget(
+  node: NodeWithTabs,
+  targetId: string,
+  moved: NodeWithTabs,
+  position: Exclude<BoardPaneDropPosition, "swap">,
+  ids: BoardIds,
+): NodeWithTabs | null {
+  const direction = position === "left" || position === "right" ? "horizontal" : "vertical";
+  const before = position === "left" || position === "above";
+  const pair = (target: NodeWithTabs): NodeWithTabs[] =>
+    before ? [moved, target] : [target, moved];
+  if (node.kind === "pane") {
+    return node.pane.id === targetId
+      ? groupNode(ids.createNodeId("group"), direction, pair(node))
+      : null;
+  }
+  const { group } = node;
+  const index = group.children.findIndex(
+    (child) => child.kind === "pane" && child.pane.id === targetId,
+  );
+  if (index >= 0) {
+    const target = group.children[index];
+    if (!target) {
+      return null;
+    }
+    const children = group.children.slice();
+    const sizes = group.sizes.slice();
+    if (group.direction === direction) {
+      const share = (sizes[index] ?? 1 / group.children.length) / 2;
+      children.splice(index, 1, ...pair(target));
+      sizes.splice(index, 1, share, share);
+    } else {
+      children[index] = groupNode(ids.createNodeId("group"), direction, pair(target));
+    }
+    return { kind: "group", group: { ...group, children, sizes } };
+  }
+  for (let i = 0; i < group.children.length; i += 1) {
+    const child = group.children[i];
+    const inserted = child ? insertBesideTarget(child, targetId, moved, position, ids) : null;
+    if (inserted) {
+      const children = group.children.slice();
+      children[i] = inserted;
+      return { kind: "group", group: { ...group, children } };
+    }
+  }
+  return null;
+}
+
+function swapPaneNodes(node: NodeWithTabs, aId: string, bId: string): NodeWithTabs {
+  if (node.kind === "pane") {
+    return node;
+  }
+  const byId = new Map(
+    collectPaneNodes(node).flatMap((pane) => (pane.kind === "pane" ? [[pane.pane.id, pane]] : [])),
+  );
+  const replace = (current: NodeWithTabs): NodeWithTabs => {
+    if (current.kind === "pane") {
+      if (current.pane.id === aId) {
+        return byId.get(bId) ?? current;
+      }
+      return current.pane.id === bId ? (byId.get(aId) ?? current) : current;
+    }
+    return {
+      kind: "group",
+      group: { ...current.group, children: current.group.children.map(replace) },
+    };
+  };
+  return replace(node);
+}
+
+/**
+ * Moves a pane (with all its tabs) next to another: "swap" exchanges their places; the other
+ * positions take the pane out of its spot (single-child groups collapse) and put it on that
+ * side of the target, the two sharing the target's old share evenly. Divider overrides are
+ * folded into the tree and cleared. Null when impossible (same pane, unknown pane, too deep).
+ */
+export function moveBoardPaneModel(
+  board: Board,
+  paneId: string,
+  targetPaneId: string,
+  position: BoardPaneDropPosition,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  if (paneId === targetPaneId) {
+    return null;
+  }
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const panes = new Map(
+    collectPaneNodes(root).flatMap((pane) => (pane.kind === "pane" ? [[pane.pane.id, pane]] : [])),
+  );
+  const moved = panes.get(paneId);
+  if (!moved || !panes.has(targetPaneId)) {
+    return null;
+  }
+  let next: NodeWithTabs | null;
+  if (position === "swap") {
+    next = swapPaneNodes(root, paneId, targetPaneId);
+  } else {
+    const without = removePaneNode(root, paneId);
+    const inserted = without
+      ? insertBesideTarget(without, targetPaneId, moved, position, ids)
+      : null;
+    next = inserted ? flattenSameDirection(inserted) : null;
+  }
+  if (!next || getTreeDepth(asLayoutRoot(next)) > MAX_BOARD_TREE_DEPTH) {
+    return null;
+  }
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(next) },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Adding a workspace to a view / removing one
+// ---------------------------------------------------------------------------
+
+/** True for a single pane, or one horizontal row whose children are all panes. */
+function isSingleRow(root: NodeWithTabs): boolean {
+  return (
+    root.kind === "pane" ||
+    (root.group.direction === "horizontal" && root.group.children.every((c) => c.kind === "pane"))
+  );
+}
+
+/**
+ * Appends one NEW pane per group to the board, each filled like a split pane (same builder as
+ * buildWorkspaceSplit). Existing panes keep their tabs and selected tab. A single row grows by
+ * the new columns (existing widths scaled to make room); any other shape is re-laid out over
+ * all its panes with `preset` (the board's last one) or a grid. Sessions already on the board
+ * are skipped. Divider overrides are folded into the tree and cleared.
+ */
+export function addWorkspacePanesToBoard(
+  board: Board,
+  groups: readonly BoardSplitGroup[],
+  input: { preset?: ArrangePreset | null; viewport: ArrangeViewport },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; addedPaneIds: string[] } {
+  if (groups.length === 0) {
+    return { board, addedPaneIds: [] };
+  }
+  const known = new Set(Object.values(board.origins).map(boardSessionKey));
+  const fresh = groups.map((group) => ({
+    sessions: group.sessions.filter((session) => !known.has(boardSessionKey(session))),
+    focused: group.focused && !known.has(boardSessionKey(group.focused)) ? group.focused : null,
+  }));
+  const built = buildWorkspaceSplit({
+    groups: fresh,
+    layout: "columns",
+    viewport: input.viewport,
+    ids,
+  });
+  const newPanes = collectPaneNodes(built.layout.root as NodeWithTabs);
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const existingPanes = collectPaneNodes(root);
+  const total = existingPanes.length + newPanes.length;
+
+  let nextRoot: NodeWithTabs;
+  if (isSingleRow(root)) {
+    const children = [...existingPanes, ...newPanes];
+    const scale = existingPanes.length / total;
+    const oldSizes = root.kind === "group" ? root.group.sizes : [1];
+    const sizes = [
+      ...existingPanes.map((_, index) => (oldSizes[index] ?? 1 / existingPanes.length) * scale),
+      ...newPanes.map(() => 1 / total),
+    ];
+    const base =
+      root.kind === "group"
+        ? root.group
+        : { id: ids.createNodeId("group"), direction: "horizontal" as const };
+    nextRoot = { kind: "group", group: { ...base, children, sizes } };
+  } else {
+    const flat: Board = {
+      ...board,
+      layout: {
+        ...board.layout,
+        root: asLayoutRoot(wrapNodes([...existingPanes, ...newPanes], "horizontal", ids)),
+      },
+      splitSizes: {},
+    };
+    const arranged = arrangeBoardPanes(
+      { ...flat, origins: { ...board.origins, ...built.origins } },
+      { preset: input.preset ?? "grid", viewport: input.viewport },
+      ids,
+    );
+    nextRoot = (arranged ?? flat).layout.root as NodeWithTabs;
+  }
+  return {
+    board: {
+      ...board,
+      origins: { ...board.origins, ...built.origins },
+      layout: { ...board.layout, root: asLayoutRoot(nextRoot) },
+      splitSizes: {},
+    },
+    addedPaneIds: newPanes.flatMap((node) => (node.kind === "pane" ? [node.pane.id] : [])),
+  };
+}
+
+/**
+ * Takes a whole pane (workspace) out of the view, with its tabs and origins; emptied groups
+ * collapse. The last pane is never removed. Focus moves to the first pane if it was on this one.
+ */
+export function removeWorkspacePaneFromBoard(board: Board, paneId: string): Board {
+  const root = bakeSplitSizes(board.layout.root as NodeWithTabs, board.splitSizes);
+  const panes = collectPaneNodes(root);
+  const target = panes.find((node) => node.kind === "pane" && node.pane.id === paneId);
+  if (!target || target.kind !== "pane" || panes.length <= 1) {
+    return board;
+  }
+  const without = removePaneNode(root, paneId);
+  if (!without) {
+    return board;
+  }
+  const next = flattenSameDirection(without);
+  const dropped = new Set(target.pane.tabIds);
+  const origins = Object.fromEntries(
+    Object.entries(board.origins).filter(([tabId]) => !dropped.has(tabId)),
+  );
+  const focusedPaneId =
+    board.layout.focusedPaneId === paneId ? firstPaneId(next) : board.layout.focusedPaneId;
+  return {
+    ...board,
+    origins,
+    layout: { ...board.layout, root: asLayoutRoot(next), focusedPaneId },
+    splitSizes: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Files and new agents open as tabs in the pane they were asked from
+// ---------------------------------------------------------------------------
+
+type WorkspaceRef = Pick<BoardTabOrigin, "serverId" | "workspaceId">;
+
+/**
+ * Opens a file as a tab in `sourcePaneId`, belonging to the workspace in `origin`, and selects
+ * it. A file already open on the board is not duplicated: its tab is selected (and its pane
+ * focused), wherever it is. Null for an unknown pane or an empty path.
+ */
+export function openFileBesideModel(
+  board: Board,
+  input: { sourcePaneId: string; origin: WorkspaceRef; location: WorkspaceFileLocation },
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; tabId: string; paneId: string } | null {
+  const location = normalizeWorkspaceFileLocation(input.location);
+  const source = findPaneById(board.layout.root, input.sourcePaneId);
+  if (!location || !source) {
+    return null;
+  }
+  const ref: BoardSessionRef = {
+    serverId: input.origin.serverId,
+    workspaceId: input.origin.workspaceId,
+    path: location.path,
+  };
+
+  const existingTabId = findBoardTabId(board, ref);
+  const existingPane = existingTabId
+    ? findPaneContainingTab(board.layout.root, existingTabId)
+    : null;
+  if (existingTabId && existingPane) {
+    return {
+      board: selectBoardTabModel(board, existingPane.id, existingTabId),
+      tabId: existingTabId,
+      paneId: existingPane.id,
+    };
+  }
+
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: createWorkspaceFileTabTarget(location),
+    createdAt: ids.now(),
+  };
+  const root = updatePane(board.layout.root as NodeWithTabs, source.id, (pane) =>
+    makePane(pane.id, [...pane.tabs, tab], tab.tabId),
+  );
+  return {
+    board: {
+      ...board,
+      origins: { ...board.origins, [tab.tabId]: originOf(ref) },
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: source.id },
+    },
+    tabId: tab.tabId,
+    paneId: source.id,
+  };
+}
+
+/** The workspace a pane shows: its focused tab's, else its first tab's. */
+function paneWorkspace(board: Board, pane: SplitPane): WorkspaceRef | null {
+  const candidates = [pane.focusedTabId, ...pane.tabIds];
+  for (const tabId of candidates) {
+    const origin = tabId ? board.origins[tabId] : undefined;
+    if (origin) {
+      return { serverId: origin.serverId, workspaceId: origin.workspaceId };
+    }
+  }
+  return null;
+}
+
+/**
+ * Adds a "New agent" draft tab to a pane, for that pane's workspace, and selects it. Null when
+ * the pane is unknown or has no tab to say which workspace it belongs to.
+ */
+export function openDraftInPaneModel(
+  board: Board,
+  paneId: string,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): { board: Board; tabId: string } | null {
+  const pane = findPaneById(board.layout.root, paneId);
+  const workspace = pane ? paneWorkspace(board, pane) : null;
+  if (!pane || !workspace) {
+    return null;
+  }
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: { kind: "draft", draftId: ids.createDraftId?.() ?? generateDraftId() },
+    createdAt: ids.now(),
+  };
+  const root = updatePane(board.layout.root as NodeWithTabs, pane.id, (current) =>
+    makePane(current.id, [...current.tabs, tab], tab.tabId),
+  );
+  return {
+    board: {
+      ...board,
+      origins: { ...board.origins, [tab.tabId]: { ...workspace } },
+      layout: { ...board.layout, root: asLayoutRoot(root), focusedPaneId: pane.id },
+    },
+    tabId: tab.tabId,
+  };
+}
+
+function retargetTabInNode(
+  node: NodeWithTabs,
+  tabId: string,
+  target: WorkspaceTabTarget,
+): NodeWithTabs {
+  if (node.kind === "group") {
+    return {
+      kind: "group",
+      group: {
+        ...node.group,
+        children: node.group.children.map((child) => retargetTabInNode(child, tabId, target)),
+      },
+    };
+  }
+  if (!node.pane.tabIds.includes(tabId)) {
+    return node;
+  }
+  return {
+    kind: "pane",
+    pane: {
+      ...node.pane,
+      tabs: node.pane.tabs.map((tab) => (tab.tabId === tabId ? { ...tab, target } : tab)),
+    },
+  };
+}
+
+/**
+ * Swaps a tab's target in place (same tab id, same slot), e.g. a draft that became an agent,
+ * and brings its origin along. Unknown tab = the board unchanged.
+ */
+export function retargetBoardTabModel(
+  board: Board,
+  tabId: string,
+  target: WorkspaceTabTarget,
+): Board {
+  const origin = board.origins[tabId];
+  if (!origin || !findPaneContainingTab(board.layout.root, tabId)) {
+    return board;
+  }
+  const nextOrigin: BoardTabOrigin = { serverId: origin.serverId, workspaceId: origin.workspaceId };
+  if (target.kind === "agent") {
+    nextOrigin.agentId = target.agentId;
+  } else if (target.kind === "file") {
+    nextOrigin.path = target.path;
+  }
+  const root = retargetTabInNode(board.layout.root as NodeWithTabs, tabId, target);
+  return {
+    ...board,
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+    origins: { ...board.origins, [tabId]: nextOrigin },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Following a workspace live (split views)
+// ---------------------------------------------------------------------------
+
+function workspaceKeyOf(origin: Pick<BoardTabOrigin, "serverId" | "workspaceId">): string {
+  return `${origin.serverId}\n${origin.workspaceId}`;
+}
+
+/** The pane that holds most of a workspace's tabs (first in tree order on a tie), or null. */
+function findWorkspacePane(board: Board, workspace: WorkspaceRef): PaneWithTabs | null {
+  const wanted = workspaceKeyOf(workspace);
+  let best: PaneWithTabs | null = null;
+  let bestCount = 0;
+  for (const node of collectPaneNodes(board.layout.root as NodeWithTabs)) {
+    if (node.kind !== "pane") {
+      continue;
+    }
+    const count = node.pane.tabIds.filter((tabId) => {
+      const origin = board.origins[tabId];
+      return origin ? workspaceKeyOf(origin) === wanted : false;
+    }).length;
+    if (count > bestCount) {
+      best = node.pane;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * A session the workspace just gained: appended to the end of that workspace's pane and made
+ * the pane's active tab. The board's focused pane does not move (the user may be typing in
+ * another one) and every existing tab keeps its id, so open panels do not remount. Null when
+ * the session is already on the board or the board has no pane for that workspace.
+ */
+export function appendSessionToWorkspacePane(
+  board: Board,
+  session: BoardSessionRef,
+  ids: BoardIds = DEFAULT_BOARD_IDS,
+): Board | null {
+  const key = boardSessionKey(session);
+  if (Object.values(board.origins).some((origin) => boardSessionKey(origin) === key)) {
+    return null;
+  }
+  const pane = findWorkspacePane(board, session);
+  if (!pane) {
+    return null;
+  }
+  const tab: WorkspaceTab = {
+    tabId: ids.createTabId(),
+    target: boardTabTarget(session),
+    createdAt: ids.now(),
+  };
+  const root = updatePane(board.layout.root as NodeWithTabs, pane.id, (current) =>
+    makePane(current.id, [...current.tabs, tab], tab.tabId),
+  );
+  return {
+    ...board,
+    origins: { ...board.origins, [tab.tabId]: originOf(session) },
+    layout: { ...board.layout, root: asLayoutRoot(root) },
+  };
+}
+
+/**
+ * Closes the board's tab for a session the workspace no longer has. Only a tab that belongs to
+ * that workspace counts, and a draft (no agent, no file) is never one. Same board when absent.
+ */
+export function removeSessionFromBoard(board: Board, session: BoardSessionRef): Board {
+  const key = boardSessionKey(session);
+  const wanted = workspaceKeyOf(session);
+  for (const [tabId, origin] of Object.entries(board.origins)) {
+    if (
+      (origin.agentId !== undefined || origin.path !== undefined) &&
+      boardSessionKey(origin) === key &&
+      workspaceKeyOf(origin) === wanted
+    ) {
+      return removeTabFromBoard(board, tabId);
+    }
+  }
+  return board;
+}
+
+/** Whether the session has a tab on the board (a draft never counts). */
+export function boardHasSession(board: Board, session: BoardSessionRef): boolean {
+  const key = boardSessionKey(session);
+  return Object.values(board.origins).some(
+    (origin) =>
+      (origin.agentId !== undefined || origin.path !== undefined) &&
+      boardSessionKey(origin) === key,
+  );
+}

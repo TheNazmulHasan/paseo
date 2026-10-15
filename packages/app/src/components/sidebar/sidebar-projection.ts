@@ -64,6 +64,7 @@ export interface SidebarProjectionInput {
   deskKeys?: ReadonlySet<string>;
   deskGrouping?: DeskGrouping;
   shelfCollapsed?: boolean;
+  deskCollapsed?: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
   t: TFunction;
@@ -107,7 +108,10 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   if (!input.pinnedCollapsed) {
     sections.push({ workspaces: pinnedGroups.pinnedChats });
   }
-  sections.push({ workspaces: flattenDeskGroups(deskGroups) });
+  sections.push({
+    workspaces: flattenDeskGroups(deskGroups),
+    collapsed: input.deskCollapsed,
+  });
   if (input.groupMode === "project") {
     sections.push(
       ...pinnedGroups.unpinnedProjects.map((project) => ({
