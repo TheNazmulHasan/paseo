@@ -64,6 +64,9 @@ export function createMarkdownStyles(
           caution: { color: theme.colors.statusDanger, backgroundColor: theme.colors.surface2 },
         },
       },
+      // Semibold, not bold: 700 is too heavy for inline runs in long prose. The web renderer
+      // passes any CSS weight through; native treats every value but "normal" as bold.
+      strong: { fontWeight: "600" as "bold" },
       link: { color: theme.colors.accentBright, underline: false },
       linkVariants: {
         "^(?!https?://).+": {
