@@ -1,3 +1,4 @@
+import { navigateToBoard } from "@/boards/navigation";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { cancelTabSwitcher } from "@/tab-switcher/controller";
 import {
@@ -117,6 +118,10 @@ export function commitWorkspaceSwitcher(): void {
   store.close();
   // The list is frozen while open, so the target may have been archived meanwhile.
   if (!candidate || !store.liveKeys.has(workspaceVisitKey(candidate))) {
+    return;
+  }
+  if (candidate.boardId) {
+    navigateToBoard(candidate.boardId);
     return;
   }
   navigateToWorkspace({ serverId: candidate.serverId, workspaceId: candidate.workspaceId });

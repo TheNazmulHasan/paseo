@@ -84,6 +84,7 @@ export function SidebarModelProvider({
   const deskKeyList = useDeskStore((state) => state.deskKeys);
   const deskGrouping = useDeskStore((state) => state.deskGrouping);
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
+  const deskCollapsed = useDeskStore((state) => state.deskCollapsed);
   const deskKeys = useMemo(() => toKeySet(deskKeyList), [deskKeyList]);
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
@@ -193,6 +194,7 @@ export function SidebarModelProvider({
       deskKeys,
       deskGrouping,
       shelfCollapsed,
+      deskCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       t,
@@ -203,6 +205,7 @@ export function SidebarModelProvider({
       deskGrouping,
       deskKeys,
       shelfCollapsed,
+      deskCollapsed,
       groupMode,
       list.projectNamesByViewKey,
       orderedProjects,

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useMemo } from "react";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import type { ShortcutOverrides } from "@/keyboard/keyboard-shortcuts";
@@ -6,6 +7,8 @@ import {
   createShortcutOverrideStore,
   type ShortcutOverrideStore,
 } from "@/keyboard/shortcut-override-store";
+import { mergeShortcutOverrides } from "@/keyboard/file-keybindings";
+import { useKeybindingsFileStore } from "@/stores/keybindings-file-store";
 import { readValidatedJson } from "@/storage/validated-storage";
 
 const STORAGE_KEY = "@paseo:keyboard-shortcut-overrides";
@@ -34,7 +37,13 @@ export function useKeyboardShortcutOverrides(): UseKeyboardShortcutOverridesRetu
   });
 
   const store = getStore(queryClient);
-  const overrides = data ?? EMPTY_OVERRIDES;
+  const storedOverrides = data ?? EMPTY_OVERRIDES;
+  const fileOverrides = useKeybindingsFileStore((state) => state.overrides);
+  // Precedence: default < in-app override < ~/.paseo/keybindings.json.
+  const overrides = useMemo(
+    () => mergeShortcutOverrides(storedOverrides, fileOverrides),
+    [storedOverrides, fileOverrides],
+  );
 
   return {
     overrides,
@@ -43,7 +52,7 @@ export function useKeyboardShortcutOverrides(): UseKeyboardShortcutOverridesRetu
     clearOverride: store.clear,
     removeOverride: store.remove,
     resetAll: store.resetAll,
-    hasOverrides: Object.keys(overrides).length > 0,
+    hasOverrides: Object.keys(storedOverrides).length > 0,
   };
 }
 

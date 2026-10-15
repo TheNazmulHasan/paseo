@@ -10,6 +10,7 @@ describe("migrateDeskState", () => {
         seenHosts: [],
         seeded: false,
         shelfCollapsed: true,
+        deskCollapsed: false,
         deskGrouping: "recent",
       });
     }
@@ -26,6 +27,7 @@ describe("migrateDeskState", () => {
       seenHosts: [],
       seeded: true,
       shelfCollapsed: true,
+      deskCollapsed: false,
       deskGrouping: "status",
     });
   });
@@ -39,6 +41,7 @@ describe("useDeskStore", () => {
       seenHosts: [],
       seeded: false,
       shelfCollapsed: true,
+      deskCollapsed: false,
       deskGrouping: "recent",
     });
   });
@@ -63,5 +66,13 @@ describe("useDeskStore", () => {
     useDeskStore.getState().setDeskGrouping("project");
     expect(useDeskStore.getState().shelfCollapsed).toBe(false);
     expect(useDeskStore.getState().deskGrouping).toBe("project");
+  });
+
+  it("folds and unfolds the Desk, starting open", () => {
+    expect(useDeskStore.getState().deskCollapsed).toBe(false);
+    useDeskStore.getState().toggleDeskCollapsed();
+    expect(useDeskStore.getState().deskCollapsed).toBe(true);
+    useDeskStore.getState().toggleDeskCollapsed();
+    expect(useDeskStore.getState().deskCollapsed).toBe(false);
   });
 });

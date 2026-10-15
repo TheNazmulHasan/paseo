@@ -14,6 +14,7 @@ interface DeskPersistedState {
   seenHosts: string[];
   seeded: boolean;
   shelfCollapsed: boolean;
+  deskCollapsed: boolean;
   deskGrouping: DeskGrouping;
 }
 
@@ -27,6 +28,7 @@ interface DeskStoreState extends DeskPersistedState {
   removeDeskKeys: (workspaceKeys: readonly string[]) => void;
   applySync: (next: DeskSyncState) => void;
   toggleShelfCollapsed: () => void;
+  toggleDeskCollapsed: () => void;
   setDeskGrouping: (grouping: DeskGrouping) => void;
 }
 
@@ -37,6 +39,7 @@ const DeskPersistedStateSchema = z.strictObject({
   seenHosts: z.array(z.string()).optional(),
   seeded: z.boolean().optional(),
   shelfCollapsed: z.boolean().optional(),
+  deskCollapsed: z.boolean().optional(),
   deskGrouping: DeskGroupingSchema.optional(),
 });
 
@@ -48,6 +51,7 @@ function emptyDeskState(): DeskPersistedState {
     seeded: false,
     // The Shelf is the long tail; it starts folded so the Desk is what you see first.
     shelfCollapsed: true,
+    deskCollapsed: false,
     deskGrouping: DEFAULT_DESK_GROUPING,
   };
 }
@@ -65,6 +69,7 @@ export function migrateDeskState(persistedState: unknown): DeskPersistedState {
     seenHosts: result.data.seenHosts ?? empty.seenHosts,
     seeded: result.data.seeded ?? empty.seeded,
     shelfCollapsed: result.data.shelfCollapsed ?? empty.shelfCollapsed,
+    deskCollapsed: result.data.deskCollapsed ?? empty.deskCollapsed,
     deskGrouping: result.data.deskGrouping ?? empty.deskGrouping,
   };
 }
@@ -114,6 +119,7 @@ export const useDeskStore = create<DeskStoreState>()(
         });
       },
       toggleShelfCollapsed: () => set((state) => ({ shelfCollapsed: !state.shelfCollapsed })),
+      toggleDeskCollapsed: () => set((state) => ({ deskCollapsed: !state.deskCollapsed })),
       setDeskGrouping: (grouping) => set({ deskGrouping: grouping }),
     }),
     {
@@ -127,6 +133,7 @@ export const useDeskStore = create<DeskStoreState>()(
         seenHosts: state.seenHosts,
         seeded: state.seeded,
         shelfCollapsed: state.shelfCollapsed,
+        deskCollapsed: state.deskCollapsed,
         deskGrouping: state.deskGrouping,
       }),
     },

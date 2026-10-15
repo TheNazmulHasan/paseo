@@ -99,6 +99,7 @@ import {
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
+import { BoardsSection } from "@/boards/boards-section";
 import { DeskSection } from "@/desk/desk-section";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
@@ -2547,7 +2548,11 @@ function ProjectModeList({
     <>
       {pinnedChats.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
+          <PinnedSectionHeader
+            collapsed={pinnedCollapsed}
+            count={pinnedChats.length}
+            onToggle={togglePinnedCollapsed}
+          />
           {pinnedCollapsed ? null : (
             <>
               <DraggableList
@@ -2575,6 +2580,7 @@ function ProjectModeList({
           )}
         </View>
       ) : null}
+      <BoardsSection onWorkspacePress={onWorkspacePress} />
       <DeskSection onWorkspacePress={onWorkspacePress} />
       {/* The header carries the display menu, which is the only way back out of a filter, so it
         stays for as long as a filter is what emptied the list. It is absent only when the

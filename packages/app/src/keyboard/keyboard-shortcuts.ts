@@ -170,6 +170,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-next",
     "pin-workspace",
     "desk-toggle",
+    "workspace-board-split",
     "archive-workspace",
   ],
   "tabs-panes": [
@@ -265,6 +266,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
   "desk-toggle": "settings.shortcuts.help.toggleDesk",
+  "workspace-board-split": "settings.shortcuts.help.splitWorkspaces",
   "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
@@ -435,6 +437,31 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
 
+  // --- Split workspaces into one view (fork mod #13, Boards) ---
+  // Same Ctrl+Cmd / Ctrl+Alt family as Arrange and Desk; the non-mac chord skips text fields.
+  {
+    id: "workspace-board-split-ctrl-cmd-o-mac",
+    action: "workspace.board.split",
+    combo: "Cmd+Ctrl+O",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-board-split",
+      section: "workspaces",
+      label: "Split workspaces",
+    },
+  },
+  {
+    id: "workspace-board-split-ctrl-alt-o-non-mac",
+    action: "workspace.board.split",
+    combo: "Ctrl+Alt+O",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-board-split",
+      section: "workspaces",
+      label: "Split workspaces",
+    },
+  },
+
   // --- Tab management ---
   {
     id: "workspace-tab-new-cmd-t-mac",
@@ -580,6 +607,22 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Close current tab",
     },
+  },
+
+  // --- Copy the current session's id (fork mod #13 follow-up: works in Views too) ---
+  // No help row on purpose: it is reached by the tab menu and the hover card, and this binding
+  // exists so keybindings.json can rebind it (the file only accepts actions that have a binding).
+  {
+    id: "workspace-tab-copy-id-cmd-shift-i-mac",
+    action: "workspace.tab.copy.id",
+    combo: "Cmd+Shift+I",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-tab-copy-id-ctrl-alt-shift-i-non-mac",
+    action: "workspace.tab.copy.id",
+    combo: "Ctrl+Alt+Shift+I",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
   },
 
   // --- Workspace index jump ---
@@ -882,6 +925,58 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "tabs-panes",
       label: "Focus pane down",
     },
+  },
+  // Hyper+Arrows (Caps Lock -> Cmd+Ctrl+Alt+Shift on Nazmul's Mac): pane focus that also fires
+  // while the cursor is in a chat box. The four-modifier chord cannot collide with text editing,
+  // so unlike Cmd+Shift+Arrow (selection) these carry no `editable: false`. No `help`: the
+  // Cmd+Shift row already labels the action.
+  {
+    id: "workspace-pane-focus-left-hyper-left-mac",
+    action: "workspace.pane.focus.left",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowLeft",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-left-ctrl-alt-shift-left-non-mac",
+    action: "workspace.pane.focus.left",
+    combo: "Ctrl+Alt+Shift+ArrowLeft",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-right-hyper-right-mac",
+    action: "workspace.pane.focus.right",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowRight",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-right-ctrl-alt-shift-right-non-mac",
+    action: "workspace.pane.focus.right",
+    combo: "Ctrl+Alt+Shift+ArrowRight",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-up-hyper-up-mac",
+    action: "workspace.pane.focus.up",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowUp",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-up-ctrl-alt-shift-up-non-mac",
+    action: "workspace.pane.focus.up",
+    combo: "Ctrl+Alt+Shift+ArrowUp",
+    when: { mac: false, commandCenter: false, terminal: false },
+  },
+  {
+    id: "workspace-pane-focus-down-hyper-down-mac",
+    action: "workspace.pane.focus.down",
+    combo: "Cmd+Ctrl+Alt+Shift+ArrowDown",
+    when: { mac: true, commandCenter: false },
+  },
+  {
+    id: "workspace-pane-focus-down-ctrl-alt-shift-down-non-mac",
+    action: "workspace.pane.focus.down",
+    combo: "Ctrl+Alt+Shift+ArrowDown",
+    when: { mac: false, commandCenter: false, terminal: false },
   },
   {
     id: "workspace-pane-move-tab-left-cmd-shift-alt-left",
@@ -1513,7 +1608,38 @@ export const DEFAULT_BINDINGS: readonly ParsedShortcutBinding[] =
 
 export type ShortcutOverrides = Record<string, string | null>;
 
+/**
+ * Extra chords for one binding (from keybindings.json) are keyed
+ * `<bindingId>#<n>`; `buildEffectiveBindings` appends them as help-less clones.
+ */
+export const EXTRA_CHORD_SEPARATOR = "#";
+
 export function buildEffectiveBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
+  return [...buildBaseBindings(overrides), ...buildExtraChordBindings(overrides)];
+}
+
+function buildExtraChordBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
+  const extras: ParsedShortcutBinding[] = [];
+  for (const [key, combo] of Object.entries(overrides)) {
+    const separatorIndex = key.lastIndexOf(EXTRA_CHORD_SEPARATOR);
+    if (separatorIndex < 0 || typeof combo !== "string") continue;
+    const base = DEFAULT_BINDINGS.find((b) => b.id === key.slice(0, separatorIndex));
+    if (!base) continue;
+    let parsedChord: KeyCombo[];
+    try {
+      parsedChord = parseBindingChord(combo);
+    } catch {
+      continue;
+    }
+    const { help: _help, ...rest } = base;
+    const when = withoutDefaultComboGuard(base.when);
+    const { mac: _mac, ...whenWithoutPlatform } = when ?? {};
+    extras.push({ ...rest, id: key, combo, parsedChord, when: whenWithoutPlatform });
+  }
+  return extras;
+}
+
+function buildBaseBindings(overrides: ShortcutOverrides): ParsedShortcutBinding[] {
   return DEFAULT_BINDINGS.map(function (binding) {
     const override = overrides[binding.id];
     if (override === UNASSIGNED_COMBO) {
@@ -1686,7 +1812,7 @@ function resetChordState(input: ChordState): ChordState {
   };
 }
 
-function helpMatchesPlatform(
+export function helpMatchesPlatform(
   when: ShortcutWhen | undefined,
   context: KeyboardShortcutPlatformContext,
 ): boolean {
