@@ -20,7 +20,7 @@ export function createMarkdownStyles(
     fontSize,
     fontFamily: theme.fontFamily.ui,
     lineHeight: Math.round(fontSize * 1.4),
-    color: muted ? theme.colors.foregroundMuted : theme.colors.foreground,
+    color: muted ? theme.colors.foregroundMuted : theme.colors.contentForeground,
     ...block,
   };
   const heading = (scale: number) => ({
@@ -50,7 +50,7 @@ export function createMarkdownStyles(
       },
       blockquote: {
         ...paragraph,
-        color: `${theme.colors.foreground}cc`,
+        color: `${theme.colors.contentForeground}cc`,
         backgroundColor: theme.colors.surface1,
         borderColor: theme.colors.surface2,
         borderWidth: 3,
@@ -73,7 +73,7 @@ export function createMarkdownStyles(
       code: {
         fontFamily: theme.fontFamily.mono === "ui-monospace" && !isWeb ? "" : theme.fontFamily.mono,
         fontScale: theme.fontSize.code / fontSize,
-        color: theme.colors.foreground,
+        color: theme.colors.contentForeground,
         backgroundColor: theme.colors.surface2,
         borderColor: "transparent",
       },
@@ -90,7 +90,7 @@ export function createMarkdownStyles(
         ...paragraph,
         borderColor: theme.colors.border,
         headerBackgroundColor: theme.colors.surface2,
-        headerTextColor: theme.colors.foreground,
+        headerTextColor: theme.colors.contentForeground,
         rowEvenBackgroundColor: theme.colors.surface0,
         rowOddBackgroundColor: theme.colors.surface1,
       },
