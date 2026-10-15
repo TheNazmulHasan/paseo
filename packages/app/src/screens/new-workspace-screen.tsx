@@ -124,6 +124,7 @@ import {
 } from "./workspace/terminals/state";
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
+import { NewWorkspaceFilesSidebar } from "./new-workspace/files-sidebar";
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
   draftId: string | undefined;
@@ -1611,16 +1612,27 @@ export function NewWorkspaceScreen({
   );
   return (
     <FileDropZone style={styles.container}>
-      <NewWorkspaceLayout
-        isCompact={isCompact}
-        fullscreen={isComposerFullscreen}
-        title={t("newWorkspace.title")}
-        formStack={formStack}
-        onImportSession={importSession.open}
-      >
-        {composer}
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-      </NewWorkspaceLayout>
+      <View style={styles.columns}>
+        <View style={styles.mainColumn}>
+          <NewWorkspaceLayout
+            isCompact={isCompact}
+            fullscreen={isComposerFullscreen}
+            title={t("newWorkspace.title")}
+            formStack={formStack}
+            onImportSession={importSession.open}
+          >
+            {composer}
+            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+          </NewWorkspaceLayout>
+        </View>
+        {/* A fullscreen composer owns the whole screen, so the Files column steps aside. */}
+        {isComposerFullscreen ? null : (
+          <NewWorkspaceFilesSidebar
+            serverId={selectedServerId}
+            sourceDirectory={selectedSourceDirectory}
+          />
+        )}
+      </View>
       {importSession.sheet}
     </FileDropZone>
   );
@@ -1704,6 +1716,15 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
     userSelect: "none",
+  },
+  columns: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: "row",
+  },
+  mainColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   content: {
     position: "relative",
