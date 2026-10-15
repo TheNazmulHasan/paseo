@@ -449,6 +449,9 @@ export const en = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Recent tabs",
+    },
     route: {
       loading: "Loading workspace",
       connecting: "Connecting",
@@ -2677,6 +2680,7 @@ export const en = {
         toggleSettings: "Toggle settings",
         toggleFocusMode: "Toggle focus mode",
         cycleTheme: "Cycle theme",
+        switchRecentTabs: "Switch recent tabs",
         focusMessageInput: "Focus message input",
         cycleAgentMode: "Cycle agent mode",
         toggleVoiceMode: "Toggle voice mode",

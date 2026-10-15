@@ -457,6 +457,9 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    tabSwitcher: {
+      title: "Onglets récents",
+    },
     route: {
       loading: "Chargement de l’espace de travail…",
       connecting: "Connexion…",
@@ -2609,6 +2612,7 @@ export const fr: TranslationResources = {
         sendMessage: "Envoyer le message",
         queueMessage: "Mettre le message en file d’attente",
         muteUnmuteVoiceMode: "Couper/réactiver le micro en mode vocal",
+        switchRecentTabs: "Changer d'onglet récent",
         switchProject: "Changer de projet",
       },
       helpNotes: {
