@@ -3,7 +3,6 @@ import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CircleAlert, Folder, FolderGit2, Monitor, Terminal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import {
@@ -28,12 +27,6 @@ import {
 } from "@/utils/status-indicator-geometry";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { StatusRing } from "@/components/status-ring";
-import {
-  StatusRingFrame,
-  rotatorStyles,
-  styles as statusRingStyles,
-} from "@/components/status-ring/frame";
-import { useStatusRingRotation } from "@/components/status-ring/clock";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
@@ -53,6 +46,12 @@ const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
 const ThemedTerminal = withUnistyles(Terminal);
+
+// A row busy with background tasks only: same ring as a running agent, with a terminal in the
+// middle instead of the dot. Built once — it takes no props from the row.
+const backgroundTaskCenterNode = (
+  <ThemedTerminal size={10} uniProps={foregroundMutedColorMapping} />
+);
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -228,24 +227,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function BackgroundTaskRunningRing({ backdrop }: { backdrop: SidebarSurfaceBackdrop | null }) {
-  const rotation = useStatusRingRotation();
-  const rotatorStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-  const centerNode = useMemo(
-    () => <ThemedTerminal size={10} uniProps={foregroundMutedColorMapping} />,
-    [],
-  );
-  return (
-    <StatusRingFrame backdrop={backdrop} center={centerNode}>
-      <Animated.View style={[rotatorStyles.rotator, rotatorStyle]}>
-        <View style={statusRingStyles.arc} />
-      </Animated.View>
-    </StatusRingFrame>
-  );
-}
-
 function WorkspaceStatusIndicator({
   bucket,
   workspaceKind,
@@ -291,7 +272,7 @@ function WorkspaceStatusIndicator({
         testID="workspace-status-indicator-background-running"
         accessibilityLabel="background tasks running"
       >
-        <BackgroundTaskRunningRing backdrop={backdrop} />
+        <StatusRing backdrop={backdrop} center={backgroundTaskCenterNode} />
       </View>
     );
   }
