@@ -3,6 +3,7 @@ import { formatShortcut } from "@/utils/format-shortcut";
 import {
   buildKeyboardShortcutHelpSections,
   buildEffectiveBindings,
+  DEFAULT_BINDINGS,
   getBindingIdForAction,
   getDefaultKeysForAction,
   getWorkspaceIndexJumpModifierKey,
@@ -119,6 +120,187 @@ describe("workspace switcher shortcut isolation", () => {
       action: "workspace.switcher.cycle",
       payload: { delta: 1 },
     });
+  });
+});
+
+describe("workspace arrange shortcuts", () => {
+  const ARRANGE_CASES = [
+    ["single", "1", "Digit1"],
+    ["columns2", "2", "Digit2"],
+    ["columns3", "3", "Digit3"],
+    ["grid", "g", "KeyG"],
+    ["watch", "w", "KeyW"],
+    ["restore", "z", "KeyZ"],
+    ["equalize", "e", "KeyE"],
+    ["menu", "l", "KeyL"],
+    ["select-tab", "s", "KeyS"],
+  ] as const;
+
+  it.each(ARRANGE_CASES)("maps Ctrl+Cmd+%s on mac to workspace.arrange.%s", (name, key, code) => {
+    for (const focusScope of ["other", "message-input", "terminal"] as const) {
+      expectShortcutResolution({
+        event: { key, code, ctrlKey: true, metaKey: true },
+        context: { isMac: true, isDesktop: true, focusScope },
+        action: `workspace.arrange.${name}`,
+      });
+    }
+  });
+
+  it.each(ARRANGE_CASES)(
+    "maps Ctrl+Alt+%s on non-mac to workspace.arrange.%s",
+    (name, key, code) => {
+      expectShortcutResolution({
+        event: { key, code, ctrlKey: true, altKey: true },
+        context: { isMac: false, isDesktop: true, focusScope: "other" },
+        action: `workspace.arrange.${name}`,
+      });
+    },
+  );
+
+  it("does not fire the non-mac chord while typing, where AltGr is Ctrl+Alt", () => {
+    expectNoShortcutResolution({
+      event: { key: "s", code: "KeyS", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "message-input" },
+    });
+  });
+
+  it("does not fire while the command center is open", () => {
+    expectNoShortcutResolution({
+      event: { key: "1", code: "Digit1", ctrlKey: true, metaKey: true },
+      context: {
+        isMac: true,
+        isDesktop: true,
+        focusScope: "command-center",
+        commandCenterOpen: true,
+      },
+    });
+  });
+
+  it("shares no default chord with any other binding", () => {
+    const arrangeCombos = new Set(
+      DEFAULT_BINDINGS.filter((binding) => binding.action.startsWith("workspace.arrange.")).map(
+        (binding) => binding.combo,
+      ),
+    );
+    expect(arrangeCombos.size).toBe(ARRANGE_CASES.length * 2);
+    const clashes = DEFAULT_BINDINGS.filter(
+      (binding) =>
+        !binding.action.startsWith("workspace.arrange.") && arrangeCombos.has(binding.combo),
+    );
+    expect(clashes).toEqual([]);
+  });
+
+  it("lists every arrange action in the tabs-panes help section", () => {
+    const sections = buildKeyboardShortcutHelpSections({ isMac: true, isDesktop: true });
+    const rows = sections.find((section) => section.id === "tabs-panes")?.rows ?? [];
+    for (const [name] of ARRANGE_CASES) {
+      expect(rows.some((row) => row.id === `workspace-arrange-${name}`)).toBe(true);
+    }
+  });
+
+  it("honours a rebind through the override store keyed by binding id", () => {
+    const bindingId = "workspace-arrange-grid-ctrl-cmd-g-mac";
+    const overrides = { [bindingId]: "Cmd+Ctrl+Y" };
+    const context = { isMac: true, isDesktop: true, focusScope: "other" as const };
+    const rebound = resolveShortcut({
+      event: { key: "y", code: "KeyY", ctrlKey: true, metaKey: true },
+      context,
+      bindings: buildEffectiveBindings(overrides),
+    });
+    const original = resolveShortcut({
+      event: { key: "g", code: "KeyG", ctrlKey: true, metaKey: true },
+      context,
+      bindings: buildEffectiveBindings(overrides),
+    });
+
+    expect(rebound.match?.action).toBe("workspace.arrange.grid");
+    expect(original.match).toBeNull();
+    expect(
+      resolveShortcutKeysForAction("workspace-arrange-grid", overrides, {
+        isMac: true,
+        isDesktop: true,
+      }),
+    ).toEqual([["mod", "ctrl", "Y"]]);
+  });
+});
+
+describe("workspace desk toggle shortcut", () => {
+  it("maps Ctrl+Cmd+K on mac to workspace.desk.toggle, even while typing", () => {
+    for (const focusScope of ["other", "message-input", "terminal"] as const) {
+      expectShortcutResolution({
+        event: { key: "k", code: "KeyK", ctrlKey: true, metaKey: true },
+        context: { isMac: true, isDesktop: true, focusScope },
+        action: "workspace.desk.toggle",
+      });
+    }
+  });
+
+  it("maps Ctrl+Alt+K on non-mac to workspace.desk.toggle", () => {
+    expectShortcutResolution({
+      event: { key: "k", code: "KeyK", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "other" },
+      action: "workspace.desk.toggle",
+    });
+  });
+
+  it("does not fire the non-mac chord while typing, where AltGr is Ctrl+Alt", () => {
+    expectNoShortcutResolution({
+      event: { key: "k", code: "KeyK", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "message-input" },
+    });
+  });
+
+  it("does not fire while the command center is open", () => {
+    expectNoShortcutResolution({
+      event: { key: "k", code: "KeyK", ctrlKey: true, metaKey: true },
+      context: {
+        isMac: true,
+        isDesktop: true,
+        focusScope: "command-center",
+        commandCenterOpen: true,
+      },
+    });
+  });
+
+  it("shares its default chords with no other binding", () => {
+    const deskCombos = new Set(
+      DEFAULT_BINDINGS.filter((binding) => binding.action === "workspace.desk.toggle").map(
+        (binding) => binding.combo,
+      ),
+    );
+    expect(deskCombos.size).toBe(2);
+    const clashes = DEFAULT_BINDINGS.filter(
+      (binding) => binding.action !== "workspace.desk.toggle" && deskCombos.has(binding.combo),
+    );
+    expect(clashes).toEqual([]);
+  });
+
+  it("lists the action in the workspaces help section", () => {
+    const sections = buildKeyboardShortcutHelpSections({ isMac: true, isDesktop: true });
+    const rows = sections.find((section) => section.id === "workspaces")?.rows ?? [];
+    expect(rows.some((row) => row.id === "desk-toggle")).toBe(true);
+  });
+
+  it("honours a rebind through the override store keyed by binding id", () => {
+    const bindingId = "workspace-desk-toggle-ctrl-cmd-k-mac";
+    const overrides = { [bindingId]: "Cmd+Ctrl+Y" };
+    const context = { isMac: true, isDesktop: true, focusScope: "other" as const };
+    const rebound = resolveShortcut({
+      event: { key: "y", code: "KeyY", ctrlKey: true, metaKey: true },
+      context,
+      bindings: buildEffectiveBindings(overrides),
+    });
+    const original = resolveShortcut({
+      event: { key: "k", code: "KeyK", ctrlKey: true, metaKey: true },
+      context,
+      bindings: buildEffectiveBindings(overrides),
+    });
+
+    expect(rebound.match?.action).toBe("workspace.desk.toggle");
+    expect(original.match).toBeNull();
+    expect(
+      resolveShortcutKeysForAction("desk-toggle", overrides, { isMac: true, isDesktop: true }),
+    ).toEqual([["mod", "ctrl", "Y"]]);
   });
 });
 

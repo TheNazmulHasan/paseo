@@ -43,6 +43,15 @@ export type KeyboardActionId =
   | "workspace.pane.move-tab.up"
   | "workspace.pane.move-tab.down"
   | "workspace.pane.close"
+  | "workspace.arrange.single"
+  | "workspace.arrange.columns2"
+  | "workspace.arrange.columns3"
+  | "workspace.arrange.grid"
+  | "workspace.arrange.watch"
+  | "workspace.arrange.restore"
+  | "workspace.arrange.equalize"
+  | "workspace.arrange.menu"
+  | "workspace.arrange.select-tab"
   | "workspace.focus.toggle"
   | "workspace.terminal.new"
   | "workspace.browser.new"
@@ -53,6 +62,7 @@ export type KeyboardActionId =
   | "worktree.new"
   | "workspace.archive"
   | "workspace.pin"
+  | "workspace.desk.toggle"
   // Command-center only: no keybind, so these are absent from route-shortcut.ts.
   | "workspace.rename"
   | "workspace.setup.show";
@@ -102,6 +112,15 @@ export type KeyboardActionDefinition =
   | { id: "workspace.pane.move-tab.up"; scope: KeyboardActionScope }
   | { id: "workspace.pane.move-tab.down"; scope: KeyboardActionScope }
   | { id: "workspace.pane.close"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.single"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.columns2"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.columns3"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.grid"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.watch"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.restore"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.equalize"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.menu"; scope: KeyboardActionScope }
+  | { id: "workspace.arrange.select-tab"; scope: KeyboardActionScope }
   | { id: "workspace.focus.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.terminal.new"; scope: KeyboardActionScope }
   | { id: "workspace.browser.new"; scope: KeyboardActionScope }
@@ -112,6 +131,7 @@ export type KeyboardActionDefinition =
   | { id: "worktree.new"; scope: KeyboardActionScope }
   | { id: "workspace.archive"; scope: KeyboardActionScope }
   | { id: "workspace.pin"; scope: KeyboardActionScope }
+  | { id: "workspace.desk.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.rename"; scope: KeyboardActionScope }
   | { id: "workspace.setup.show"; scope: KeyboardActionScope };
 

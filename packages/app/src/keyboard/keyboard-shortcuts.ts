@@ -169,6 +169,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-prev",
     "workspace-next",
     "pin-workspace",
+    "desk-toggle",
     "archive-workspace",
   ],
   "tabs-panes": [
@@ -194,6 +195,15 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-pane-move-tab-up",
     "workspace-pane-move-tab-down",
     "workspace-pane-close",
+    "workspace-arrange-single",
+    "workspace-arrange-columns2",
+    "workspace-arrange-columns3",
+    "workspace-arrange-grid",
+    "workspace-arrange-watch",
+    "workspace-arrange-restore",
+    "workspace-arrange-equalize",
+    "workspace-arrange-menu",
+    "workspace-arrange-select-tab",
   ],
   layout: ["toggle-left-sidebar", "toggle-right-sidebar", "toggle-both-sidebars", "toggle-focus"],
   "agent-input": [
@@ -234,6 +244,15 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "workspace-pane-move-tab-up": "settings.shortcuts.help.moveTabUp",
   "workspace-pane-move-tab-down": "settings.shortcuts.help.moveTabDown",
   "workspace-pane-close": "settings.shortcuts.help.closePane",
+  "workspace-arrange-single": "settings.shortcuts.help.arrangeOnePane",
+  "workspace-arrange-columns2": "settings.shortcuts.help.arrangeColumns2",
+  "workspace-arrange-columns3": "settings.shortcuts.help.arrangeColumns3",
+  "workspace-arrange-grid": "settings.shortcuts.help.arrangeGrid",
+  "workspace-arrange-watch": "settings.shortcuts.help.arrangeWatch",
+  "workspace-arrange-restore": "settings.shortcuts.help.arrangeRestore",
+  "workspace-arrange-equalize": "settings.shortcuts.help.arrangeEqualize",
+  "workspace-arrange-menu": "settings.shortcuts.help.arrangeMenu",
+  "workspace-arrange-select-tab": "settings.shortcuts.help.arrangeSelectTab",
   "workspace-terminal-new": "settings.shortcuts.help.newTerminal",
   "search-files": "settings.shortcuts.help.searchFiles",
   "toggle-command-center": "settings.shortcuts.help.toggleCommandCenter",
@@ -245,6 +264,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "toggle-focus": "settings.shortcuts.help.toggleFocusMode",
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
+  "desk-toggle": "settings.shortcuts.help.toggleDesk",
   "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
@@ -386,6 +406,32 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "pin-workspace",
       section: "workspaces",
       label: "Pin chat",
+    },
+  },
+
+  // --- Desk toggle (fork mod #12) ---
+  // Same Ctrl+Cmd family as Arrange (mac) / Ctrl+Alt (others, skipping editable surfaces because
+  // AltGr is Ctrl+Alt on many layouts and K types a character there).
+  {
+    id: "workspace-desk-toggle-ctrl-cmd-k-mac",
+    action: "workspace.desk.toggle",
+    combo: "Cmd+Ctrl+K",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "desk-toggle",
+      section: "workspaces",
+      label: "Put on / take off Desk",
+    },
+  },
+  {
+    id: "workspace-desk-toggle-ctrl-alt-k-non-mac",
+    action: "workspace.desk.toggle",
+    combo: "Ctrl+Alt+K",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "desk-toggle",
+      section: "workspaces",
+      label: "Put on / take off Desk",
     },
   },
 
@@ -890,6 +936,207 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "workspace-pane-close",
       section: "tabs-panes",
       label: "Close pane",
+    },
+  },
+  // --- Arrange (fork mod #11) ---
+  // Ctrl+Cmd family on mac; Ctrl+Alt on other platforms. Non-mac bindings skip editable
+  // surfaces because AltGr is Ctrl+Alt on many layouts and these letters/digits type characters.
+  {
+    id: "workspace-arrange-single-ctrl-cmd-1-mac",
+    action: "workspace.arrange.single",
+    combo: "Cmd+Ctrl+1",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-single",
+      section: "tabs-panes",
+      label: "Arrange: one pane",
+    },
+  },
+  {
+    id: "workspace-arrange-single-ctrl-alt-1-non-mac",
+    action: "workspace.arrange.single",
+    combo: "Ctrl+Alt+1",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-single",
+      section: "tabs-panes",
+      label: "Arrange: one pane",
+    },
+  },
+  {
+    id: "workspace-arrange-columns2-ctrl-cmd-2-mac",
+    action: "workspace.arrange.columns2",
+    combo: "Cmd+Ctrl+2",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-columns2",
+      section: "tabs-panes",
+      label: "Arrange: 2 columns",
+    },
+  },
+  {
+    id: "workspace-arrange-columns2-ctrl-alt-2-non-mac",
+    action: "workspace.arrange.columns2",
+    combo: "Ctrl+Alt+2",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-columns2",
+      section: "tabs-panes",
+      label: "Arrange: 2 columns",
+    },
+  },
+  {
+    id: "workspace-arrange-columns3-ctrl-cmd-3-mac",
+    action: "workspace.arrange.columns3",
+    combo: "Cmd+Ctrl+3",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-columns3",
+      section: "tabs-panes",
+      label: "Arrange: 3 columns",
+    },
+  },
+  {
+    id: "workspace-arrange-columns3-ctrl-alt-3-non-mac",
+    action: "workspace.arrange.columns3",
+    combo: "Ctrl+Alt+3",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-columns3",
+      section: "tabs-panes",
+      label: "Arrange: 3 columns",
+    },
+  },
+  {
+    id: "workspace-arrange-grid-ctrl-cmd-g-mac",
+    action: "workspace.arrange.grid",
+    combo: "Cmd+Ctrl+G",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-grid",
+      section: "tabs-panes",
+      label: "Arrange: grid",
+    },
+  },
+  {
+    id: "workspace-arrange-grid-ctrl-alt-g-non-mac",
+    action: "workspace.arrange.grid",
+    combo: "Ctrl+Alt+G",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-grid",
+      section: "tabs-panes",
+      label: "Arrange: grid",
+    },
+  },
+  {
+    id: "workspace-arrange-watch-ctrl-cmd-w-mac",
+    action: "workspace.arrange.watch",
+    combo: "Cmd+Ctrl+W",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-watch",
+      section: "tabs-panes",
+      label: "Arrange: watch mode",
+    },
+  },
+  {
+    id: "workspace-arrange-watch-ctrl-alt-w-non-mac",
+    action: "workspace.arrange.watch",
+    combo: "Ctrl+Alt+W",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-watch",
+      section: "tabs-panes",
+      label: "Arrange: watch mode",
+    },
+  },
+  {
+    id: "workspace-arrange-restore-ctrl-cmd-z-mac",
+    action: "workspace.arrange.restore",
+    combo: "Cmd+Ctrl+Z",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-restore",
+      section: "tabs-panes",
+      label: "Restore layout",
+    },
+  },
+  {
+    id: "workspace-arrange-restore-ctrl-alt-z-non-mac",
+    action: "workspace.arrange.restore",
+    combo: "Ctrl+Alt+Z",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-restore",
+      section: "tabs-panes",
+      label: "Restore layout",
+    },
+  },
+  {
+    id: "workspace-arrange-equalize-ctrl-cmd-e-mac",
+    action: "workspace.arrange.equalize",
+    combo: "Cmd+Ctrl+E",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-equalize",
+      section: "tabs-panes",
+      label: "Equalize pane sizes",
+    },
+  },
+  {
+    id: "workspace-arrange-equalize-ctrl-alt-e-non-mac",
+    action: "workspace.arrange.equalize",
+    combo: "Ctrl+Alt+E",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-equalize",
+      section: "tabs-panes",
+      label: "Equalize pane sizes",
+    },
+  },
+  {
+    id: "workspace-arrange-menu-ctrl-cmd-l-mac",
+    action: "workspace.arrange.menu",
+    combo: "Cmd+Ctrl+L",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-menu",
+      section: "tabs-panes",
+      label: "Open Arrange menu",
+    },
+  },
+  {
+    id: "workspace-arrange-menu-ctrl-alt-l-non-mac",
+    action: "workspace.arrange.menu",
+    combo: "Ctrl+Alt+L",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-menu",
+      section: "tabs-panes",
+      label: "Open Arrange menu",
+    },
+  },
+  {
+    id: "workspace-arrange-select-tab-ctrl-cmd-s-mac",
+    action: "workspace.arrange.select-tab",
+    combo: "Cmd+Ctrl+S",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-arrange-select-tab",
+      section: "tabs-panes",
+      label: "Select tab for arranging",
+    },
+  },
+  {
+    id: "workspace-arrange-select-tab-ctrl-alt-s-non-mac",
+    action: "workspace.arrange.select-tab",
+    combo: "Ctrl+Alt+S",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "workspace-arrange-select-tab",
+      section: "tabs-panes",
+      label: "Select tab for arranging",
     },
   },
   // --- New terminal ---
