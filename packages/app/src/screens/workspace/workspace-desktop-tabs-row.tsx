@@ -80,6 +80,7 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { AgentTabTooltipBody } from "@/screens/workspace/agent-tab-tooltip-body";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabLaunchPurpose } from "@/workspace-tabs/launcher";
@@ -92,8 +93,6 @@ import type { Theme } from "@/styles/theme";
 import { RenderProfile } from "@/utils/render-profiler";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import { useCompactTimeAgo } from "@/hooks/use-time-ago";
-import { formatCompactTimeAgoAsProse } from "@/utils/time";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { WorkspaceNewTabMenuContent } from "@/screens/workspace/workspace-new-tab-menu";
@@ -107,7 +106,6 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
-import { useSessionStore } from "@/stores/session-store";
 import { WorkspacePinnedTargetsRow } from "@/workspace-pins/workspace-pinned-row";
 import { AgentChatDisplayToolbarButton } from "@/chat-display/toolbar-button";
 
@@ -181,41 +179,6 @@ function normalizeAgentTooltipTitle(title: string): string {
 function formatAgentTooltipTitle(singleLineTitle: string): string {
   if (singleLineTitle.length <= AGENT_TOOLTIP_TITLE_MAX_LENGTH) return singleLineTitle;
   return `${singleLineTitle.slice(0, AGENT_TOOLTIP_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
-}
-
-function AgentTabTooltipBody({
-  serverId,
-  agentId,
-  title,
-}: {
-  serverId: string;
-  agentId: string;
-  title: string;
-}) {
-  const lastActivityAt = useSessionStore((state) => {
-    const session = state.sessions[serverId];
-    const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId) ?? null;
-    return state.agentLastActivity.get(agentId) ?? agent?.lastActivityAt ?? null;
-  });
-  const compactActivity = useCompactTimeAgo(lastActivityAt);
-  const activity = formatCompactTimeAgoAsProse(compactActivity);
-
-  return (
-    <View style={styles.tooltipAgentContent}>
-      <Text style={styles.agentTooltipTitle} numberOfLines={1} ellipsizeMode="tail">
-        {title}
-      </Text>
-      <View style={styles.tooltipAgentMetadata}>
-        <Text style={styles.tooltipAgentId}>{agentId.slice(0, 7)}</Text>
-        {activity ? (
-          <>
-            <Text style={styles.tooltipAgentSeparator}>·</Text>
-            <Text style={styles.tooltipAgentActivity}>{activity}</Text>
-          </>
-        ) : null}
-      </View>
-    </View>
-  );
 }
 
 function TabLabelMeasurement({
@@ -461,7 +424,7 @@ function WorkspaceExitFocusModeButton({
   );
 }
 
-function TabContextMenuItem({
+export function TabContextMenuItem({
   entry,
 }: {
   entry: Extract<WorkspaceTabMenuEntry, { kind: "item" }>;
@@ -992,7 +955,12 @@ function TabChip({
       onPointerLeave={handleTabPointerLeave}
     >
       <ContextMenu key={tab.key}>
-        <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip
+          delayDuration={400}
+          enabledOnDesktop
+          enabledOnMobile={false}
+          interactive={tab.target.kind === "agent"}
+        >
           <TooltipTrigger asChild triggerRefProp="triggerRef">
             <ContextMenuTrigger
               {...(dragHandleProps?.attributes as object | undefined)}
@@ -1979,31 +1947,6 @@ const styles = StyleSheet.create((theme) => ({
   newTabTooltipText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-  },
-  tooltipAgentContent: {
-    gap: theme.spacing[0.5],
-    maxWidth: 420,
-  },
-  agentTooltipTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-  },
-  tooltipAgentMetadata: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  tooltipAgentId: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  tooltipAgentSeparator: {
-    color: theme.colors.foregroundExtraMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  tooltipAgentActivity: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
   },
   menuItemHint: {
     color: theme.colors.foregroundMuted,

@@ -75,6 +75,7 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
+import { BoardsSection } from "@/boards/boards-section";
 import { DeskSection } from "@/desk/desk-section";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
@@ -232,6 +233,9 @@ export function SidebarStatusWorkspaceList({
             collapsed={pinnedCollapsed}
             onToggle={togglePinnedCollapsed}
             testID="sidebar-pinned-section-header"
+            count={pinnedWorkspaces.length}
+            countTestID="sidebar-pinned-count"
+            chevronAlwaysVisible
           />
           {pinnedCollapsed ? null : (
             <>
@@ -259,6 +263,7 @@ export function SidebarStatusWorkspaceList({
           )}
         </View>
       ) : null}
+      <BoardsSection onWorkspacePress={onWorkspacePress} />
       <DeskSection onWorkspacePress={onWorkspacePress} />
       {listHeaderComponent}
       {sidebarFilterEmpty ? (
@@ -549,6 +554,7 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   onToggleWorkspacePin,
   reserveIdleStatusIndicatorSpace = true,
   inStatusGroup = true,
+  onPressIntercept,
   drag,
   isDragging = false,
   dragHandleProps,
@@ -568,6 +574,8 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
    */
   inStatusGroup?: boolean;
   onWorkspacePress?: () => void;
+  /** Desk selection seam: return true to swallow the press instead of opening the workspace. */
+  onPressIntercept?: () => boolean;
   drag?: () => void;
   isDragging?: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
@@ -579,8 +587,9 @@ export const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
 
   const handlePress = useCallback(() => {
     if (!workspace.serverId) return;
+    if (onPressIntercept?.()) return;
     navigateToWorkspace({ serverId: workspace.serverId, workspaceId: workspace.workspaceId });
-  }, [workspace.serverId, workspace.workspaceId]);
+  }, [onPressIntercept, workspace.serverId, workspace.workspaceId]);
 
   return (
     <StatusWorkspaceRowWithMenu

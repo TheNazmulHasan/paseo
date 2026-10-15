@@ -14,6 +14,10 @@ export type WorkspaceSwitcherCandidate = WorkspaceSwitcherVisit & {
   iconDataUri: string | null;
   projectInitial: string;
   projectViewKey: string;
+  /** Set on a board row (fork mod #13): committing it opens the board, not a workspace. */
+  boardId?: string;
+  boardKind?: "user" | "live";
+  boardSessionCount?: number;
 };
 
 interface WorkspaceSwitcherStoreState {

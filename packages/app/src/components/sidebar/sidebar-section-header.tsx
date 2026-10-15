@@ -16,6 +16,8 @@ export function SidebarSectionHeader({
   testID,
   titleAccessory,
   chevronAlwaysVisible,
+  count,
+  countTestID,
   onLayout,
   children,
 }: {
@@ -27,6 +29,9 @@ export function SidebarSectionHeader({
   titleAccessory?: ReactNode;
   /** Fork (Desk/Shelf): show the fold chevron without hovering, so it is a visible affordance. */
   chevronAlwaysVisible?: boolean;
+  /** Fork (Pinned): how many rows the section holds, shown right after the title. */
+  count?: number;
+  countTestID?: string;
   onLayout?: (event: LayoutChangeEvent) => void;
   children?: ReactNode;
 }) {
@@ -45,9 +50,14 @@ export function SidebarSectionHeader({
   );
   return (
     <View style={styles.header} onLayout={onLayout}>
-      {titleAccessory ? (
+      {titleAccessory || count !== undefined ? (
         <View style={styles.leading}>
           {titleNode}
+          {count !== undefined ? (
+            <Text style={styles.count} testID={countTestID}>
+              {count}
+            </Text>
+          ) : null}
           {titleAccessory}
         </View>
       ) : (
@@ -133,6 +143,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  count: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    opacity: 0.7,
   },
   actions: {
     flexDirection: "row",

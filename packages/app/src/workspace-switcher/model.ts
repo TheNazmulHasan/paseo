@@ -16,6 +16,65 @@ export function workspaceVisitKey(
   return `${visit.serverId}:${visit.workspaceId}`;
 }
 
+/**
+ * Boards (fork mod #13) share the switcher's rows. A board row is keyed like a workspace row, under
+ * a pseudo host, so freezing, pruning and selecting need no second code path.
+ */
+export const BOARD_ROW_SERVER_ID = "board";
+
+export function boardRowKey(boardId: string): string {
+  return `${BOARD_ROW_SERVER_ID}:${boardId}`;
+}
+
+/** A view visit, typed: the same record a workspace visit is, under the pseudo host. */
+export function boardVisit(
+  boardId: string,
+): Pick<WorkspaceSwitcherVisit, "serverId" | "workspaceId"> {
+  return { serverId: BOARD_ROW_SERVER_ID, workspaceId: boardId };
+}
+
+export function isBoardRowKey(key: string): boolean {
+  return key.startsWith(`${BOARD_ROW_SERVER_ID}:`);
+}
+
+/**
+ * Orders every switcher row, workspaces and views alike, by recency. A view is just another
+ * place you have been, so `historyKeys` (newest first, views included) drives the order.
+ * Row 0 is the current place and row 1 the one just left (the head), so a tap always lands there.
+ * After the head, the Desk workspaces and the views you have visited lead, in recency order;
+ * views never visited follow, then everything else (never-visited workspaces keep placement order).
+ */
+export function orderSwitcherKeys(input: {
+  currentKey: string | null;
+  historyKeys: readonly string[];
+  workspaceKeys: readonly string[];
+  boardKeys: readonly string[];
+  deskKeys: ReadonlySet<string>;
+}): readonly string[] {
+  const visited = input.historyKeys.filter((key) => key !== input.currentKey);
+  const seen = new Set<string>(visited);
+  if (input.currentKey) {
+    seen.add(input.currentKey);
+  }
+  const unvisitedWorkspaces = input.workspaceKeys.filter((key) => !seen.has(key));
+  const unvisitedBoards = input.boardKeys.filter((key) => !seen.has(key));
+  const sequence = [
+    ...(input.currentKey ? [input.currentKey] : []),
+    ...visited,
+    ...unvisitedWorkspaces,
+  ];
+  const headCount = input.currentKey ? 2 : 1;
+  const head = sequence.slice(0, headCount);
+  const rest = sequence.slice(headCount);
+  const leading = (key: string) => input.deskKeys.has(key) || isBoardRowKey(key);
+  return [
+    ...head,
+    ...rest.filter(leading),
+    ...unvisitedBoards,
+    ...rest.filter((key) => !leading(key)),
+  ];
+}
+
 export function recordWorkspaceVisit(
   history: readonly WorkspaceSwitcherVisit[],
   visit: WorkspaceSwitcherVisit,

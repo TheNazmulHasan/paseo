@@ -240,4 +240,51 @@ describe("keyboard-action-dispatcher", () => {
     expect(replacementHandle).toHaveBeenCalledOnce();
     expect(oldHandle).not.toHaveBeenCalled();
   });
+  it("dispatchToHandler delivers to exactly the named handler", () => {
+    const board = vi.fn(() => true);
+    const other = vi.fn(() => true);
+    const action: KeyboardActionDefinition = { id: "workspace.arrange.grid", scope: "workspace" };
+    dispatcher.registerHandler({
+      handlerId: "board-actions:abc",
+      actions: [],
+      enabled: true,
+      priority: 0,
+      handle: board,
+    });
+    dispatcher.registerHandler({
+      handlerId: "workspace-arrange-actions:s:w",
+      actions: [action.id],
+      enabled: true,
+      priority: 100,
+      handle: other,
+    });
+
+    expect(dispatcher.dispatchToHandler("board-actions:abc", action)).toBe(true);
+    expect(board).toHaveBeenCalledWith(action);
+    expect(other).not.toHaveBeenCalled();
+  });
+
+  it("dispatchToHandler is false for a missing, disabled or inactive handler", () => {
+    const handle = vi.fn(() => true);
+    const action: KeyboardActionDefinition = { id: "workspace.arrange.grid", scope: "workspace" };
+    expect(dispatcher.dispatchToHandler("board-actions:none", action)).toBe(false);
+    dispatcher.registerHandler({
+      handlerId: "off",
+      actions: [],
+      enabled: false,
+      priority: 0,
+      handle,
+    });
+    dispatcher.registerHandler({
+      handlerId: "idle",
+      actions: [],
+      enabled: true,
+      priority: 0,
+      isActive: () => false,
+      handle,
+    });
+    expect(dispatcher.dispatchToHandler("off", action)).toBe(false);
+    expect(dispatcher.dispatchToHandler("idle", action)).toBe(false);
+    expect(handle).not.toHaveBeenCalled();
+  });
 });

@@ -46,6 +46,7 @@ import { DesktopWindowControls } from "@/components/desktop/window-controls";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { DeskShortcutHandler } from "@/desk/desk-shortcut-handler";
+import { BoardsHost } from "@/boards/boards-host";
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
 import { WorkspaceExplorerOpenGesture } from "@/mobile-panels/explorer-open-gesture";
 import { ProviderSettingsHost } from "@/components/provider-settings-host";
@@ -120,6 +121,7 @@ import {
 } from "@/runtime/host-runtime";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { usePanelStore } from "@/stores/panel-store";
+import { usePlaceLeftSidebar } from "@/hooks/use-place-left-sidebar";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { useSessionStore } from "@/stores/session-store";
@@ -401,6 +403,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
 
   const isCompactLayout = useIsCompactFormFactor();
   useCompactWebViewportZoomLock(isCompactLayout);
+  usePlaceLeftSidebar(!isCompactLayout);
   const pathname = usePathname();
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
@@ -532,6 +535,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <PluginCommandCenterActions />
         <WorkspacePinShortcutHandler />
         <DeskShortcutHandler />
+        <BoardsHost />
         <WorkspaceRenameHost />
         <CommandCenter />
         <TabSwitcherHost />
@@ -821,6 +825,8 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/backlog" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
+      // Views (fork mod #13) need the sidebar and keyboard shortcuts like a workspace does.
+      pathname.startsWith("/boards/") ||
       routeHasKnownHost);
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;

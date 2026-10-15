@@ -161,6 +161,10 @@ export function commitTabSwitcher(): void {
   if (!candidate) {
     return;
   }
+  if (candidate.commit) {
+    candidate.commit();
+    return;
+  }
   if (candidate.kind === "agent") {
     navigateToAgent({ serverId: candidate.serverId, agentId: candidate.agentId });
     return;
