@@ -19,6 +19,9 @@ import {
   type SidebarGroupMode,
 } from "@/stores/sidebar-view-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
+import { useDeskStore } from "@/desk/desk-store";
+import { toKeySet, type DeskGroup } from "@/desk/model";
+import { useDeskReconcile } from "@/desk/use-desk-reconcile";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { buildSidebarProjection } from "./sidebar-projection";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
@@ -45,6 +48,9 @@ interface SidebarModel extends SidebarWorkspacesListResult {
   workspaceGroups: SidebarWorkspaceGroup[];
   projectIconTargets: SidebarProjectIconTarget[];
   pinnedGroups: PinnedSidebarGroups;
+  /** Fork mod #12: the Desk's groups and how many workspaces the Shelf still holds. */
+  deskGroups: DeskGroup[];
+  shelfCount: number;
   collapsedProjectKeys: ReadonlySet<string>;
   toggleProjectCollapsed: (projectViewKey: string) => void;
   shortcutModel: SidebarShortcutModel;
@@ -75,6 +81,10 @@ export function SidebarModelProvider({
   );
   const pinnedCollapsed = useSidebarCollapsedSectionsStore((state) => state.collapsedPinned);
   const pinnedWorkspaceOrder = useSidebarOrderStore((state) => state.pinnedWorkspaceOrder);
+  const deskKeyList = useDeskStore((state) => state.deskKeys);
+  const deskGrouping = useDeskStore((state) => state.deskGrouping);
+  const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
+  const deskKeys = useMemo(() => toKeySet(deskKeyList), [deskKeyList]);
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
@@ -109,6 +119,11 @@ export function SidebarModelProvider({
     list.workspacePlacements,
     active !== false || needsWorkspaceEntries,
   );
+  useDeskReconcile({
+    enabled: active !== false,
+    placements: list.workspacePlacements,
+    workspaceEntriesByKey,
+  });
   const filteredWorkspaceEntriesByKey = useMemo(() => {
     const byProject = filterWorkspacesByProjects({
       workspaces: [...workspaceEntriesByKey.values()],
@@ -175,6 +190,9 @@ export function SidebarModelProvider({
       groupMode,
       projectSort,
       pinnedCollapsed,
+      deskKeys,
+      deskGrouping,
+      shelfCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       t,
@@ -182,6 +200,9 @@ export function SidebarModelProvider({
     [
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
+      deskGrouping,
+      deskKeys,
+      shelfCollapsed,
       groupMode,
       list.projectNamesByViewKey,
       orderedProjects,
@@ -206,6 +227,8 @@ export function SidebarModelProvider({
       workspaceGroups: projection.workspaceGroups,
       projectIconTargets: projection.projectIconTargets,
       pinnedGroups: projection.pinnedGroups,
+      deskGroups: projection.deskGroups,
+      shelfCount: projection.shelfCount,
       collapsedProjectKeys,
       toggleProjectCollapsed,
       shortcutModel: projection.shortcutModel,

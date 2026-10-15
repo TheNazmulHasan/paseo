@@ -45,6 +45,7 @@ import { useToast } from "@/contexts/toast-context";
 import { lockInteractionScreen, unlockInteractionScreen } from "@/interaction-lock/actions";
 import { useInteractionLocked } from "@/stores/interaction-lock-store";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
+import { DeskMenuItem } from "@/desk/desk-menu-item";
 import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 import {
   workspaceServiceLabelKey,
@@ -250,6 +251,7 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
+      <DeskMenuItem surface={surface} workspaceKey={workspaceKey} />
       <WorkspaceMenuItem
         surface={surface}
         testID={`sidebar-workspace-menu-interaction-lock-${workspaceKey}`}
