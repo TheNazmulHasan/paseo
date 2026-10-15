@@ -6,7 +6,8 @@ import type {
   MarkdownRenderers,
 } from "react-native-enriched-markdown";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { useFileLink } from "@/assistant-file-links";
+import { AssistantLinkInlineActions, useFileLink } from "@/assistant-file-links";
+import { AssistantLinkContextMenu } from "@/assistant-file-links/link-context-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import type { Theme } from "@/styles/theme";
@@ -31,7 +32,12 @@ function WebCodeBlock({ code, language }: CodeBlockRendererProps) {
 const LINK_HOVER_STYLE = { textDecoration: "underline" } as const;
 
 function WebLink({ link, anchorProps, children }: LinkRendererProps) {
-  const { tooltipPath, onHoverIn } = useFileLink(markdownLinkSource(link.url, link.sourceType));
+  const source = markdownLinkSource(link.url, link.sourceType);
+  // Resolve bare file names up front so the icon row can say found / not found immediately.
+  const { target, externalUrl, fileStatus, tooltipPath, onHoverIn, onPress } = useFileLink(
+    source,
+    { resolveEagerly: true },
+  );
   const [hovered, setHovered] = useState(false);
   const handleMouseEnter = useCallback(() => setHovered(true), []);
   const handleMouseLeave = useCallback(() => setHovered(false), []);
@@ -53,19 +59,42 @@ function WebLink({ link, anchorProps, children }: LinkRendererProps) {
       {children}
     </a>
   );
+  const filePath = target?.path ?? null;
+  const fallbackCopyText = source.text?.trim() || source.href;
+  // Left click and the hover path tooltip stay upstream's. On top of them: a right-click menu
+  // and an always-visible Reveal / Copy row after the chip (the click already opens it).
   return (
-    <Tooltip delayDuration={400}>
-      <TooltipTrigger asChild onHoverIn={onHoverIn}>
-        <InlineLinkTrigger>{anchor}</InlineLinkTrigger>
-      </TooltipTrigger>
-      {tooltipPath ? (
-        <TooltipContent side="top" align="start" maxWidth={520}>
-          <Text selectable={false} style={styles.tooltipPath}>
-            {tooltipPath}
-          </Text>
-        </TooltipContent>
-      ) : null}
-    </Tooltip>
+    <>
+      <Tooltip delayDuration={400}>
+        <TooltipTrigger asChild onHoverIn={onHoverIn}>
+          <InlineLinkTrigger>
+            <AssistantLinkContextMenu
+              externalUrl={externalUrl}
+              filePath={filePath}
+              fallbackCopyText={fallbackCopyText}
+              onOpen={onPress}
+              fileStatus={fileStatus}
+            >
+              {anchor}
+            </AssistantLinkContextMenu>
+          </InlineLinkTrigger>
+        </TooltipTrigger>
+        {tooltipPath ? (
+          <TooltipContent side="top" align="start" maxWidth={520}>
+            <Text selectable={false} style={styles.tooltipPath}>
+              {tooltipPath}
+            </Text>
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
+      <AssistantLinkInlineActions
+        externalUrl={externalUrl}
+        filePath={filePath}
+        fallbackCopyText={fallbackCopyText}
+        onOpen={onPress}
+        fileStatus={fileStatus}
+      />
+    </>
   );
 }
 // TooltipTrigger also supplies native Pressable handlers; forward only DOM events.

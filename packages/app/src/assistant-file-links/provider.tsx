@@ -103,6 +103,11 @@ export function AssistantFileLinkResolverProvider({
   );
 }
 
+/** Same context, but usable by components that also render outside an assistant message. */
+export function useOptionalAssistantFileLinkResolverContext(): AssistantFileLinkResolverContextValue | null {
+  return useContext(AssistantFileLinkResolverContext);
+}
+
 export function useAssistantFileLinkResolverContext(): AssistantFileLinkResolverContextValue {
   const context = useContext(AssistantFileLinkResolverContext);
   return context ?? EMPTY_CONTEXT;

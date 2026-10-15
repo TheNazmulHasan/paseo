@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -18,9 +18,27 @@ import {
   type AssistantFileLinkContext,
 } from "./resolver";
 
+/**
+ * What we know about the file behind a link: `none` (not a file link), `checking` (a bare
+ * name is being looked up in the workspace), `resolved` (path known), `missing` (looked up,
+ * nothing matched).
+ */
+export type AssistantFileLinkStatus = "none" | "checking" | "resolved" | "missing";
+
+export interface UseFileLinkOptions {
+  /**
+   * Look a bare file name up as soon as the link renders instead of on hover, so the UI can
+   * show found / not-found state up front. Off by default to keep the lookup lazy.
+   */
+  resolveEagerly?: boolean;
+}
+
 export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   tooltipPath: string | null;
+  /** The http(s) URL this link opens in the browser, when it is not a file link. */
+  externalUrl: string | null;
+  fileStatus: AssistantFileLinkStatus;
   onHoverIn: () => void;
   onPress: () => void;
   open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
@@ -48,7 +66,11 @@ type AssistantFileLinkQueryKey = readonly [
 
 const DISABLED_QUERY_KEY = ["assistantFileLink", null, null, null] as const;
 
-export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult {
+export function useFileLink(
+  source: AssistantFileLinkSource,
+  options: UseFileLinkOptions = {},
+): UseFileLinkResult {
+  const resolveEagerly = options.resolveEagerly ?? false;
   const { t } = useTranslation();
   const context = useAssistantFileLinkResolverContext();
   const queryClient = useQueryClient();
@@ -132,6 +154,13 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     open(stableSource, "preferred");
   });
 
+  useEffect(() => {
+    if (!resolveEagerly || resolution.kind !== "needsLookup") {
+      return;
+    }
+    onHoverIn();
+  }, [onHoverIn, queryKey, resolution.kind, resolveEagerly]);
+
   const target = useMemo(() => {
     if (resolution.kind === "resolved") {
       return resolution.value.kind === "file" ? resolution.value.target : null;
@@ -140,9 +169,24 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   }, [query.data, resolution]);
 
   const tooltipPath = target ? formatFileLinkTooltipPath({ target, workspaceRoot }) : null;
+
+  const externalUrl =
+    resolution.kind === "resolved" && resolution.value.kind === "external"
+      ? resolution.value.url
+      : null;
+
+  const fileStatus = useMemo<AssistantFileLinkStatus>(() => {
+    if (resolution.kind === "resolved") {
+      return resolution.value.kind === "file" ? "resolved" : "none";
+    }
+    if (query.data) return "resolved";
+    if (query.isError) return "missing";
+    return "checking";
+  }, [query.data, query.isError, resolution]);
+
   return useMemo(
-    () => ({ target, tooltipPath, onHoverIn, onPress, open }),
-    [target, tooltipPath, onHoverIn, onPress, open],
+    () => ({ target, tooltipPath, externalUrl, fileStatus, onHoverIn, onPress, open }),
+    [target, tooltipPath, externalUrl, fileStatus, onHoverIn, onPress, open],
   );
 }
 
