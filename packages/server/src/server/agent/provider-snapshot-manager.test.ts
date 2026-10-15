@@ -396,6 +396,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", { isAvailable, fetchCatalog }),
@@ -421,6 +422,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -566,6 +568,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -592,6 +595,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", { isAvailable: vi.fn(waitUntilAborted) }),
@@ -621,6 +625,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", {
@@ -816,6 +821,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -844,6 +850,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -871,12 +878,21 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
       const entries = await manager.listProviders({ cwd: "/tmp/project", wait: true });
       const providers = entries.map((entry) => entry.provider).sort();
-      expect(providers).toEqual(["claude", "codex", "copilot", "omp", "opencode", "pi"]);
+      expect(providers).toEqual([
+        "antigravity",
+        "claude",
+        "codex",
+        "copilot",
+        "omp",
+        "opencode",
+        "pi",
+      ]);
       for (const entry of entries) {
         expect(entry.enabled).toBe(false);
         expect(entry.status).toBe("unavailable");
@@ -1322,6 +1338,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", {
@@ -1401,6 +1418,7 @@ describe("ProviderSnapshotManager public surface", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", {
@@ -1460,6 +1478,7 @@ describe("ProviderSnapshotManager public surface", () => {
         codex: { enabled: false },
         copilot: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
       extraClients: {
         opencode: createExtraClient("opencode", {
@@ -1514,6 +1533,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -1574,6 +1594,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -1600,6 +1621,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -1647,6 +1669,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
       copilot: { enabled: false },
       opencode: { enabled: false },
       pi: { enabled: false },
+      antigravity: { enabled: false },
       omp: { enabled: false },
     };
     const manager = new ProviderSnapshotManager({
@@ -1698,6 +1721,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
       copilot: { enabled: false },
       opencode: { enabled: false },
       pi: { enabled: false },
+      antigravity: { enabled: false },
       omp: { enabled: false },
     };
     const manager = new ProviderSnapshotManager({
@@ -1752,6 +1776,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
       copilot: { enabled: false },
       opencode: { enabled: false },
       pi: { enabled: false },
+      antigravity: { enabled: false },
       omp: { enabled: false },
     };
     const manager = new ProviderSnapshotManager({
@@ -1895,6 +1920,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
       omp: { enabled: false },
       opencode: { enabled: false },
       pi: { enabled: false },
+      antigravity: { enabled: false },
     });
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
@@ -1948,6 +1974,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -1975,6 +2002,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     const listener = vi.fn();
@@ -2174,6 +2202,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -2201,6 +2230,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        antigravity: { enabled: false },
       },
     });
     try {
@@ -2282,6 +2312,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
           copilot: { enabled: false },
           opencode: { enabled: false },
           pi: { enabled: false },
+          antigravity: { enabled: false },
         },
       });
       try {
@@ -2418,6 +2449,7 @@ describe("provider-owned catalogue identity", () => {
     copilot: { enabled: false },
     opencode: { enabled: false },
     pi: { enabled: false },
+    antigravity: { enabled: false },
   };
 
   test("shares effective runtime/configuration keys, preserves targets, and isolates provider identities", async () => {
@@ -2959,6 +2991,7 @@ test("an unchanged provider publishes a pending key failure after an unrelated c
     copilot: { enabled: false },
     opencode: { enabled: false },
     pi: { enabled: false },
+    antigravity: { enabled: false },
     omp: { enabled: false },
   };
   const manager = new ProviderSnapshotManager({
@@ -3248,7 +3281,7 @@ test("result identity covers content, metadata and status while unchanged refres
 });
 
 const PUBLICATION_PROVIDERS = Object.fromEntries(
-  ["claude", "codex", "copilot", "opencode", "pi", "omp"].map((provider) => [
+  ["claude", "codex", "copilot", "opencode", "pi", "omp", "antigravity"].map((provider) => [
     provider,
     { enabled: provider === "codex" },
   ]),
