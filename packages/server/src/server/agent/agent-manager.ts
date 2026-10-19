@@ -275,6 +275,8 @@ export type AgentSubscriber = (event: AgentManagerEvent) => void;
 export interface SubscribeOptions {
   agentId?: string;
   replayState?: boolean;
+  /** Global subscribers skip internal agents unless this is set. */
+  includeInternal?: boolean;
 }
 
 interface HydrateTimelineOptions {
@@ -602,6 +604,7 @@ function attachPersistenceCwd(
 interface SubscriptionRecord {
   callback: AgentSubscriber;
   agentId: string | null;
+  includeInternal: boolean;
 }
 
 interface SteerEventBarrier {
@@ -1007,6 +1010,7 @@ export class AgentManager {
     const record: SubscriptionRecord = {
       callback,
       agentId: targetAgentId,
+      includeInternal: options?.includeInternal === true,
     };
     this.subscribers.add(record);
 
@@ -1022,7 +1026,7 @@ export class AgentManager {
       } else {
         // For global subscribers, skip internal agents during replay
         for (const agent of this.agents.values()) {
-          if (agent.internal) {
+          if (agent.internal && !record.includeInternal) {
             continue;
           }
           callback({
@@ -1046,6 +1050,11 @@ export class AgentManager {
     return Array.from(this.agents.values())
       .filter((agent) => !agent.internal)
       .map((agent) => Object.assign({}, agent));
+  }
+
+  /** Includes internal agents. `listAgents` hides those from clients. */
+  listAgentsIncludingInternal(): ManagedAgent[] {
+    return Array.from(this.agents.values()).map((agent) => Object.assign({}, agent));
   }
 
   async listImportableSessions(
@@ -5513,7 +5522,13 @@ export class AgentManager {
         continue;
       }
       // Skip internal agents for global subscribers (those without a specific agentId)
-      if (!subscriber.agentId && this.eventBelongsToInternalAgent(event)) {
+      // unless the subscriber asked to see them. Remote git poll counts a running
+      // internal agent as activity.
+      if (
+        !subscriber.agentId &&
+        !subscriber.includeInternal &&
+        this.eventBelongsToInternalAgent(event)
+      ) {
         continue;
       }
       subscriber.callback(event);

@@ -1,5 +1,6 @@
 import { searchTimeline } from "./agent/chat-search/index.js";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
+import type { GitRemotePollClientPin } from "./git-remote-poll/git-remote-poll-gate.js";
 import { BrowserAutomationHostCapabilitySchema } from "@getpaseo/protocol/browser-automation/capabilities";
 import type {
   SessionEventSubscription,
@@ -552,6 +553,7 @@ export interface SessionOptions {
   // defaults to the real checkout-git implementation.
   renameCurrentBranch?: typeof renameCurrentBranchDefault;
   workspaceGitService: WorkspaceGitService;
+  gitRemotePoll?: GitRemotePollClientPin | null;
   workspaceAutoName: WorkspaceAutoName;
   daemonConfigStore: DaemonConfigStore;
   pluginRuntime?: {
@@ -809,6 +811,7 @@ export class Session {
   private readonly github: ForgeService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
   private readonly workspaceGitService: WorkspaceGitService;
+  private readonly gitRemotePoll: GitRemotePollClientPin | null | undefined;
   private readonly workspaceAutoName: WorkspaceAutoName;
   private readonly gitMutation: GitMutationService;
   private readonly workspaceProvisioning: WorkspaceProvisioningService;
@@ -998,6 +1001,7 @@ export class Session {
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
     this.workspaceGitService = workspaceGitService;
+    this.gitRemotePoll = options.gitRemotePoll;
     this.gitMutation = createGitMutationService({
       workspaceGitService: this.workspaceGitService,
       logger: this.sessionLogger,
@@ -5564,6 +5568,7 @@ export class Session {
     deviceType: "web" | "mobile";
     focusedAgentId: string | null;
     focusedTerminalId?: string | null;
+    openWorkspaceId?: string | null;
     lastActivityAt: string;
     appVisible: boolean;
     appVisibilityChangedAt?: string;
@@ -5587,6 +5592,7 @@ export class Session {
     if (metadata.pushToken) {
       this.pushNotifications.renew(metadata.pushToken);
     }
+    this.gitRemotePoll?.setClientOpenWorkspace(this.sessionId, msg.openWorkspaceId ?? null);
   }
 
   private async clearFocusedTerminalAttention(terminalId: string): Promise<void> {
@@ -9555,6 +9561,7 @@ export class Session {
    */
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
+    this.gitRemotePoll?.forgetClient(this.sessionId);
     this.tcpTunnelForwarder.dispose();
     this.isCleanedUp = true;
     await this.delivery.close();
