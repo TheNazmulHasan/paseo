@@ -1,4 +1,5 @@
 import type { AgentRateLimitAutoResumeManager } from "./agent-rate-limit-auto-resume.js";
+import type { AgentRateLimitCooldownPayload } from "@getpaseo/protocol/messages";
 import { AGENT_LABEL_RATE_LIMIT_AUTO_RESUME } from "@getpaseo/protocol/agent-labels";
 import { projectTimelineRows } from "./timeline-projection.js";
 import type { PluginLifecycle } from "../plugins/lifecycle/index.js";
@@ -460,6 +461,7 @@ interface ManagedAgentBase {
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
+  rateLimitCooldown?: AgentRateLimitCooldownPayload | null;
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
   unsubscribeSession: (() => void) | null;
@@ -746,9 +748,6 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
-export const RATE_LIMIT_ERROR_HEURISTIC =
-  /(?:429|rate[_\s-]?limit|cooldown|cooling down|quota|too many requests)/i;
-
 function resolveRescueTimeouts(
   timeouts?: AgentManagerRescueTimeouts,
 ): Required<AgentManagerRescueTimeouts> {
@@ -843,6 +842,14 @@ export class AgentManager {
 
   getRateLimitAutoResumeManager(): AgentRateLimitAutoResumeManager | null {
     return this.rateLimitAutoResumeManager;
+  }
+
+  setRateLimitCooldown(agentId: string, cooldown: AgentRateLimitCooldownPayload | null): void {
+    const agent = this.agents.get(agentId);
+    if (agent) {
+      agent.rateLimitCooldown = cooldown;
+      this.emitState(agent);
+    }
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -3951,6 +3958,48 @@ export class AgentManager {
     return { durableTimelineHasRows };
   }
 
+  private resolveManagedAgentCooldown(agentId: string): AgentRateLimitCooldownPayload | null {
+    const pending = this.rateLimitAutoResumeManager?.getPending(agentId);
+    if (!pending) return null;
+    return {
+      scheduledFor: pending.scheduledFor.toISOString(),
+      retryAfter: pending.retryAfter,
+      consecutiveResumes: this.rateLimitAutoResumeManager?.getConsecutiveResumes?.(agentId) ?? 0,
+    };
+  }
+
+  private resolveManagedAgentRegistrationOptions(
+    now: Date,
+    durableTimelineHasRows: boolean,
+    options:
+      | {
+          createdAt?: Date;
+          updatedAt?: Date;
+          lastUserMessageAt?: Date | null;
+          labels?: Record<string, string>;
+          historyPrimed?: boolean;
+          lastUsage?: AgentUsage;
+          lastError?: string;
+          attention?: AttentionState;
+          workspaceId?: string;
+          owner?: AgentOwner;
+        }
+      | undefined,
+  ) {
+    return {
+      workspaceId: options?.workspaceId,
+      owner: options?.owner,
+      createdAt: options?.createdAt ?? now,
+      updatedAt: options?.updatedAt ?? now,
+      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
+      lastUserMessageAt: options?.lastUserMessageAt ?? null,
+      lastUsage: options?.lastUsage,
+      lastError: options?.lastError,
+      attention: resolveInitialAttention(options?.attention),
+      labels: options?.labels ?? {},
+    };
+  }
+
   private buildManagedAgentForRegister(params: {
     resolvedAgentId: string;
     session: AgentSession;
@@ -3974,19 +4023,21 @@ export class AgentManager {
       | undefined;
   }): ActiveManagedAgent {
     const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const rateLimitCooldown = this.resolveManagedAgentCooldown(resolvedAgentId);
+    const resolvedOpts = this.resolveManagedAgentRegistrationOptions(
+      now,
+      durableTimelineHasRows,
+      options,
+    );
     return {
       id: resolvedAgentId,
       provider: config.provider,
       cwd: config.cwd,
-      workspaceId: options?.workspaceId,
-      owner: options?.owner,
       session,
       capabilities: session.capabilities,
       config,
       runtimeInfo: undefined,
       lifecycle: "initializing",
-      createdAt: options?.createdAt ?? now,
-      updatedAt: options?.updatedAt ?? now,
       availableModes: [],
       currentModeId: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
@@ -4003,13 +4054,9 @@ export class AgentManager {
         options?.persistence ?? session.describePersistence(),
         config.cwd,
       ),
-      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
-      lastUserMessageAt: options?.lastUserMessageAt ?? null,
-      lastUsage: options?.lastUsage,
-      lastError: options?.lastError,
-      attention: resolveInitialAttention(options?.attention),
+      rateLimitCooldown,
       internal: config.internal ?? false,
-      labels: options?.labels ?? {},
+      ...resolvedOpts,
     } as ActiveManagedAgent;
   }
 
@@ -4836,9 +4883,19 @@ export class AgentManager {
   private async checkRateLimitAutoResumeOnIdle(agentId: string): Promise<void> {
     if (!this.rateLimitAutoResumeManager) return;
     try {
+      const candidates: (string | null | undefined)[] = [];
       const lastMessage = await this.getLastAssistantMessage(agentId);
-      if (lastMessage && RATE_LIMIT_ERROR_HEURISTIC.test(lastMessage)) {
-        this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, lastMessage);
+      if (lastMessage) {
+        candidates.push(lastMessage);
+      }
+      const lastItem = await this.getLastItemFromStores(agentId);
+      if (lastItem && (lastItem.type === "error" || lastItem.type === "notification")) {
+        candidates.push(lastItem.message);
+      }
+      for (const text of candidates) {
+        if (text && this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, text)) {
+          break;
+        }
       }
     } catch (error) {
       this.logger.debug({ err: error, agentId }, "Failed to check rate limit auto resume on idle");
@@ -4865,6 +4922,7 @@ export class AgentManager {
       "agent.manager.turn.completed",
     );
     if (terminalDisposition === "stale") return;
+    this.rateLimitAutoResumeManager?.resetConsecutiveResumes(agent.id);
     if (event.usage) {
       agent.lastUsage = { ...agent.lastUsage, ...event.usage };
     }

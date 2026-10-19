@@ -1,6 +1,7 @@
 import type {
   AgentListItemPayload,
   AgentSnapshotPayload,
+  AgentRateLimitCooldownPayload,
   RecentProviderSessionDescriptorPayload,
 } from "../messages.js";
 import type { SerializableAgentConfig, StoredAgentRecord } from "./agent-storage.js";
@@ -150,6 +151,10 @@ export function toAgentPayload(
     payload.lastError = agent.lastError;
   }
 
+  if (agent.rateLimitCooldown) {
+    payload.rateLimitCooldown = agent.rateLimitCooldown;
+  }
+
   // Handle attention state
   payload.requiresAttention = agent.attention.requiresAttention;
   if (agent.attention.requiresAttention) {
@@ -198,6 +203,7 @@ function buildStoredPersistenceHandle(
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
+  options?: { rateLimitCooldown?: AgentRateLimitCooldownPayload | null },
 ): AgentSnapshotPayload {
   const defaultCapabilities = {
     supportsStreaming: false,
@@ -250,6 +256,7 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    ...(options?.rateLimitCooldown ? { rateLimitCooldown: options.rateLimitCooldown } : {}),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }
@@ -273,6 +280,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp ?? null,
     labels: agent.labels,
+    ...(agent.rateLimitCooldown ? { rateLimitCooldown: agent.rateLimitCooldown } : {}),
     ...(agent.providerUnavailable ? { providerUnavailable: true } : {}),
   };
 }
