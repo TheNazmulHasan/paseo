@@ -17,7 +17,9 @@ import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { filePreviewRenderKind } from "@/components/file-pane-render-mode";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { getFileNameFromPath } from "@/attachments/utils";
+import { OfficePreview } from "@/components/office-preview";
 import { PdfPreview } from "@/components/pdf-preview";
+import { officePreviewKind } from "@/file-explorer/office";
 import { isPdfMimeType } from "@/file-explorer/pdf";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
@@ -129,6 +131,43 @@ function TooLargeSource({ size }: { size?: number }) {
   );
 }
 
+function BinaryFilePreview({
+  preview,
+  imagePreviewUri,
+}: {
+  preview: ExplorerFile;
+  imagePreviewUri: string | null;
+}) {
+  const { t } = useTranslation();
+  const label = getFileNameFromPath(preview.path) ?? preview.path;
+  const officeKind = officePreviewKind({ mimeType: preview.mimeType, path: preview.path });
+  const renderable = isPdfMimeType(preview.mimeType) || officeKind !== null;
+
+  if (!renderable) {
+    return (
+      <View style={styles.centerState}>
+        <Text style={styles.emptyText}>{t("panels.file.binaryPreviewUnavailable")}</Text>
+        <Text style={styles.binaryMetaText}>{formatFileSize({ size: preview.size })}</Text>
+      </View>
+    );
+  }
+
+  if (!imagePreviewUri) {
+    return (
+      <View style={styles.centerState}>
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
+      </View>
+    );
+  }
+
+  if (officeKind) {
+    return <OfficePreview uri={imagePreviewUri} kind={officeKind} label={label} />;
+  }
+
+  return <PdfPreview uri={imagePreviewUri} label={label} />;
+}
+
 function FilePreviewBody({
   preview,
   mode,
@@ -213,27 +252,7 @@ function FilePreviewBody({
     return <ZoomableImage uri={imagePreviewUri} testID="image-file-preview" />;
   }
 
-  if (preview.kind === "binary" && isPdfMimeType(preview.mimeType)) {
-    if (!imagePreviewUri) {
-      return (
-        <View style={styles.centerState}>
-          <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
-          <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
-        </View>
-      );
-    }
-
-    return (
-      <PdfPreview uri={imagePreviewUri} label={getFileNameFromPath(preview.path) ?? preview.path} />
-    );
-  }
-
-  return (
-    <View style={styles.centerState}>
-      <Text style={styles.emptyText}>{t("panels.file.binaryPreviewUnavailable")}</Text>
-      <Text style={styles.binaryMetaText}>{formatFileSize({ size: preview.size })}</Text>
-    </View>
-  );
+  return <BinaryFilePreview preview={preview} imagePreviewUri={imagePreviewUri} />;
 }
 
 export function FilePane({

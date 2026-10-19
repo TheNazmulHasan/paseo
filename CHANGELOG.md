@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.908 - 2026-10-19
+
+### Added
+
+- Added Word, Excel, and PowerPoint preview in the file pane on desktop, web, and mobile ([#129](https://github.com/iamriajul/paseo/pull/129))
+
 ## 0.11.907 - 2026-10-19
 
 ### Changed
