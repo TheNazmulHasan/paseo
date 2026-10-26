@@ -45,6 +45,7 @@ import {
   Power,
   MicVocal,
   FileSymlink,
+  Flame,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -178,6 +179,7 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedNotificationInfo = withUnistyles(Info);
 const ThemedNotificationWarning = withUnistyles(TriangleAlertIcon);
 const ThemedNotificationError = withUnistyles(XCircle);
+const ThemedFlame = withUnistyles(Flame);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -189,6 +191,7 @@ const mutedForegroundColorMapping = (theme: Theme) => ({
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const infoColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[300] });
 const warningColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
+const statusWarningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} {
     0% {
@@ -2407,6 +2410,44 @@ export const ResumeMarker = memo(function ResumeMarker({ reason }: ResumeMarkerP
         <Text style={resumeStylesheet.text}>{label}</Text>
       </View>
       <View style={resumeStylesheet.line} />
+    </View>
+  );
+});
+
+const cacheWarmedStylesheet = StyleSheet.create((theme) => ({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.border,
+  },
+  label: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  text: {
+    fontFamily: theme.fontFamily.ui,
+    fontSize: 13,
+    color: theme.colors.foregroundMuted,
+  },
+}));
+
+export const CacheWarmedMarker = memo(function CacheWarmedMarker() {
+  return (
+    <View style={cacheWarmedStylesheet.container} testID="cache-warmed-marker">
+      <View style={cacheWarmedStylesheet.line} />
+      <View style={cacheWarmedStylesheet.label}>
+        <ThemedFlame size={12} uniProps={statusWarningColorMapping} />
+        <Text style={cacheWarmedStylesheet.text}>Cache warmed up</Text>
+      </View>
+      <View style={cacheWarmedStylesheet.line} />
     </View>
   );
 });

@@ -83,6 +83,7 @@ export function toStoredAgentRecord(
     updatedAt: agent.updatedAt.toISOString(),
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
+    lastResponseAt: agent.lastResponseAt ? agent.lastResponseAt.toISOString() : null,
     title: options?.title ?? null,
     labels: agent.labels,
     lastStatus: agent.lifecycle,
@@ -99,6 +100,7 @@ export function toStoredAgentRecord(
       : null,
     internal: options?.internal,
     owner: agent.owner,
+    consecutiveWarmPings: agent.consecutiveWarmPings ?? undefined,
   } satisfies StoredAgentRecord;
 }
 
@@ -125,6 +127,7 @@ export function toAgentPayload(
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
+    lastResponseAt: agent.lastResponseAt ? agent.lastResponseAt.toISOString() : null,
     status: agent.lifecycle,
     activeTurn: agent.activeTurnId
       ? {
@@ -140,6 +143,9 @@ export function toAgentPayload(
     persistence: projectPersistenceHandleForWire(agent.persistence),
     title: options?.title ?? null,
     labels: agent.labels,
+    ...(agent.consecutiveWarmPings !== undefined
+      ? { consecutiveWarmPings: agent.consecutiveWarmPings }
+      : {}),
   };
 
   const usage = sanitizeUsage(agent.lastUsage);
@@ -200,34 +206,48 @@ function buildStoredPersistenceHandle(
   return toAgentPersistenceHandle(validProviders, record.persistence);
 }
 
+const DEFAULT_STORED_AGENT_CAPABILITIES = {
+  supportsStreaming: false,
+  supportsSessionPersistence: true,
+  supportsDynamicModes: false,
+  supportsMcpServers: false,
+  supportsReasoningStream: false,
+  supportsToolInvocations: true,
+  supportsRewindConversation: false,
+  supportsRewindFiles: false,
+  supportsRewindBoth: false,
+  supportsNativeFork: false,
+  supportsSteer: false,
+} as const;
+
+function resolveStoredAgentThinking(
+  record: StoredAgentRecord,
+  runtimeInfo: AgentRuntimeInfo | undefined,
+) {
+  const thinkingOptionId = record.config?.thinkingOptionId ?? null;
+  return {
+    thinkingOptionId,
+    effectiveThinkingOptionId: resolveEffectiveThinkingOptionId({
+      runtimeInfo,
+      configuredThinkingOptionId: thinkingOptionId,
+    }),
+  };
+}
+
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
   options?: { rateLimitCooldown?: AgentRateLimitCooldownPayload | null },
 ): AgentSnapshotPayload {
-  const defaultCapabilities = {
-    supportsStreaming: false,
-    supportsSessionPersistence: true,
-    supportsDynamicModes: false,
-    supportsMcpServers: false,
-    supportsReasoningStream: false,
-    supportsToolInvocations: true,
-    supportsRewindConversation: false,
-    supportsRewindFiles: false,
-    supportsRewindBoth: false,
-    supportsNativeFork: false,
-    supportsSteer: false,
-  } as const;
-
   const createdAt = new Date(record.createdAt);
   const updatedAt = new Date(resolveStoredAgentUpdatedAt(record));
-  const lastUserMessageAt = record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null;
 
   const runtimeInfo = buildStoredRuntimeInfo(record);
   const providerAvailable = isStoredAgentProviderAvailable(record, validProviders);
   const persistence = projectPersistenceHandleForWire(
     buildStoredPersistenceHandle(record, validProviders),
   );
+  const thinking = resolveStoredAgentThinking(record, runtimeInfo);
 
   return {
     id: record.id,
@@ -235,17 +255,15 @@ export function buildStoredAgentPayload(
     cwd: record.cwd,
     ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
     model: record.config?.model ?? null,
-    thinkingOptionId: record.config?.thinkingOptionId ?? null,
-    effectiveThinkingOptionId: resolveEffectiveThinkingOptionId({
-      runtimeInfo,
-      configuredThinkingOptionId: record.config?.thinkingOptionId ?? null,
-    }),
+    thinkingOptionId: thinking.thinkingOptionId,
+    effectiveThinkingOptionId: thinking.effectiveThinkingOptionId,
     ...(runtimeInfo ? { runtimeInfo } : {}),
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
-    lastUserMessageAt: lastUserMessageAt ? lastUserMessageAt.toISOString() : null,
+    lastUserMessageAt: record.lastUserMessageAt ?? null,
+    lastResponseAt: record.lastResponseAt ?? null,
     status: record.lastStatus,
-    capabilities: defaultCapabilities,
+    capabilities: DEFAULT_STORED_AGENT_CAPABILITIES,
     currentModeId: record.lastModeId ?? null,
     availableModes: [],
     pendingPermissions: [],
@@ -256,6 +274,9 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    ...(record.consecutiveWarmPings !== undefined
+      ? { consecutiveWarmPings: record.consecutiveWarmPings }
+      : {}),
     ...(options?.rateLimitCooldown ? { rateLimitCooldown: options.rateLimitCooldown } : {}),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
@@ -275,6 +296,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
     lastUserMessageAt: agent.lastUserMessageAt,
+    lastResponseAt: agent.lastResponseAt,
     archivedAt: agent.archivedAt ?? null,
     requiresAttention: agent.requiresAttention ?? false,
     attentionReason: agent.attentionReason ?? null,

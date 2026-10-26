@@ -1,4 +1,5 @@
 import { AgentRateLimitAutoResumeManager } from "./agent/agent-rate-limit-auto-resume.js";
+import { AgentCacheWarmManager } from "./agent/agent-cache-warm.js";
 import {
   createGitRemotePollGate,
   type GitRemotePollGate,
@@ -1064,6 +1065,12 @@ export async function createPaseoDaemon(
   });
   agentManager.setRateLimitAutoResumeManager(rateLimitAutoResumeManager);
   await rateLimitAutoResumeManager.restorePendingTimers();
+  const cacheWarmManager = new AgentCacheWarmManager({
+    agentManager,
+    agentStorage,
+    logger,
+  });
+  agentManager.setCacheWarmManager(cacheWarmManager);
   daemonConfigStore.onFieldChange("daemon.autoResumeOnRateLimit", () => {
     if (daemonConfigStore.get().autoResumeOnRateLimit === false) {
       rateLimitAutoResumeManager.cancelAll();
@@ -1545,7 +1552,11 @@ export async function createPaseoDaemon(
         prompt: config.autoResumeRunningAgents?.prompt ?? "Resume - there was a power cut",
       }),
     )
-    .then(() => rateLimitAutoResumeManager.bootstrap())
+    .then(() => {
+      rateLimitAutoResumeManager.bootstrap();
+      cacheWarmManager.bootstrap(agentManager.listAgents());
+      return undefined;
+    })
     .catch((error) => {
       logger.warn({ err: error }, "Auto-resume for running agents failed");
     });

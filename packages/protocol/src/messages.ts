@@ -930,6 +930,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastUserMessageAt: z.string().nullable(),
+  lastResponseAt: z.string().nullable().optional(),
   status: AgentStatusSchema,
   activeTurn: AgentActiveTurnPayloadSchema.nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,
@@ -948,6 +949,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   archivedAt: z.string().nullable().optional(),
   providerUnavailable: z.boolean().optional(),
   rateLimitCooldown: AgentRateLimitCooldownPayloadSchema.nullable().optional(),
+  consecutiveWarmPings: z.number().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
@@ -965,6 +967,7 @@ export const AgentListItemPayloadSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastUserMessageAt: z.string().nullable(),
+  lastResponseAt: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),

@@ -3,6 +3,7 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
 import { isLikelyExternalToolName } from "@getpaseo/protocol/tool-name-normalization";
 import { buildToolCallDisplayModel } from "@getpaseo/protocol/tool-call-display";
+import { isCacheWarmPrompt, isCacheWarmReply } from "@getpaseo/protocol/agent-cache-warm";
 import { projectTimelineRows } from "./timeline-projection.js";
 
 const DEFAULT_MAX_ITEMS = 0;
@@ -132,6 +133,21 @@ function formatToolCallEntry(
   return activityEntry(summary ? `[${displayName}] ${summary}` : `[${displayName}]`);
 }
 
+function isWarmPingItem(item: AgentTimelineItem, prevItem: AgentTimelineItem | undefined): boolean {
+  if (item.type === "user_message" && isCacheWarmPrompt(item.text)) {
+    return true;
+  }
+  if (
+    item.type === "assistant_message" &&
+    isCacheWarmReply(item.text) &&
+    prevItem?.type === "user_message" &&
+    isCacheWarmPrompt(prevItem.text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function curateProjectedActivityEntries(
   items: readonly AgentTimelineItem[],
   options?: ActivityCuratorOptions,
@@ -145,8 +161,15 @@ function curateProjectedActivityEntries(
 
   const entries: ActivityEntry[] = [];
   const buffers = { message: "", thought: "" };
+  let prevItem: AgentTimelineItem | undefined;
 
   for (const item of recentItems) {
+    if (isWarmPingItem(item, prevItem)) {
+      prevItem = item;
+      continue;
+    }
+    prevItem = item;
+
     if (!shouldIncludeItem(item, options)) {
       continue;
     }

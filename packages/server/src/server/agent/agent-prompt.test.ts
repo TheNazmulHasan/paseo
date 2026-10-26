@@ -542,6 +542,104 @@ it("does not notify archived callers", async () => {
   expect(replaceAgentRunSpy).not.toHaveBeenCalled();
 });
 
+it("does not notify or disarm finish notifications for cache warm ping turns", async () => {
+  let subscriber: ((event: AgentManagerEvent) => void) | null = null;
+
+  const childAgent: ManagedAgent = Object.create(null);
+  Reflect.set(childAgent, "id", "child-agent");
+  Reflect.set(childAgent, "lifecycle", "idle");
+  Reflect.set(childAgent, "config", { title: "Child Agent" });
+  Reflect.set(childAgent, "pendingPermissions", new Map());
+
+  const callerAgent: ManagedAgent = Object.create(null);
+  Reflect.set(callerAgent, "id", "caller-agent");
+  Reflect.set(callerAgent, "lifecycle", "idle");
+  Reflect.set(callerAgent, "config", { title: "Caller Agent" });
+
+  const streamAgentSpy = vi.fn(() => (async function* noop() {})());
+  const replaceAgentRunSpy = vi.fn(() => (async function* noop() {})());
+
+  const agentManager = new AgentManager({ clients: {}, logger: createTestLogger() });
+  Reflect.set(
+    agentManager,
+    "getAgent",
+    vi.fn((agentId: string) => {
+      if (agentId === "child-agent") return childAgent;
+      if (agentId === "caller-agent") return callerAgent;
+      return null;
+    }),
+  );
+  Reflect.set(
+    agentManager,
+    "subscribe",
+    vi.fn((callback: (event: AgentManagerEvent) => void) => {
+      subscriber = callback;
+      return () => {
+        subscriber = null;
+      };
+    }),
+  );
+  Reflect.set(agentManager, "hasInFlightRun", vi.fn().mockReturnValue(false));
+  Reflect.set(agentManager, "streamAgent", streamAgentSpy);
+  Reflect.set(agentManager, "replaceAgentRun", replaceAgentRunSpy);
+
+  const agentStorageGetSpy = vi.fn(async (agentId: string) =>
+    agentId === "caller-agent" ? { title: "Caller Agent" } : null,
+  );
+  const agentStorage: AgentStorage = Object.create(AgentStorage.prototype);
+  Reflect.set(agentStorage, "get", agentStorageGetSpy);
+
+  setupFinishNotification({
+    agentManager,
+    agentStorage,
+    childAgentId: "child-agent",
+    callerAgentId: "caller-agent",
+    logger: createTestLogger(),
+  });
+
+  expect(subscriber).not.toBeNull();
+
+  // 1. Warm ping starts
+  childAgent.lifecycle = "running";
+  childAgent.activeTurnIsWarmPing = true;
+  subscriber?.({
+    type: "agent_state",
+    agent: childAgent,
+  });
+
+  // 2. Warm ping completes (returns to idle)
+  childAgent.lifecycle = "idle";
+  childAgent.activeTurnIsWarmPing = false;
+  subscriber?.({
+    type: "agent_state",
+    agent: childAgent,
+    isWarmPing: true,
+  });
+
+  // Caller should NOT have been notified
+  expect(agentStorageGetSpy).not.toHaveBeenCalled();
+  // Listener must NOT have been unsubscribed (remains armed)
+  expect(subscriber).not.toBeNull();
+
+  // 3. Subsequent real work turn starts and completes
+  childAgent.lifecycle = "running";
+  subscriber?.({
+    type: "agent_state",
+    agent: childAgent,
+  });
+
+  childAgent.lifecycle = "idle";
+  subscriber?.({
+    type: "agent_state",
+    agent: childAgent,
+  });
+
+  // Now the caller should be notified for the real turn
+  await vi.waitFor(() => {
+    expect(agentStorageGetSpy).toHaveBeenCalledWith("caller-agent");
+  });
+});
+
 // Deliberately independent literals rather than the production constants these tests
 // guard: deriving the boundaries from AGENT_RUN_START_TIMEOUT_MS would keep the tests
 // green if that constant were shortened back under a provider's startup budget.

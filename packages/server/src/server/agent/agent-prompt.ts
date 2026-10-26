@@ -34,7 +34,7 @@ export interface StartAgentRunOptions {
   clearPendingPermissions?: boolean;
 }
 
-export type PromptDispatchDisposition = "out_of_band" | "steered" | "turn_started";
+export type PromptDispatchDisposition = "out_of_band" | "steered" | "turn_started" | "skipped";
 
 async function steerOrReplaceActiveRun(
   agentManager: AgentRunController,
@@ -134,6 +134,13 @@ async function startAgentRunInner(
   logger: Logger,
   options?: StartAgentRunOptions,
 ): Promise<{ disposition: PromptDispatchDisposition }> {
+  if (options?.replaceRunning === false && agentManager.hasInFlightRun(agentId)) {
+    logger.debug(
+      { agentId },
+      "Skipping prompt dispatch: in-flight run active and replaceRunning is false",
+    );
+    return { disposition: "skipped" };
+  }
   const snapshot = agentManager.getAgent(agentId);
   const steered = await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
   if (steered?.disposition === "steered") {
@@ -231,6 +238,7 @@ export interface SendPromptToAgentParams {
   activeTurnBehavior?: ActiveTurnBehavior;
   /** COMPAT(promptSteer): maps onto activeTurnBehavior when the new field is omitted. */
   steer?: boolean;
+  replaceRunning?: boolean;
   runOptions?: AgentRunOptions;
   /** Optional mode to set on the agent before the run starts. */
   sessionMode?: string;
@@ -340,12 +348,28 @@ export async function sendPromptToAgent(
     await params.agentManager.setAgentMode(params.agentId, params.sessionMode);
   }
 
+  if (params.replaceRunning === false) {
+    const liveAgent = params.agentManager.getAgent(params.agentId);
+    if (
+      !liveAgent ||
+      liveAgent.lifecycle !== "idle" ||
+      params.agentManager.hasInFlightRun(params.agentId) ||
+      (liveAgent.pendingPermissions && liveAgent.pendingPermissions.size > 0)
+    ) {
+      params.logger?.debug(
+        { agentId: params.agentId },
+        "Skipping prompt dispatch: agent is not idle and replaceRunning is false",
+      );
+      return { disposition: "skipped" };
+    }
+  }
+
   const runOptions = params.messageId
     ? { ...params.runOptions, clientMessageId: params.messageId }
     : params.runOptions;
 
   return await startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
-    replaceRunning: true,
+    replaceRunning: params.replaceRunning ?? true,
     activeTurnBehavior: params.activeTurnBehavior ?? (params.steer === true ? "steer" : undefined),
     clearPendingPermissions: params.clearPendingPermissions,
     runOptions,
@@ -546,7 +570,7 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
           }
         }
         if (event.agent.lifecycle === "running") {
-          if (event.agent.pendingPermissions.size === 0) {
+          if (event.agent.pendingPermissions.size === 0 && !event.agent.activeTurnIsWarmPing) {
             hasSeenRunning = true;
           }
           return;
@@ -555,7 +579,7 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
           notifySafely("errored");
           return;
         }
-        if (event.agent.lifecycle === "idle" && hasSeenRunning) {
+        if (event.agent.lifecycle === "idle" && hasSeenRunning && !event.isWarmPing) {
           notifySafely("finished");
           return;
         }
