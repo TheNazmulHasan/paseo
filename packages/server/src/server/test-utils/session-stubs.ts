@@ -36,6 +36,8 @@ export function asAgentManager(stub: {
   return createStub<SessionOptions["agentManager"]>({
     listProviderSubagentActivity: () => [],
     getRateLimitAutoResumeManager: () => null,
+    resolveStoredAgentLastResponseAt: (record: { lastResponseAt?: string | null }) =>
+      record.lastResponseAt ?? null,
     ...stub,
   });
 }

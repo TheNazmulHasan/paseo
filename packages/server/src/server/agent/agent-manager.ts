@@ -2127,9 +2127,37 @@ export class AgentManager {
     }
   }
 
+  resolveLatestTimelineResponseTimestamp(agentId: string): Date | null {
+    if (!this.timelineStore.has(agentId)) {
+      return null;
+    }
+    const rows = this.timelineStore.getRows(agentId);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const item = rows[i].item;
+      if (
+        item.type === "assistant_message" ||
+        (item.type === "tool_call" && item.status === "completed")
+      ) {
+        return new Date(rows[i].timestamp);
+      }
+    }
+    return null;
+  }
+
+  resolveStoredAgentLastResponseAt(record: StoredAgentRecord): string | null {
+    if (record.lastResponseAt) {
+      return record.lastResponseAt;
+    }
+    const derived = this.resolveLatestTimelineResponseTimestamp(record.id);
+    return derived ? derived.toISOString() : null;
+  }
+
   private dispatchStoredAgentState(record: StoredAgentRecord): void {
     const updatedAt = new Date(record.updatedAt);
     const attention = extractAttention(record);
+    const lastResponseAt =
+      (record.lastResponseAt ? new Date(record.lastResponseAt) : null) ??
+      this.resolveLatestTimelineResponseTimestamp(record.id);
     this.dispatch({
       type: "agent_state",
       agent: {
@@ -2161,7 +2189,7 @@ export class AgentManager {
         persistence: record.persistence ?? null,
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
-        lastResponseAt: record.lastResponseAt ? new Date(record.lastResponseAt) : null,
+        lastResponseAt,
         consecutiveWarmPings: record.consecutiveWarmPings ?? undefined,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
@@ -4091,6 +4119,8 @@ export class AgentManager {
       durableTimelineHasRows,
       options,
     );
+    const lastResponseAt =
+      resolvedOpts.lastResponseAt ?? this.resolveLatestTimelineResponseTimestamp(resolvedAgentId);
     return {
       id: resolvedAgentId,
       provider: config.provider,
@@ -4119,6 +4149,7 @@ export class AgentManager {
       rateLimitCooldown,
       internal: config.internal ?? false,
       ...resolvedOpts,
+      lastResponseAt,
     } as ActiveManagedAgent;
   }
 
@@ -5134,6 +5165,8 @@ export class AgentManager {
   ): void {
     const hadPendingPermissions = agent.pendingPermissions.size > 0;
     agent.pendingPermissions.set(event.request.id, event.request);
+    agent.lastResponseAt = new Date();
+    this.cacheWarmManager?.onResponseOccurred(agent.id, agent.lastResponseAt);
     this.refreshSessionPersistence(agent);
     if (!hadPendingPermissions && !agent.internal) {
       this.broadcastAgentAttention(agent, "permission");
