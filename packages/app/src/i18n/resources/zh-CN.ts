@@ -493,6 +493,10 @@ export const zhCN: TranslationResources = {
       importing: "正在导入...",
     },
   },
+  topicTrail: {
+    yourMove: "轮到你",
+    jumpTo: "跳转到“{{label}}”开始的位置",
+  },
   boards: {
     sidebar: {
       title: "视图",

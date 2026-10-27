@@ -498,6 +498,10 @@ export const ptBR: TranslationResources = {
       importing: "Importando...",
     },
   },
+  topicTrail: {
+    yourMove: "Sua vez",
+    jumpTo: "Ir para onde “{{label}}” começou",
+  },
   boards: {
     sidebar: {
       title: "Visualizações",

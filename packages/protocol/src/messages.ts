@@ -41,6 +41,7 @@ import { z } from "zod";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
+import { TopicTrailSchema } from "./topic-trail.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
@@ -1199,6 +1200,7 @@ export const AgentSnapshotPayloadSchema = z.object({
    * its process on the first turn. Absent from daemons and providers that do not report it.
    */
   runtimeActive: z.boolean().optional(),
+  topicTrail: TopicTrailSchema.nullable().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
@@ -1224,6 +1226,7 @@ export const AgentListItemPayloadSchema = z.object({
   labels: z.record(z.string(), z.string()).default({}),
   providerUnavailable: z.boolean().optional(),
   rateLimitCooldown: AgentRateLimitCooldownPayloadSchema.nullable().optional(),
+  topicTrail: TopicTrailSchema.nullable().optional(),
 });
 
 export type AgentListItemPayload = z.infer<typeof AgentListItemPayloadSchema>;

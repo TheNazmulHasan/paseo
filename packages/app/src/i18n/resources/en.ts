@@ -491,6 +491,10 @@ export const en = {
       importing: "Importing...",
     },
   },
+  topicTrail: {
+    yourMove: "Your move",
+    jumpTo: "Go to where “{{label}}” began",
+  },
   boards: {
     sidebar: {
       title: "Views",

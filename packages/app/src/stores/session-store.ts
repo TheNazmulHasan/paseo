@@ -28,6 +28,7 @@ import type {
   AgentPromptCacheState,
   GatewayAccountChange,
 } from "@getpaseo/protocol/agent-cache-warm";
+import type { TopicTrail } from "@getpaseo/protocol/topic-trail";
 import type {
   AgentPermissionRequest,
   AgentFeature,
@@ -126,6 +127,8 @@ export interface Agent {
   labels: Record<string, string>;
   rateLimitCooldown?: AgentRateLimitCooldownPayload | null;
   projectPlacement?: ProjectPlacementPayload | null;
+  /** Nazmul mod (topic-trail): last topics + "your move", written by the daemon. */
+  topicTrail?: TopicTrail | null;
 }
 
 export interface WorkspaceDescriptor {

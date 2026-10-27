@@ -2,6 +2,7 @@ import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agen
 import type { AgentToolResult } from "@getpaseo/plugin/server";
 import type { RuntimeCleanupCandidate } from "./idle-runtime-cleanup/index.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
+import type { TopicTrail } from "@getpaseo/protocol/topic-trail";
 import type { AgentRateLimitAutoResumeManager } from "./agent-rate-limit-auto-resume.js";
 import type { AgentCacheWarmManager } from "./agent-cache-warm.js";
 import type { PromptCacheJournal, PromptCacheJournalHistory } from "./prompt-cache-journal.js";
@@ -2763,6 +2764,20 @@ export class AgentManager {
     }
     this.touchUpdatedAt(agent);
     await this.persistSnapshot(agent, { title: normalizedTitle });
+    this.emitState(agent, { persist: false });
+  }
+
+  /**
+   * Nazmul mod (topic-trail): persist the trail and push a state update so the client sees it.
+   * Deliberately does not touch updatedAt: a topic trail is not user activity, and bumping it
+   * would reorder the "Recent" sidebar sort.
+   */
+  async setTopicTrail(agentId: string, topicTrail: TopicTrail | null): Promise<void> {
+    const agent = this.agents.get(agentId);
+    if (!agent || agent.internal || !this.registry) {
+      return;
+    }
+    await this.registry.setTopicTrail(agentId, topicTrail);
     this.emitState(agent, { persist: false });
   }
 

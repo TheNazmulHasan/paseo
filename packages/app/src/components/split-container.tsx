@@ -57,6 +57,7 @@ import {
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { recordRenderProfileReasons, RenderProfile } from "@/utils/render-profiler";
+import { TopicTrailStrip } from "@/components/topic-trail/topic-trail-strip";
 import { isNative } from "@/constants/platform";
 
 interface SplitContainerProps {
@@ -756,6 +757,8 @@ const SplitPaneView = memo(function SplitPaneView({
             onExitFocusMode={onExitFocusMode}
           />
         </WindowChromeSafeArea>
+
+        <TopicTrailStrip serverId={normalizedServerId} tab={activeTabDescriptor} />
 
         <View style={styles.paneContent}>
           <WorkspacePanelHost
