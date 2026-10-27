@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatAgo, formatAmount, formatResetLabel, relativeDuration } from "./format";
+import {
+  formatAgo,
+  formatAmount,
+  formatCountdownClock,
+  formatPreciseDuration,
+  formatResetLabel,
+  relativeDuration,
+} from "./format";
 
 describe("relativeDuration", () => {
   const baseTime = new Date("2026-10-20T12:00:00.000Z").getTime();
@@ -53,6 +60,35 @@ describe("relativeDuration", () => {
     const in7d = new Date(baseTime + 7 * 24 * 3600_000).toISOString();
     expect(relativeDuration(in1d, baseTime)).toBe("1d");
     expect(relativeDuration(in7d, baseTime)).toBe("7d");
+  });
+});
+
+describe("formatPreciseDuration", () => {
+  it("counts down in seconds under a minute and never shows 0s while time is left", () => {
+    expect(formatPreciseDuration(40_000)).toBe("40s");
+    expect(formatPreciseDuration(200)).toBe("1s");
+    expect(formatPreciseDuration(0)).toBe("0s");
+    expect(formatPreciseDuration(-5_000)).toBe("0s");
+  });
+
+  it("pairs minutes with seconds, hours with minutes, days with hours", () => {
+    expect(formatPreciseDuration(220_000)).toBe("3m40s");
+    expect(formatPreciseDuration(219_001)).toBe("3m40s");
+    expect(formatPreciseDuration(4 * 60_000)).toBe("4m");
+    expect(formatPreciseDuration((5 * 60 + 30) * 60_000)).toBe("5h30m");
+    expect(formatPreciseDuration(58 * 60_000)).toBe("58m");
+    expect(formatPreciseDuration((29 * 60 + 5) * 60_000)).toBe("1d5h");
+  });
+});
+
+describe("formatCountdownClock", () => {
+  it("reads as minutes and seconds, rounding seconds up", () => {
+    expect(formatCountdownClock(220_000)).toBe("3:40");
+    expect(formatCountdownClock(9_200)).toBe("0:10");
+    expect(formatCountdownClock(58 * 60_000)).toBe("58:00");
+    expect(formatCountdownClock(60 * 60_000)).toBe("60:00");
+    expect(formatCountdownClock(0)).toBe("0:00");
+    expect(formatCountdownClock(-1)).toBe("0:00");
   });
 });
 

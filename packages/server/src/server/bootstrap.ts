@@ -435,6 +435,7 @@ export interface PaseoDaemonConfig {
   };
   autoArchiveAfterMerge?: boolean;
   autoResumeOnRateLimit?: boolean;
+  cacheWarmSubagents?: boolean;
   enableTerminalAgentHooks?: boolean;
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
@@ -629,6 +630,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
     },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     autoResumeOnRateLimit: config.autoResumeOnRateLimit ?? true,
+    cacheWarmSubagents: config.cacheWarmSubagents ?? true,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     pluginsEnabled: config.pluginsEnabled ?? false,
@@ -1312,6 +1314,7 @@ export async function createPaseoDaemon(
     providerSnapshotManager,
     createPaseoWorktree: createPaseoWorktreeForTools,
     ensureWorkspaceForCreate: ensureWorkspaceForCreateAndBroadcastExternal,
+    isCacheWarmEnabledForSubagents: () => daemonConfigStore.get().cacheWarmSubagents !== false,
   };
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
@@ -1554,11 +1557,14 @@ export async function createPaseoDaemon(
     )
     .then(() => {
       rateLimitAutoResumeManager.bootstrap();
-      cacheWarmManager.bootstrap(agentManager.listAgents());
       return undefined;
     })
     .catch((error) => {
       logger.warn({ err: error }, "Auto-resume for running agents failed");
+    })
+    .then(() => cacheWarmManager.bootstrap())
+    .catch((error) => {
+      logger.warn({ err: error }, "Cache warm bootstrap failed");
     });
   logger.info(
     "Voice mode configured for agent-scoped resume flow (no dedicated voice assistant provider)",

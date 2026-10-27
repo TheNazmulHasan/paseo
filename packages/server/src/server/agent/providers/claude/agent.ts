@@ -189,6 +189,7 @@ import {
   type ResolveAgentDefaultModeInput,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
+import type { PromptCacheRequestTokens } from "@getpaseo/protocol/agent-cache-warm";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
 import {
@@ -541,7 +542,6 @@ interface ClaudeAgentSessionOptions {
   handle?: AgentPersistenceHandle;
   agentId?: string;
   launchEnv?: Record<string, string>;
-  isSubagent?: boolean;
   persistSession?: boolean;
   logger: Logger;
   queryFactory?: ClaudeQueryFactory;
@@ -1725,7 +1725,6 @@ export class ClaudeAgentClient implements AgentClient {
       cliproxyEffortProfiles: this.cliproxyEffortProfiles,
       agentId: launchContext?.agentId,
       launchEnv: launchContext?.env,
-      isSubagent: launchContext?.isSubagent,
       persistSession: options?.persistSession,
       logger: this.logger,
       queryFactory: this.queryFactory,
@@ -1761,7 +1760,6 @@ export class ClaudeAgentClient implements AgentClient {
       handle,
       agentId: launchContext?.agentId,
       launchEnv: launchContext?.env,
-      isSubagent: launchContext?.isSubagent,
       logger: this.logger,
       queryFactory: this.queryFactory,
       resolveBinary: this.resolveBinary,
@@ -2176,6 +2174,22 @@ function readStreamRequestInputTokens(event: Record<string, unknown>): number | 
   return inputTokens + cacheCreationInputTokens + cacheReadInputTokens;
 }
 
+function readStreamRequestCacheTokens(
+  event: Record<string, unknown>,
+): PromptCacheRequestTokens | undefined {
+  const usage = toObjectRecord(toObjectRecord(event.message)?.usage);
+  if (!usage) {
+    return undefined;
+  }
+  const read = (value: unknown): number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+  return {
+    readTokens: read(usage.cache_read_input_tokens),
+    writeTokens: read(usage.cache_creation_input_tokens),
+    uncachedTokens: read(usage.input_tokens),
+  };
+}
+
 function readStreamRequestOutputTokens(event: Record<string, unknown>): number | undefined {
   const outputTokens = toObjectRecord(event.usage)?.output_tokens;
   if (typeof outputTokens !== "number" || !Number.isFinite(outputTokens) || outputTokens < 0) {
@@ -2286,6 +2300,7 @@ class ClaudeContextUsageState {
       return null;
     }
     const eventType = readTrimmedString(streamEvent.type);
+    let requestCache: PromptCacheRequestTokens | undefined;
     if (eventType === "message_start") {
       const inputTokens = readStreamRequestInputTokens(streamEvent);
       if (typeof inputTokens !== "number") {
@@ -2293,6 +2308,7 @@ class ClaudeContextUsageState {
       }
       this.streamRequestInputTokens = inputTokens;
       this.streamRequestOutputTokens = 0;
+      requestCache = readStreamRequestCacheTokens(streamEvent);
     } else if (eventType === "message_delta") {
       const outputTokens = readStreamRequestOutputTokens(streamEvent);
       if (typeof outputTokens !== "number") {
@@ -2307,7 +2323,11 @@ class ClaudeContextUsageState {
     if (usedTokens === undefined) {
       return null;
     }
-    return this.createUsageUpdatedEvent(usedTokens);
+    const usageEvent = this.createUsageUpdatedEvent(usedTokens);
+    if (requestCache && usageEvent.type === "usage_updated") {
+      usageEvent.usage.requestCache = requestCache;
+    }
+    return usageEvent;
   }
 
   buildResultUsage(message: SDKResultMessage, modelUsage: unknown): AgentUsage | undefined {
@@ -2395,7 +2415,6 @@ class ClaudeAgentSession implements AgentSession {
   private readonly config: ClaudeAgentConfig;
   private readonly launchEnv?: Record<string, string>;
   private readonly agentId?: string;
-  private readonly isSubagent: boolean;
   private readonly defaults?: { agents?: Record<string, AgentDefinition> };
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly gateway?: ResolvedGatewayConfig;
@@ -2505,7 +2524,6 @@ class ClaudeAgentSession implements AgentSession {
     assertClaudeThinkingOptionSupported(config.model, config.thinkingOptionId);
     this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
-    this.isSubagent = options.isSubagent ?? false;
     this.defaults = options.defaults;
     this.runtimeSettings = options.runtimeSettings;
     this.gateway = options.gateway;
@@ -2566,7 +2584,6 @@ class ClaudeAgentSession implements AgentSession {
         typeof this.config.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === "boolean"
           ? this.config.featureValues[CLAUDE_CACHE_WARM_FEATURE_ID]
           : undefined,
-      isSubagent: this.isSubagent,
     });
   }
 
@@ -2990,6 +3007,11 @@ class ClaudeAgentSession implements AgentSession {
         throw new Error(
           `Invalid prompt_cache_ttl value: expected one of ${CLAUDE_PROMPT_CACHE_TTL_VALUES.join(", ")}`,
         );
+      }
+      if (this.config.featureValues?.prompt_cache_ttl !== ttl) {
+        // CLAUDE_CODE_PROMPT_CACHE_TTL is read when the Claude process starts, so the
+        // running query keeps writing the old TTL until it is relaunched.
+        this.queryRestartNeeded = true;
       }
       this.config.featureValues = {
         ...this.config.featureValues,

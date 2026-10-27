@@ -262,6 +262,7 @@ export const MutableDaemonConfigSchema = z
     enableTerminalAgentHooks: z.boolean().default(false),
     appendSystemPrompt: z.string().default(""),
     autoResumeOnRateLimit: z.boolean().default(true),
+    cacheWarmSubagents: z.boolean().default(true),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
@@ -303,6 +304,7 @@ export const MutableDaemonConfigPatchSchema = z
     enableTerminalAgentHooks: z.boolean().optional(),
     appendSystemPrompt: z.string().optional(),
     autoResumeOnRateLimit: z.boolean().optional(),
+    cacheWarmSubagents: z.boolean().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     pluginsEnabled: z.boolean().optional(),
@@ -910,6 +912,20 @@ const AgentActiveTurnPayloadSchema = z.object({
   startedAt: z.string().nullable(),
 });
 
+const PromptCacheRequestSampleSchema = z.object({
+  at: z.string(),
+  turnId: z.string().nullable(),
+  isWarmPing: z.boolean(),
+  readTokens: z.number(),
+  writeTokens: z.number(),
+  uncachedTokens: z.number(),
+});
+
+export const AgentPromptCacheStateSchema = z.object({
+  lastRequest: PromptCacheRequestSampleSchema,
+  turnFirstRequest: PromptCacheRequestSampleSchema,
+});
+
 export const AgentRateLimitCooldownPayloadSchema = z.object({
   scheduledFor: z.string(),
   retryAfter: z.string(),
@@ -950,6 +966,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   providerUnavailable: z.boolean().optional(),
   rateLimitCooldown: AgentRateLimitCooldownPayloadSchema.nullable().optional(),
   consecutiveWarmPings: z.number().optional(),
+  totalWarmPings: z.number().optional(),
+  promptCache: AgentPromptCacheStateSchema.optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
