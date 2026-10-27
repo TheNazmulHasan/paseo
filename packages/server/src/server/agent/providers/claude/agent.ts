@@ -541,6 +541,7 @@ interface ClaudeAgentSessionOptions {
   handle?: AgentPersistenceHandle;
   agentId?: string;
   launchEnv?: Record<string, string>;
+  isSubagent?: boolean;
   persistSession?: boolean;
   logger: Logger;
   queryFactory?: ClaudeQueryFactory;
@@ -1724,6 +1725,7 @@ export class ClaudeAgentClient implements AgentClient {
       cliproxyEffortProfiles: this.cliproxyEffortProfiles,
       agentId: launchContext?.agentId,
       launchEnv: launchContext?.env,
+      isSubagent: launchContext?.isSubagent,
       persistSession: options?.persistSession,
       logger: this.logger,
       queryFactory: this.queryFactory,
@@ -1759,6 +1761,7 @@ export class ClaudeAgentClient implements AgentClient {
       handle,
       agentId: launchContext?.agentId,
       launchEnv: launchContext?.env,
+      isSubagent: launchContext?.isSubagent,
       logger: this.logger,
       queryFactory: this.queryFactory,
       resolveBinary: this.resolveBinary,
@@ -1954,7 +1957,10 @@ export class ClaudeAgentClient implements AgentClient {
       modelId: claudeConfig.model,
       fastModeEnabled: claudeConfig.featureValues?.fast_mode === true,
       promptCacheTtl: claudeConfig.featureValues?.prompt_cache_ttl,
-      cacheWarmEnabled: claudeConfig.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === true,
+      cacheWarmEnabled:
+        typeof claudeConfig.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === "boolean"
+          ? claudeConfig.featureValues[CLAUDE_CACHE_WARM_FEATURE_ID]
+          : undefined,
     });
   }
 
@@ -2389,6 +2395,7 @@ class ClaudeAgentSession implements AgentSession {
   private readonly config: ClaudeAgentConfig;
   private readonly launchEnv?: Record<string, string>;
   private readonly agentId?: string;
+  private readonly isSubagent: boolean;
   private readonly defaults?: { agents?: Record<string, AgentDefinition> };
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly gateway?: ResolvedGatewayConfig;
@@ -2498,6 +2505,7 @@ class ClaudeAgentSession implements AgentSession {
     assertClaudeThinkingOptionSupported(config.model, config.thinkingOptionId);
     this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
+    this.isSubagent = options.isSubagent ?? false;
     this.defaults = options.defaults;
     this.runtimeSettings = options.runtimeSettings;
     this.gateway = options.gateway;
@@ -2554,7 +2562,11 @@ class ClaudeAgentSession implements AgentSession {
       modelId: this.config.model,
       fastModeEnabled: this.config.featureValues?.fast_mode === true,
       promptCacheTtl: this.config.featureValues?.prompt_cache_ttl,
-      cacheWarmEnabled: this.config.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === true,
+      cacheWarmEnabled:
+        typeof this.config.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === "boolean"
+          ? this.config.featureValues[CLAUDE_CACHE_WARM_FEATURE_ID]
+          : undefined,
+      isSubagent: this.isSubagent,
     });
   }
 
