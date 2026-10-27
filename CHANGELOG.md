@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.914 - 2026-10-27
+
+### Fixed
+
+- Fixed cache warm-up going silent after a turn the agent started by itself, such as one triggered when a background task finished, so the prompt cache expired and was re-written from scratch. ([#138](https://github.com/iamriajul/paseo/pull/138))
+- Fixed the running indicator flickering off for a frame when you send a message, which made the conversation jump down by about 70px. ([#138](https://github.com/iamriajul/paseo/pull/138))
+
 ## 0.11.913 - 2026-10-27
 
 ### Added
