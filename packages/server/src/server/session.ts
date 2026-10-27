@@ -2443,6 +2443,10 @@ export class Session {
     const storedRecord = await this.agentStorage.get(payload.id);
     payload.title = storedRecord?.title ?? null;
     payload.archivedAt = storedRecord?.archivedAt ?? null;
+    // Nazmul mod (topic-trail): storage-only, like the title.
+    if (storedRecord?.topicTrail) {
+      payload.topicTrail = storedRecord.topicTrail;
+    }
     return payload;
   }
 

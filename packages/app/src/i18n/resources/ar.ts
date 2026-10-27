@@ -462,6 +462,10 @@ export const ar: TranslationResources = {
       importing: "جارٍ الاستيراد...",
     },
   },
+  topicTrail: {
+    yourMove: "دورك",
+    jumpTo: "الانتقال إلى بداية «{{label}}»",
+  },
   boards: {
     sidebar: {
       title: "العروض",

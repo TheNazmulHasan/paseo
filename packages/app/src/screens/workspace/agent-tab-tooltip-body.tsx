@@ -6,6 +6,7 @@ import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useCopyAgentId } from "@/hooks/use-agent-tab-actions";
 import { useSessionStore } from "@/stores/session-store";
 import { formatCompactTimeAgoAsProse } from "@/utils/time";
+import { TopicTrailTooltipLines } from "@/components/topic-trail/topic-trail-tooltip-lines";
 
 const COPIED_FEEDBACK_MS = 1200;
 
@@ -84,6 +85,7 @@ export function AgentTabTooltipBody({
           </>
         ) : null}
       </View>
+      <TopicTrailTooltipLines serverId={serverId} agentId={agentId} />
     </View>
   );
 }

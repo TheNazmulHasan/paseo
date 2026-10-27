@@ -466,6 +466,10 @@ export const ja: TranslationResources = {
       importing: "インポート中...",
     },
   },
+  topicTrail: {
+    yourMove: "あなたの番",
+    jumpTo: "「{{label}}」の始まりへ移動",
+  },
   boards: {
     sidebar: {
       title: "ビュー",

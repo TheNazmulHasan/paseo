@@ -467,6 +467,10 @@ export const fr: TranslationResources = {
       importing: "Importation…",
     },
   },
+  topicTrail: {
+    yourMove: "À vous",
+    jumpTo: "Aller où « {{label}} » a commencé",
+  },
   boards: {
     sidebar: {
       title: "Vues",

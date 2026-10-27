@@ -2,6 +2,7 @@ import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import type { Logger } from "pino";
+import { TopicTrailSchema, type TopicTrail } from "@getpaseo/protocol/topic-trail";
 
 import { writeJsonFileAtomic } from "../atomic-file.js";
 import { AgentFeatureSchema, AgentPromptCacheStateSchema, AgentStatusSchema } from "../messages.js";
@@ -53,6 +54,7 @@ const STORED_AGENT_SCHEMA = z.object({
   lastUserMessageAt: z.string().nullable().optional(),
   lastResponseAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  topicTrail: TopicTrailSchema.nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
@@ -263,6 +265,10 @@ export class AgentStorage {
       if (existing && existing.archivedAt !== undefined) {
         record.archivedAt = existing.archivedAt;
       }
+      // Nazmul mod (topic-trail): the trail is storage-only, like the title.
+      if (existing?.topicTrail !== undefined) {
+        record.topicTrail = existing.topicTrail;
+      }
       return record;
     });
   }
@@ -275,6 +281,19 @@ export class AgentStorage {
       throw new Error(`Agent ${agentId} not found`);
     }
     await this.upsert({ ...record, title });
+  }
+
+  /** Nazmul mod (topic-trail): store the trail without racing a concurrent snapshot write. */
+  async setTopicTrail(agentId: string, topicTrail: TopicTrail | null): Promise<void> {
+    await this.load();
+    const existing = await this.get(agentId);
+    if (!existing) {
+      return;
+    }
+    await this.queueRecordMutation(agentId, (current) => ({
+      ...(current ?? existing),
+      topicTrail,
+    }));
   }
 
   async flush(): Promise<void> {

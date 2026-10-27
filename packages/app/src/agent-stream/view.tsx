@@ -73,6 +73,7 @@ import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
+import { useTopicTrailJump } from "@/components/topic-trail/use-topic-trail-jump";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
@@ -861,6 +862,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onJumpError: handleTimelineHistoryLoadError,
       visibleMessageIds,
       revealLoadedMessage: revealLoadedHistory,
+    });
+    useTopicTrailJump({
+      serverId: resolvedServerId,
+      agentId,
+      jumpToPrompt: chatOutline.jumpToPrompt,
     });
 
     useImperativeHandle(

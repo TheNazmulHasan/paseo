@@ -462,6 +462,10 @@ export const ko: TranslationResources = {
       importing: "가져오는 중...",
     },
   },
+  topicTrail: {
+    yourMove: "당신의 차례",
+    jumpTo: "“{{label}}”이(가) 시작된 곳으로 이동",
+  },
   boards: {
     sidebar: {
       title: "보기",

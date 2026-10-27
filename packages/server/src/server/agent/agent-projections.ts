@@ -287,6 +287,7 @@ export function buildStoredAgentPayload(
     pendingPermissions: [],
     persistence,
     title: record.title ?? null,
+    ...(record.topicTrail ? { topicTrail: record.topicTrail } : {}),
     requiresAttention: record.requiresAttention ?? false,
     attentionReason: record.attentionReason ?? null,
     attentionTimestamp: record.attentionTimestamp ?? null,
@@ -320,6 +321,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     labels: agent.labels,
     ...(agent.rateLimitCooldown ? { rateLimitCooldown: agent.rateLimitCooldown } : {}),
     ...(agent.providerUnavailable ? { providerUnavailable: true } : {}),
+    ...(agent.topicTrail ? { topicTrail: agent.topicTrail } : {}),
   };
 }
 

@@ -467,6 +467,10 @@ export const es: TranslationResources = {
       importing: "Importador...",
     },
   },
+  topicTrail: {
+    yourMove: "Tu turno",
+    jumpTo: "Ir a donde empezó «{{label}}»",
+  },
   boards: {
     sidebar: {
       title: "Vistas",
