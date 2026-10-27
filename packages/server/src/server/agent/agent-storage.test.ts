@@ -195,6 +195,23 @@ describe("AgentStorage", () => {
     expect(persisted.config?.providerOptions).toEqual({ allowedTools: ["Read"] });
   });
 
+  test("topic trail survives later snapshots and reloads (Nazmul mod: topic-trail)", async () => {
+    await storage.applySnapshot(createManagedAgent({ id: "agent-trail", cwd: "/tmp/project" }));
+    const trail = {
+      topics: [{ label: "Pricing meters", seq: 4, epoch: "e1", at: "2026-10-27T09:00:00.000Z" }],
+      yourMove: "Assign DEE-41?",
+      basedOnSeq: 4,
+      updatedAt: "2026-10-27T09:01:00.000Z",
+    };
+    await storage.setTopicTrail("agent-trail", trail);
+    await storage.applySnapshot(createManagedAgent({ id: "agent-trail", cwd: "/tmp/project" }));
+
+    expect((await storage.get("agent-trail"))?.topicTrail).toEqual(trail);
+    const reloaded = new AgentStorage(storagePath, logger);
+    expect((await reloaded.get("agent-trail"))?.topicTrail).toEqual(trail);
+    await expect(storage.setTopicTrail("missing", trail)).resolves.toBeUndefined();
+  });
+
   test("applySnapshot stores and reloads featureValues when present", async () => {
     await storage.applySnapshot(
       createManagedAgent({

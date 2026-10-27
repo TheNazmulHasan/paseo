@@ -224,6 +224,7 @@ import {
 import { deleteLocalCredential, writeLocalCredential } from "./local-credential.js";
 import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
+import { TopicTrailService } from "./agent/topic-trail/topic-trail-service.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
@@ -1218,6 +1219,15 @@ export async function createPaseoDaemon(
     logger,
   });
 
+  // Nazmul mod (topic-trail): PASEO_TOPIC_TRAIL=0 turns it off.
+  const topicTrailService = new TopicTrailService({
+    agentManager,
+    agentStorage,
+    providerSnapshotManager,
+    logger,
+  });
+  topicTrailService.start();
+
   setupAutoArchiveOnMerge({
     paseoHome: config.paseoHome,
     paseoWorktreesBaseRoot: config.worktreesRoot,
@@ -1966,6 +1976,7 @@ export async function createPaseoDaemon(
     unsubscribePluginProviders();
     await hubRelationships.stop();
     workspaceReconciliation.dispose();
+    topicTrailService.dispose();
     scriptHealthMonitor.stop();
     // Freeze both ingress and registration before taking the agent closure snapshot.
     wsServer?.prepareForShutdown();

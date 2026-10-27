@@ -90,6 +90,7 @@ import {
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { RenderProfile } from "@/utils/render-profiler";
+import { TopicTrailStrip } from "@/components/topic-trail/topic-trail-strip";
 import { isNative } from "@/constants/platform";
 import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
 
@@ -1305,6 +1306,8 @@ function SplitPaneView({
             onExitFocusMode={onExitFocusMode}
           />
         </WindowChromeSafeArea>
+
+        <TopicTrailStrip serverId={normalizedServerId} tab={activeTabDescriptor} />
 
         <View style={styles.paneContent}>
           <WorkspacePanelHost

@@ -455,6 +455,10 @@ export const ru: TranslationResources = {
       importing: "Импортируется...",
     },
   },
+  topicTrail: {
+    yourMove: "Ваш ход",
+    jumpTo: "Перейти к началу «{{label}}»",
+  },
   boards: {
     sidebar: {
       title: "Виды",

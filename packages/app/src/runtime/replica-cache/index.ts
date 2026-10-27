@@ -5,6 +5,7 @@ import {
   WorkspaceGitHubRuntimePayloadSchema,
 } from "@getpaseo/protocol/messages";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
+import { TopicTrailSchema } from "@getpaseo/protocol/topic-trail";
 import type { PluginTimelineData } from "@getpaseo/plugin";
 import {
   normalizeProjectDescriptor,
@@ -256,6 +257,7 @@ const StoredAgentSnapshotSchema = z.strictObject({
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: IsoDateSchema.nullable().optional(),
   archivedAt: IsoDateSchema.nullable().optional(),
+  topicTrail: TopicTrailSchema.nullable().optional(),
 });
 
 const StoredAgentSchema = z.strictObject({
@@ -624,6 +626,10 @@ function serializeAgentTurn(agent: Agent): NonNullable<StoredAgent["turn"]> {
   };
 }
 
+function topicTrailField(agent: Agent) {
+  return agent.topicTrail ? { topicTrail: agent.topicTrail } : {};
+}
+
 function serializeAgent(agent: Agent): StoredAgent {
   const snapshot = {
     id: agent.id,
@@ -675,6 +681,7 @@ function serializeAgent(agent: Agent): StoredAgent {
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp?.toISOString() ?? null,
     archivedAt: agent.archivedAt?.toISOString() ?? null,
+    ...topicTrailField(agent),
   };
   return {
     snapshot,

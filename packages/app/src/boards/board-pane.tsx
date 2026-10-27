@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink, Plus, X } from "lucide-react-native";
 import { BoardPaneDragHandle, BoardPaneDropOverlay } from "@/boards/board-pane-dnd";
+import { TopicTrailStrip } from "@/components/topic-trail/topic-trail-strip";
 import {
   boardTabContextMenuTestId,
   buildBoardTabMenuEntries,
@@ -660,6 +661,8 @@ export const BoardPane = memo(function BoardPane({
             <ThemedPlus size={ACTION_ICON_SIZE} uniProps={mutedIconColorMapping} />
           </BoardIconButton>
         </View>
+
+        <TopicTrailStrip serverId={activeOrigin?.serverId ?? null} tab={activeTab} />
 
         <View style={styles.paneContent}>
           {activeTab ? (

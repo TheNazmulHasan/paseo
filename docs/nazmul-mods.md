@@ -160,3 +160,16 @@ Typing @ in the composer lists sessions and inserts "Title (agent-id)". Doc: myo
 npm test --workspace=@getpaseo/app -- --project unit src/utils/session-mention-autocomplete.test.ts --bail=1
 grep -q session-mention-autocomplete packages/app/src/hooks/use-agent-autocomplete.ts
 ```
+
+## topic-trail
+
+Each agent session gets a "topic trail": its last 3 topics (newest first, click = scroll the chat to where the topic began) plus an amber "Your move" line while it waits on the user. A thin strip under every pane's tab row, also in the agent tab hover card. The daemon writes it after each turn through Antigravity (then Claude Haiku), never any other provider; `PASEO_TOPIC_TRAIL=0` turns it off. Doc: myos/paseo/topic-trail.md
+
+```bash
+npx vitest run packages/server/src/server/agent/topic-trail packages/protocol/src/topic-trail.test.ts --bail=1
+npm test --workspace=@getpaseo/app -- --project unit src/components/topic-trail --bail=1
+grep -q 'resolveTopicTrailProviders' packages/server/src/server/agent/topic-trail/topic-trail-service.ts
+grep -q topic-trail-service packages/server/src/server/bootstrap.ts
+grep -q TopicTrailStrip packages/app/src/components/split-container.tsx
+scripts/nazmul-bundle-has.sh 'topic-trail-strip-'
+```

@@ -24,6 +24,7 @@ import {
 import type { PendingPermission } from "@/types/shared";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import type { TopicTrail } from "@getpaseo/protocol/topic-trail";
 import type {
   AgentPermissionRequest,
   AgentFeature,
@@ -100,6 +101,8 @@ export interface Agent {
   parentAgentId: string | null;
   labels: Record<string, string>;
   projectPlacement?: ProjectPlacementPayload | null;
+  /** Nazmul mod (topic-trail): last topics + "your move", written by the daemon. */
+  topicTrail?: TopicTrail | null;
 }
 
 export interface WorkspaceDescriptor {
