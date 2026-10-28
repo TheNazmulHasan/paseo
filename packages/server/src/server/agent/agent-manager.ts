@@ -2462,6 +2462,24 @@ export class AgentManager {
     }
   }
 
+  /** Warm-up closed the user's unanswered question; the agent shows it until the user writes. */
+  markQuestionClosed(agentId: string): void {
+    const agent = this.agents.get(agentId);
+    if (!agent?.promptCache) {
+      return;
+    }
+    agent.promptCache = { ...agent.promptCache, questionClosedAt: new Date().toISOString() };
+    this.emitState(agent);
+  }
+
+  private noteUserMessage(agent: ActiveManagedAgent): void {
+    agent.lastUserMessageAt = new Date();
+    if (agent.promptCache?.questionClosedAt) {
+      const { questionClosedAt: _cleared, ...promptCache } = agent.promptCache;
+      agent.promptCache = promptCache;
+    }
+  }
+
   notifyAgentState(agentId: string): void {
     const agent = this.agents.get(agentId);
     if (!agent || agent.internal) {
@@ -5052,7 +5070,7 @@ export class AgentManager {
 
     this.recordAndDispatchTimelineItem(agent.id, event.item, event.provider, event.turnId);
     if (event.item.type === "user_message" && !isCacheWarmPrompt(event.item.text)) {
-      agent.lastUserMessageAt = new Date();
+      this.noteUserMessage(agent);
       this.emitState(agent);
     }
     flags.shouldDispatchEvent = false;
@@ -5099,6 +5117,7 @@ export class AgentManager {
           ? previous.turnFirstRequest
           : sample,
       observedTtl: tokens.writeTtl ?? previous?.observedTtl,
+      questionClosedAt: previous?.questionClosedAt,
     };
   }
 
@@ -5363,7 +5382,7 @@ export class AgentManager {
     }
     this.touchUpdatedAt(agent);
     if (!isCacheWarmPrompt(submittedPromptText(prompt))) {
-      agent.lastUserMessageAt = new Date();
+      this.noteUserMessage(agent);
     }
     if (!isCacheWarmPrompt(submittedPromptText(prompt))) {
       this.cacheWarmManager?.resetConsecutivePings(agent.id);

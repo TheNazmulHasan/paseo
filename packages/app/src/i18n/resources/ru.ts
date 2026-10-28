@@ -318,6 +318,7 @@ export const ru: TranslationResources = {
       archived: "В архиве",
       pending: "На рассмотрении: {{count}}",
       attention: "Внимание",
+      questionClosed: "Вопрос закрыт, пока вас не было",
     },
     archiveSheet: {
       hostOffline: "Хост не в сети",

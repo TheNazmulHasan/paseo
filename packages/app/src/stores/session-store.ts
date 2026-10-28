@@ -1915,6 +1915,7 @@ export const useSessionStore = create<SessionStore>()(
             cwd: agent.cwd,
             provider: agent.provider,
             pendingPermissionCount: agent.pendingPermissions.length,
+            questionClosedAt: agent.promptCache?.questionClosedAt ?? null,
             requiresAttention: agent.requiresAttention ?? false,
             attentionReason: agent.attentionReason ?? null,
             attentionTimestamp: agent.attentionTimestamp ?? null,

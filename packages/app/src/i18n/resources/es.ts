@@ -319,6 +319,7 @@ export const es: TranslationResources = {
       archived: "Archivado",
       pending: "{{count}}pendiente",
       attention: "Atención",
+      questionClosed: "Pregunta cerrada mientras no estabas",
     },
     archiveSheet: {
       hostOffline: "Hostfuera de línea",
