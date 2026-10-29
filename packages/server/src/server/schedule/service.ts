@@ -123,6 +123,9 @@ function applyNewAgentConfig(
   if (patch.isolation !== undefined) {
     config.isolation = patch.isolation;
   }
+  if (patch.featureValues !== undefined) {
+    config.featureValues = patch.featureValues;
+  }
   return { ...target, config };
 }
 
