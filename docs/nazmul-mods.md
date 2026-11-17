@@ -123,7 +123,7 @@ scripts/nazmul-bundle-has.sh paseo-workspace-switcher-mru
 
 ## arrange-desk
 
-Arrange keys lay out a workspace's sessions; the sidebar has Pinned / Views / Desk / Shelf. Docs: myos/paseo/arrange.md, myos/paseo/desk.md
+Arrange keys lay out a workspace's sessions; the sidebar has two sections: Pinned (the views, then the pinned workspaces) and Folders (the built-in Desk folder first, then your folders). Docs: myos/paseo/arrange.md, myos/paseo/desk.md
 
 ```bash
 npm test --workspace=@getpaseo/app -- --project unit src/arrange src/desk src/components/sidebar/sidebar-projection.test.ts --bail=1
@@ -193,7 +193,7 @@ grep -q applyModelMenu packages/server/src/server/agent/provider-registry.ts
 
 ## folders
 
-User-made one-level folders hold workspaces and saved views (`board:<id>` item keys). The daemon owns them (`<paseoHome>/projects/folders.json`), pushes the full state as the `folders_update` fork session event, and files a workspace an agent creates into the caller workspace's folder. Agents use `list_folders` / `create_folder` / `set_workspace_folder`; the CLI is `paseo folder`. App half: the Folders section replaces the Shelf (every folder plus a built-in Unfiled, always-visible + / rename / delete icons, delete with Undo), a folder icon on every workspace and view row and a "Move to folder" row-menu page, the picker on `workspace.folder.move` (Cmd+Ctrl+M, Ctrl+Alt+M), a "Folder" Desk grouping, and new workspaces filed where I was. Doc: myos/paseo/folders.md
+User-made one-level folders hold workspaces and saved views (`board:<id>` item keys). The daemon owns them (`<paseoHome>/projects/folders.json`), pushes the full state as the `folders_update` fork session event, and files a workspace an agent creates into the caller workspace's folder. Agents use `list_folders` / `create_folder` / `set_workspace_folder`; the CLI is `paseo folder`. App half: the sidebar is two sections, Pinned (views + pinned workspaces, one count, one fold, the new-view icon) and Folders (the built-in Desk folder first, with its grouping menu / select / clear icons, then every folder plus a built-in Unfiled, always-visible + / rename / delete icons, delete with Undo), a folder icon on every workspace and view row and a "Move to folder" row-menu page, the picker on `workspace.folder.move` (Cmd+Ctrl+M, Ctrl+Alt+M), a "Folder" Desk grouping, and new workspaces filed where I was. Doc: myos/paseo/folders.md
 
 ```bash
 npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/folders packages/server/src/server/session/workspace-provisioning/workspace-provisioning-folders.test.ts --bail=1
@@ -208,10 +208,15 @@ grep -q landNewWorkspaces packages/app/src/desk/use-desk-reconcile.ts
 grep -q FoldersSectionHeader packages/app/src/desk/shelf-title.tsx
 grep -q FoldersBody packages/app/src/components/sidebar/sidebar-status-list.tsx
 grep -q FoldersBody packages/app/src/components/sidebar-workspace-list.tsx
+grep -q PinnedSectionHeader packages/app/src/components/sidebar/sidebar-status-list.tsx
+grep -q PinnedSectionHeader packages/app/src/components/sidebar-workspace-list.tsx
+grep -q DeskFolder packages/app/src/folders/folders-section.tsx
 grep -q WorkspaceFolderButton packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx
 grep -q useFolderMenuPages packages/app/src/components/sidebar/sidebar-workspace-menu.tsx
 grep -q workspace.folder.move packages/app/src/keyboard/keyboard-shortcuts.ts
 scripts/nazmul-bundle-has.sh 'moveTo:"Move to folder"'
 scripts/nazmul-bundle-has.sh 'paseo-folders'
 scripts/nazmul-bundle-has.sh 'workspace.folder.move'
+scripts/nazmul-bundle-has.sh 'sidebar-desk-grouping'
+scripts/nazmul-bundle-has.sh 'sidebar-views-split'
 ```

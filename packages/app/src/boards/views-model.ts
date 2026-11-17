@@ -7,6 +7,11 @@ export function orderViewRows(boards: readonly BoardSummary[]): BoardSummary[] {
   return [...live, ...rest];
 }
 
+/** The Pinned section holds the views and the pinned workspaces: its one count is both. */
+export function pinnedSectionCount(viewCount: number, pinnedWorkspaceCount: number): number {
+  return viewCount + pinnedWorkspaceCount;
+}
+
 /** Which row is on screen: the board id of a `/boards/<id>` pathname. */
 export function isViewActive(activeBoardId: string | null, boardId: string): boolean {
   return activeBoardId !== null && activeBoardId === boardId;

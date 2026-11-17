@@ -74,9 +74,7 @@ import {
   SidebarWorkspaceContextMenu,
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
-import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
-import { BoardsSection } from "@/boards/boards-section";
-import { DeskSection } from "@/desk/desk-section";
+import { PinnedSectionHeader, PinnedViewRows, usePinnedViewsPresent } from "@/boards/pinned-views";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
 import { FoldersBody, useFoldersReplaceShelf } from "@/folders/folders-section";
@@ -152,7 +150,6 @@ export function SidebarStatusWorkspaceList({
   parentGestureRef,
   dragGestureHostActive,
 }: StatusWorkspaceListProps) {
-  const { t } = useTranslation();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const collapsedWorkspaceGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedWorkspaceGroupKeys,
@@ -163,6 +160,8 @@ export function SidebarStatusWorkspaceList({
   );
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
   const foldersReplaceShelf = useFoldersReplaceShelf();
+  // Nazmul mod (folders): the Pinned section also holds the views, so it shows with nothing pinned.
+  const pinnedViewsPresent = usePinnedViewsPresent();
   const {
     leadingItem: leadingPinnedWorkspace,
     visibleItems: visiblePinnedWorkspaces,
@@ -228,19 +227,18 @@ export function SidebarStatusWorkspaceList({
   );
   const content = (
     <>
-      {pinnedWorkspaces.length > 0 ? (
+      {pinnedWorkspaces.length > 0 || pinnedViewsPresent ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <SidebarSectionHeader
-            title={t("sidebar.pinned.title")}
+          <PinnedSectionHeader
             collapsed={pinnedCollapsed}
             onToggle={togglePinnedCollapsed}
             testID="sidebar-pinned-section-header"
-            count={pinnedWorkspaces.length}
+            pinnedCount={pinnedWorkspaces.length}
             countTestID="sidebar-pinned-count"
-            chevronAlwaysVisible
           />
           {pinnedCollapsed ? null : (
             <>
+              <PinnedViewRows onWorkspacePress={onWorkspacePress} />
               {leadingPinnedWorkspace ? renderPinnedWorkspaceRow(leadingPinnedWorkspace) : null}
               <DraggableList
                 testID="sidebar-pinned-list"
@@ -265,12 +263,8 @@ export function SidebarStatusWorkspaceList({
           )}
         </View>
       ) : null}
-      <BoardsSection onWorkspacePress={onWorkspacePress} />
-      <DeskSection onWorkspacePress={onWorkspacePress} />
       {listHeaderComponent}
-      {foldersReplaceShelf && !sidebarFilterEmpty ? (
-        <FoldersBody onWorkspacePress={onWorkspacePress} />
-      ) : null}
+      {!sidebarFilterEmpty ? <FoldersBody onWorkspacePress={onWorkspacePress} /> : null}
       {sidebarFilterEmpty ? (
         <SidebarFilterEmptyState />
       ) : (

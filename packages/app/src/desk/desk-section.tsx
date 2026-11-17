@@ -1,11 +1,9 @@
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Dimensions, Text, View } from "react-native";
-import { BrushCleaning, ListChecks } from "lucide-react-native";
-import { StyleSheet } from "react-native-unistyles";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Bookmark, BrushCleaning, ListChecks } from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
-import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import {
   buildStatusRowProjectPresentation,
@@ -15,14 +13,26 @@ import { addWorkspacesToBoard, replaceBoardWorkspaces, splitWorkspaces } from "@
 import { navigateToBoard } from "@/boards/navigation";
 import { resolveSplitViewport } from "@/boards/workspace-picker-model";
 import { isWeb } from "@/constants/platform";
+import { DeskGroupingMenu } from "@/desk/desk-grouping-menu";
 import { DeskIconButton } from "@/desk/desk-icon-button";
 import { DeskSelectableRow } from "@/desk/desk-selectable-row";
 import { DeskSelectionBar } from "@/desk/desk-selection-bar";
 import { useDeskSelectionStore } from "@/desk/desk-selection-store";
 import { useDeskStore } from "@/desk/desk-store";
 import { useDeskTargetView } from "@/desk/target-view";
-import type { DeskGroup, DeskGrouping } from "@/desk/model";
+import {
+  availableDeskGroupings,
+  resolveDeskGrouping,
+  type DeskGroup,
+  type DeskGrouping,
+} from "@/desk/model";
 import { useClearDesk } from "@/desk/use-clear-desk";
+import {
+  FolderBlockFrame,
+  FolderHeaderFrame,
+  FolderHint,
+  FolderRowsFrame,
+} from "@/folders/folder-row-frame";
 import { useFoldersAvailable } from "@/folders/use-folder-actions";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
@@ -36,23 +46,35 @@ import { useHostBadges } from "@/hosts/use-host-badges";
 import { useProjectIcons } from "@/projects/icons";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
+import type { Theme } from "@/styles/theme";
 
+const ThemedBookmark = withUnistyles(Bookmark);
+const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const EMPTY_SHORTCUT_INDEX = new Map<string, number>();
+const deskLead = <ThemedBookmark size={14} uniProps={mutedMapping} />;
+const GROUPING_LABEL_KEYS = {
+  recent: "sidebar.desk.groupRecent",
+  project: "sidebar.desk.groupProject",
+  status: "sidebar.desk.groupStatus",
+  folder: "sidebar.desk.groupFolder",
+} as const satisfies Record<DeskGrouping, string>;
 
 /**
- * The Desk: the working set between Pinned and the Shelf. Rows are the sidebar's own workspace
- * row (status indicator, attention, menus and all); only their grouping is the Desk's.
+ * The Desk, as the first folder in the Folders section: the working set. It looks and folds like
+ * a user folder (its own fold state, open by default) but is built in: no rename, no delete, no
+ * reorder, and never offered in the folder picker. Rows are the sidebar's own workspace row (status
+ * indicator, attention, menus and all); only their grouping is the Desk's.
  *
- * Reads the sidebar model and wires its own row dependencies, so the two lists that render it
- * pass nothing but `onWorkspacePress`.
+ * Reads the sidebar model and wires its own row dependencies, so the Folders body passes nothing
+ * but `onWorkspacePress`.
  */
-export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => void }) {
+export function DeskFolder({ onWorkspacePress }: { onWorkspacePress?: () => void }) {
   const { t } = useTranslation();
   const { deskGroups, shelfCount, projects, projectIconTargets, shortcutModel } = useSidebarModel();
   const storedGrouping = useDeskStore((state) => state.deskGrouping);
   const foldersAvailable = useFoldersAvailable();
   // The Folder grouping only exists while folders do; without them the sidebar shows Recent.
-  const deskGrouping = storedGrouping === "folder" && !foldersAvailable ? "recent" : storedGrouping;
+  const deskGrouping = resolveDeskGrouping(storedGrouping, foldersAvailable);
   const setDeskGrouping = useDeskStore((state) => state.setDeskGrouping);
   const collapsed = useDeskStore((state) => state.deskCollapsed);
   const toggleCollapsed = useDeskStore((state) => state.toggleDeskCollapsed);
@@ -151,32 +173,12 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
   const handleAddToView = useCallback(() => fillTargetView("add"), [fillTargetView]);
   const handleReplaceView = useCallback(() => fillTargetView("replace"), [fillTargetView]);
   const groupingOptions = useMemo(
-    () => [
-      {
-        value: "recent" as const,
-        label: t("sidebar.desk.groupRecent"),
-        testID: "desk-group-recent",
-      },
-      {
-        value: "project" as const,
-        label: t("sidebar.desk.groupProject"),
-        testID: "desk-group-project",
-      },
-      {
-        value: "status" as const,
-        label: t("sidebar.desk.groupStatus"),
-        testID: "desk-group-status",
-      },
-      ...(foldersAvailable
-        ? [
-            {
-              value: "folder" as const,
-              label: t("sidebar.desk.groupFolder"),
-              testID: "desk-group-folder",
-            },
-          ]
-        : []),
-    ],
+    () =>
+      availableDeskGroupings(foldersAvailable).map((value) => ({
+        value,
+        label: t(GROUPING_LABEL_KEYS[value]),
+        testID: `desk-group-${value}`,
+      })),
     [foldersAvailable, t],
   );
   const handleGroupingChange = useCallback(
@@ -187,42 +189,47 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
   const showEmpty = !collapsed && deskGroups.length === 0;
   const showGroups = !collapsed && deskGroups.length > 0;
 
-  // A sidebar with no workspaces yet has nothing to sort into Desk or Shelf.
-  if (count === 0 && shelfCount === 0) {
+  // Without folders a sidebar with no workspaces yet has nothing to sort into Desk or Shelf. With
+  // folders the Desk is always the first folder, even empty: it is app-local, not on any host.
+  if (!foldersAvailable && count === 0 && shelfCount === 0) {
     return null;
   }
 
+  const actions = (
+    <>
+      <DeskGroupingMenu
+        options={groupingOptions}
+        value={deskGrouping}
+        onChange={handleGroupingChange}
+      />
+      <DeskIconButton
+        icon={ListChecks}
+        label={t("sidebar.desk.select")}
+        onPress={toggleSelectionMode}
+        testID="sidebar-desk-select"
+      />
+      <DeskIconButton
+        icon={BrushCleaning}
+        label={t("sidebar.desk.clear")}
+        onPress={clearDesk}
+        testID="sidebar-desk-clear"
+      />
+    </>
+  );
+
   return (
-    <View style={styles.section} testID="sidebar-desk-section">
-      <SidebarSectionHeader
-        title={t("sidebar.desk.title")}
-        collapsed={collapsed}
-        onToggle={toggleCollapsed}
-        chevronAlwaysVisible
-        testID="sidebar-desk-header"
-        count={count}
+    <FolderBlockFrame testID="sidebar-desk-section">
+      <FolderHeaderFrame
+        rowTestID="sidebar-desk-row"
+        toggleTestID="sidebar-desk-header"
         countTestID="sidebar-desk-count"
-      >
-        <SegmentedControl
-          options={groupingOptions}
-          value={deskGrouping}
-          onValueChange={handleGroupingChange}
-          size="sm"
-          testID="sidebar-desk-grouping"
-        />
-        <DeskIconButton
-          icon={ListChecks}
-          label={t("sidebar.desk.select")}
-          onPress={toggleSelectionMode}
-          testID="sidebar-desk-select"
-        />
-        <DeskIconButton
-          icon={BrushCleaning}
-          label={t("sidebar.desk.clear")}
-          onPress={clearDesk}
-          testID="sidebar-desk-clear"
-        />
-      </SidebarSectionHeader>
+        name={t("sidebar.desk.title")}
+        count={count}
+        open={!collapsed}
+        onToggle={toggleCollapsed}
+        lead={deskLead}
+        actions={actions}
+      />
       {selectionActive && checked.length >= 1 ? (
         <DeskSelectionBar
           count={checked.length}
@@ -235,12 +242,11 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
         />
       ) : null}
       {showEmpty ? (
-        <Text style={styles.empty} testID="sidebar-desk-empty">
-          {t("sidebar.desk.empty")}
-        </Text>
+        <FolderHint testID="sidebar-desk-empty">{t("sidebar.desk.empty")}</FolderHint>
       ) : null}
-      {showGroups
-        ? deskGroups.map((group) => (
+      {showGroups ? (
+        <FolderRowsFrame>
+          {deskGroups.map((group) => (
             <DeskGroupRows
               key={group.key}
               group={group}
@@ -255,9 +261,10 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
               checked={checked}
               onToggleChecked={toggleChecked}
             />
-          ))
-        : null}
-    </View>
+          ))}
+        </FolderRowsFrame>
+      ) : null}
+    </FolderBlockFrame>
   );
 }
 
@@ -327,16 +334,6 @@ const DeskGroupRows = memo(function DeskGroupRows({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  section: {
-    marginBottom: theme.spacing[1],
-  },
-  empty: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    paddingHorizontal: theme.spacing[2],
-    paddingBottom: theme.spacing[2],
-    opacity: 0.8,
-  },
   group: {
     paddingBottom: theme.spacing[1],
   },

@@ -1,34 +1,20 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { usePathname } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  ChevronDown,
-  ChevronRight,
-  SquareSplitHorizontal,
-  LayoutGrid,
-  Pencil,
-  Trash2,
-} from "lucide-react-native";
+import { LayoutGrid, Pencil, Trash2 } from "lucide-react-native";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { DeskIconButton } from "@/desk/desk-icon-button";
 import { BoardFolderButton } from "@/folders/folder-row-button";
-import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { deleteBoard, renameBoard, useBoards } from "@/boards/controller";
-import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
+import { deleteBoard, renameBoard } from "@/boards/controller";
 import { navigateToBoard } from "@/boards/navigation";
-import { useViewsSidebarStore } from "@/boards/sidebar-store";
 import { ViewRenameField } from "@/boards/view-rename-field";
-import { openSplitPicker } from "@/boards/split-picker-store";
 import { LIVE_BOARD_ID, type BoardSummary } from "@/boards/types";
-import { isViewActive, orderViewRows, resolveRename, showRowActions } from "@/boards/views-model";
+import { resolveRename, showRowActions } from "@/boards/views-model";
 import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedLayoutGrid = withUnistyles(LayoutGrid);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -145,8 +131,9 @@ export const ViewRow = memo(function ViewRow({
 });
 
 /**
- * What a view row does: open, rename in place, delete after a confirm. Shared by the Views section
- * and the folders that hold views, so a view behaves the same wherever it is listed.
+ * What a view row does: open, rename in place, delete after a confirm. Shared by the Pinned section
+ * (which lists the views) and the folders that hold views, so a view behaves the same wherever it
+ * is listed.
  */
 export function useViewRowActions({
   boards,
@@ -202,101 +189,7 @@ export function useViewRowActions({
   };
 }
 
-/**
- * The sidebar's Views section, between Pinned and the Desk: the Live view first, then the saved
- * split views. Reads its own data, so the two sidebar lists that render it pass nothing but
- * `onWorkspacePress` (called after a row opens, so the compact sidebar can close).
- */
-export function BoardsSection({ onWorkspacePress }: { onWorkspacePress?: () => void }) {
-  const { t } = useTranslation();
-  const boards = useBoards();
-  const pathname = usePathname();
-  const activeBoardId = parseBoardIdFromPathname(pathname);
-  const collapsed = useViewsSidebarStore((state) => state.collapsed);
-  const toggleCollapsed = useViewsSidebarStore((state) => state.toggleCollapsed);
-  const splitKeys = useShortcutKeys("workspace-board-split");
-  const rows = useMemo(() => orderViewRows(boards), [boards]);
-  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
-  const Chevron = collapsed ? ThemedChevronRight : ThemedChevronDown;
-  const { editingId, onStartRename, onOpen, onCancelRename, onCommitRename, onDelete } =
-    useViewRowActions({ boards: rows, onWorkspacePress });
-
-  return (
-    <View style={styles.section} testID="sidebar-views-section">
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={accessibilityState}
-          onPress={toggleCollapsed}
-          style={styles.titleGroup}
-          testID="sidebar-views-header"
-        >
-          <Chevron size={12} uniProps={foregroundMutedColorMapping} />
-          <Text style={styles.title} numberOfLines={1}>
-            {t("boards.sidebar.title")}
-          </Text>
-          <Text style={styles.headerCount} testID="sidebar-views-count">
-            {rows.length}
-          </Text>
-        </Pressable>
-        <DeskIconButton
-          icon={SquareSplitHorizontal}
-          label={t("boards.sidebar.split")}
-          shortcutKeys={splitKeys}
-          onPress={openSplitPicker}
-          testID="sidebar-views-split"
-        />
-      </View>
-      {collapsed
-        ? null
-        : rows.map((board) => (
-            <ViewRow
-              key={board.id}
-              board={board}
-              active={isViewActive(activeBoardId, board.id)}
-              editing={editingId === board.id}
-              onOpen={onOpen}
-              onStartRename={onStartRename}
-              onCancelRename={onCancelRename}
-              onCommitRename={onCommitRename}
-              onDelete={onDelete}
-            />
-          ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
-  section: {
-    marginBottom: theme.spacing[1],
-  },
-  header: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    paddingLeft: theme.spacing[2],
-    paddingRight: 4,
-    paddingVertical: theme.spacing[1],
-  },
-  titleGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flexShrink: 0,
-    userSelect: "none",
-  },
-  title: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  headerCount: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    opacity: 0.7,
-  },
   row: {
     minHeight: 36,
     marginBottom: theme.spacing[0.5],

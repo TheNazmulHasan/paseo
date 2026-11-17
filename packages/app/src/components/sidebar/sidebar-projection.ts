@@ -43,7 +43,7 @@ const NO_DESK_KEYS: ReadonlySet<string> = new Set();
 
 export interface SidebarProjection {
   pinnedGroups: PinnedSidebarGroups;
-  /** Fork mod #12: the Desk, grouped as the Desk's own toggle says. Its rows left the Shelf. */
+  /** Fork mod #12: the Desk (the first folder of Folders), grouped as its own toggle says. Its rows left the Shelf. */
   deskGroups: DeskGroup[];
   /** Workspaces left on the Shelf (neither pinned nor on the Desk). */
   shelfCount: number;
@@ -83,8 +83,12 @@ export interface SidebarProjectionInput {
     /** Saved views only: the built-in Live view is not fileable. */
     boards: readonly BoardSummary[];
     openKeys: ReadonlySet<string>;
-    sectionCollapsed: boolean;
   };
+  /**
+   * The whole Folders section is folded. The Desk is its first folder, so folding it hides the Desk
+   * too, with or without user folders (a sidebar whose hosts have none still draws the Desk).
+   */
+  foldersSectionCollapsed?: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
   t: TFunction;
@@ -146,9 +150,12 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   if (!input.pinnedCollapsed) {
     sections.push({ workspaces: pinnedGroups.pinnedChats });
   }
+  // The Desk is the first folder of the Folders section: folded away with the section, or on its own.
+  const foldersSectionCollapsed = input.foldersSectionCollapsed ?? false;
+  const deskHidden = Boolean(input.deskCollapsed) || foldersSectionCollapsed;
   sections.push({
     workspaces: flattenDeskGroups(deskGroups),
-    collapsed: input.deskCollapsed,
+    collapsed: deskHidden,
   });
   if (input.folders && folderSections) {
     // The folders replace the Shelf. Pinned and Desk rows repeat in their folder; they are
@@ -157,7 +164,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     if (!input.pinnedCollapsed) {
       for (const workspace of pinnedGroups.pinnedChats) alreadyNumbered.add(workspace.workspaceKey);
     }
-    if (!input.deskCollapsed) {
+    if (!deskHidden) {
       for (const workspace of flattenDeskGroups(deskGroups)) {
         alreadyNumbered.add(workspace.workspaceKey);
       }
@@ -165,7 +172,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     const folderShortcutSections = buildFolderShortcutSections({
       sections: folderSections,
       openKeys: input.folders.openKeys,
-      sectionCollapsed: input.folders.sectionCollapsed,
+      sectionCollapsed: foldersSectionCollapsed,
       alreadyNumbered,
     });
     sections.push(...folderShortcutSections);

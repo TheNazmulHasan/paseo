@@ -3,6 +3,7 @@ import {
   createRenameSession,
   isViewActive,
   orderViewRows,
+  pinnedSectionCount,
   resolveRename,
   showRowActions,
 } from "@/boards/views-model";
@@ -103,5 +104,15 @@ describe("createRenameSession", () => {
     session.blur();
     expect(onCommit).toHaveBeenCalledExactlyOnceWith("A | B");
     expect(resolveRename("A | B", "A | B")).toBeNull();
+  });
+});
+
+describe("pinnedSectionCount", () => {
+  it("counts the views and the pinned workspaces as one", () => {
+    expect(pinnedSectionCount(3, 2)).toBe(5);
+  });
+
+  it("still counts the views when nothing is pinned", () => {
+    expect(pinnedSectionCount(1, 0)).toBe(1);
   });
 });

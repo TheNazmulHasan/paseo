@@ -99,12 +99,14 @@ import {
   SidebarWorkspaceMenu,
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
-import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
-import { BoardsSection } from "@/boards/boards-section";
-import { DeskSection } from "@/desk/desk-section";
+import { PinnedSectionHeader, PinnedViewRows, usePinnedViewsPresent } from "@/boards/pinned-views";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
-import { FoldersBody, useFoldersReplaceShelf } from "@/folders/folders-section";
+import {
+  FoldersBody,
+  useFoldersReplaceShelf,
+  useFoldersSectionPresent,
+} from "@/folders/folders-section";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { createWorkspaceVisibilityPolicy } from "@/components/sidebar/sidebar-group-visibility";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -2293,7 +2295,6 @@ function ProjectModeList({
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
 }) {
-  const { t } = useTranslation();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
   const creatingWorkspaceTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -2306,6 +2307,9 @@ function ProjectModeList({
   );
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
   const foldersReplaceShelf = useFoldersReplaceShelf();
+  // Nazmul mod (folders): the Pinned section also holds the views; the Folders section holds the Desk.
+  const pinnedViewsPresent = usePinnedViewsPresent();
+  const foldersSectionPresent = useFoldersSectionPresent();
 
   const manualSort = useSidebarViewStore((state) => state.workspaceSort === "manual");
   const getWorkspaceOrder = useSidebarOrderStore((state) => state.getWorkspaceOrder);
@@ -2624,19 +2628,18 @@ function ProjectModeList({
 
   const content = (
     <>
-      {pinnedChats.length > 0 ? (
+      {pinnedChats.length > 0 || pinnedViewsPresent ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
-          <SidebarSectionHeader
-            title={t("sidebar.pinned.title")}
+          <PinnedSectionHeader
             collapsed={pinnedCollapsed}
             onToggle={togglePinnedCollapsed}
             testID="sidebar-pinned-section-header"
-            count={pinnedChats.length}
+            pinnedCount={pinnedChats.length}
             countTestID="sidebar-pinned-count"
-            chevronAlwaysVisible
           />
           {pinnedCollapsed ? null : (
             <>
+              <PinnedViewRows onWorkspacePress={onWorkspacePress} />
               {leadingPinnedChat ? renderPinnedChatRow(leadingPinnedChat) : null}
               <DraggableList
                 testID="sidebar-pinned-list"
@@ -2663,8 +2666,6 @@ function ProjectModeList({
           )}
         </View>
       ) : null}
-      <BoardsSection onWorkspacePress={onWorkspacePress} />
-      <DeskSection onWorkspacePress={onWorkspacePress} />
       {/* The header carries the display menu, which is the only way back out of a filter, so it
         stays for as long as a filter is what emptied the list. It is absent only when the
         sidebar is genuinely empty, where a section heading would sit over nothing.
@@ -2672,14 +2673,13 @@ function ProjectModeList({
         project whose chats are all pinned leaves `unpinnedProjects` empty, and without its term
         the header would go with it, taking the only route back to the filter page. */}
       {unpinnedProjects.length > 0 ||
+      foldersSectionPresent ||
       hasActiveHostFilter ||
       hasActiveProjectFilter ||
       sidebarFilterEmpty
         ? listHeaderComponent
         : null}
-      {foldersReplaceShelf && !sidebarFilterEmpty ? (
-        <FoldersBody onWorkspacePress={onWorkspacePress} />
-      ) : null}
+      {!sidebarFilterEmpty ? <FoldersBody onWorkspacePress={onWorkspacePress} /> : null}
       {sidebarFilterEmpty ? <SidebarFilterEmptyState /> : projectBody}
       {listFooterComponent}
     </>

@@ -13,6 +13,18 @@ import type {
 export type DeskGrouping = "recent" | "project" | "status" | "folder";
 
 export const DEFAULT_DESK_GROUPING: DeskGrouping = "recent";
+
+/** The Desk's groupings in menu order. "folder" only exists while some host has folders. */
+export function availableDeskGroupings(foldersAvailable: boolean): DeskGrouping[] {
+  return foldersAvailable
+    ? ["recent", "project", "status", "folder"]
+    : ["recent", "project", "status"];
+}
+
+/** The stored grouping, or Recent when it is "folder" and no host has folders (it stays stored). */
+export function resolveDeskGrouping(stored: DeskGrouping, foldersAvailable: boolean): DeskGrouping {
+  return availableDeskGroupings(foldersAvailable).includes(stored) ? stored : DEFAULT_DESK_GROUPING;
+}
 export const DESK_SEED_LIMIT = 12;
 export const DESK_SEED_RECENT_MS = 48 * 60 * 60 * 1000;
 

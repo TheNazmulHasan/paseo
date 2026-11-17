@@ -54,7 +54,7 @@ interface SidebarModel extends SidebarWorkspacesListResult {
   workspaceGroups: SidebarWorkspaceGroup[];
   projectIconTargets: SidebarProjectIconTarget[];
   pinnedGroups: PinnedSidebarGroups;
-  /** Fork mod #12: the Desk's groups and how many workspaces the Shelf still holds. */
+  /** Fork mod #12: the Desk's groups (it is the first folder of Folders) and how many workspaces the Shelf still holds. */
   deskGroups: DeskGroup[];
   shelfCount: number;
   /** Fork mod #16: the folders that replace the Shelf; null while no host has folders. */
@@ -108,10 +108,9 @@ export function SidebarModelProvider({
             index: folderIndex,
             boards: boards.filter((board) => board.kind !== "live" && board.id !== LIVE_BOARD_ID),
             openKeys: new Set(folderOpenKeyList),
-            sectionCollapsed: folderSectionCollapsed,
           }
         : undefined,
-    [boards, folderIndex, folderOpenKeyList, folderSectionCollapsed, foldersAvailable],
+    [boards, folderIndex, folderOpenKeyList, foldersAvailable],
   );
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
@@ -236,6 +235,7 @@ export function SidebarModelProvider({
       shelfCollapsed,
       deskCollapsed,
       folders: foldersInput,
+      foldersSectionCollapsed: folderSectionCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       t,
@@ -246,6 +246,7 @@ export function SidebarModelProvider({
       deskGrouping,
       deskKeys,
       foldersInput,
+      folderSectionCollapsed,
       shelfCollapsed,
       deskCollapsed,
       groupMode,

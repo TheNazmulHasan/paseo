@@ -3,22 +3,12 @@ import { router, usePathname } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Text, View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderPlus,
-  Inbox,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react-native";
+import { Folder, FolderPlus, Inbox, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { ViewRow, useViewRowActions } from "@/boards/boards-section";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { isViewActive } from "@/boards/views-model";
 import { ViewRenameField } from "@/boards/view-rename-field";
 import type { BoardSummary } from "@/boards/types";
-import { PressHighlight } from "@/components/ui/press-highlight";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
@@ -28,9 +18,17 @@ import {
   StatusWorkspaceRow,
 } from "@/components/sidebar/sidebar-status-list";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
+import { DeskFolder } from "@/desk/desk-section";
 import { DeskIconButton } from "@/desk/desk-icon-button";
+import { useDeskStore } from "@/desk/desk-store";
 import { useFolderStore } from "@/folders/folder-store";
 import { useFolderUiStore } from "@/folders/folder-ui-store";
+import {
+  FolderBlockFrame,
+  FolderHeaderFrame,
+  FolderHint,
+  FolderRowsFrame,
+} from "@/folders/folder-row-frame";
 import { FolderRowContext } from "@/folders/folder-row-button";
 import {
   formatFolderNameInput,
@@ -58,8 +56,6 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import type { Theme } from "@/styles/theme";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedInbox = withUnistyles(Inbox);
 const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -71,9 +67,10 @@ const WORKSPACE_VISIBILITY = {
 };
 
 /**
- * The header that replaces the Shelf's while folders are available: the Folders title and fold
- * chevron, the count of folders, the always-visible + (new folder) and whatever the caller puts at
- * the trailing edge (the display menu, the only way back out of a sidebar filter).
+ * The Folders section header: the title and fold chevron, the count of folders you made, the
+ * always-visible + (new folder, only while a host has folders) and whatever the caller puts at the
+ * trailing edge (the display menu, the only way back out of a sidebar filter). The Desk is the first
+ * folder under it and is not counted: the count is the folders you made.
  */
 export function FoldersSectionHeader({
   onLayout,
@@ -87,6 +84,7 @@ export function FoldersSectionHeader({
   const collapsed = useFolderUiStore((state) => state.sectionCollapsed);
   const toggleSection = useFolderUiStore((state) => state.toggleSection);
   const setCreating = useFolderStore((state) => state.setCreating);
+  const foldersAvailable = folderSections !== null;
   const folderCount = folderSections ? folderSections.length - 1 : 0;
   const handleNew = useCallback(() => {
     if (useFolderUiStore.getState().sectionCollapsed) toggleSection();
@@ -103,20 +101,31 @@ export function FoldersSectionHeader({
       countTestID="sidebar-folders-count"
       onLayout={onLayout}
     >
-      <DeskIconButton
-        icon={FolderPlus}
-        label={t("folders.new")}
-        onPress={handleNew}
-        testID="sidebar-folders-new"
-      />
+      {foldersAvailable ? (
+        <DeskIconButton
+          icon={FolderPlus}
+          label={t("folders.new")}
+          onPress={handleNew}
+          testID="sidebar-folders-new"
+        />
+      ) : null}
       {children}
     </SidebarSectionHeader>
   );
 }
 
-/** True while the Folders section stands in for the Shelf (some host has folders loaded). */
+/** True while the user folders stand in for the Shelf (some host has folders loaded). */
 export function useFoldersReplaceShelf(): boolean {
   return useSidebarModel().folderSections !== null;
+}
+
+/**
+ * True when the Folders section has something to draw: a host has folders, or the Desk or the
+ * fallback Shelf holds rows. The project list gates its section header on this.
+ */
+export function useFoldersSectionPresent(): boolean {
+  const { folderSections, deskGroups, shelfCount } = useSidebarModel();
+  return folderSections !== null || deskGroups.length > 0 || shelfCount > 0;
 }
 
 interface RowDeps {
@@ -131,9 +140,10 @@ interface RowDeps {
 }
 
 /**
- * The body that replaces the Shelf's list: one block per folder, then Unfiled. Reads the sidebar
- * model and wires its own row dependencies, like the Desk, so the two sidebar lists that render it
- * pass nothing but `onWorkspacePress`. Renders nothing while no host has folders (the Shelf shows).
+ * The Folders section body: the built-in Desk folder first, then one block per user folder, then
+ * Unfiled. Reads the sidebar model and wires its own row dependencies, like the Desk, so the two
+ * sidebar lists that render it pass nothing but `onWorkspacePress`. While no host has folders only
+ * the Desk shows, and the old Shelf's own header follows it (the list below draws the Shelf rows).
  */
 export function FoldersBody({ onWorkspacePress }: { onWorkspacePress?: () => void }) {
   const { t } = useTranslation();
@@ -192,39 +202,63 @@ export function FoldersBody({ onWorkspacePress }: { onWorkspacePress?: () => voi
   );
   const handleCancelCreate = useCallback(() => setCreating(false), [setCreating]);
 
-  if (!folderSections || collapsed) {
-    return null;
-  }
-  const hasFolders = folderSections.length > 1;
+  const hasFolders = folderSections ? folderSections.length > 1 : false;
   return (
-    <View style={styles.body} testID="sidebar-folders-section">
-      {creating ? (
-        <View style={styles.newRow} testID="sidebar-folders-new-row">
-          <ThemedFolder size={14} uniProps={mutedMapping} />
-          <View style={styles.nameSlot}>
-            <ViewRenameField
-              initialValue=""
-              placeholder={t("folders.newPlaceholder")}
-              onCommit={handleCreate}
-              onCancel={handleCancelCreate}
+    <>
+      {collapsed ? null : (
+        <View style={styles.body} testID="sidebar-folders-section">
+          <DeskFolder onWorkspacePress={onWorkspacePress} />
+          {folderSections && creating ? (
+            <View style={styles.newRow} testID="sidebar-folders-new-row">
+              <ThemedFolder size={14} uniProps={mutedMapping} />
+              <View style={styles.nameSlot}>
+                <ViewRenameField
+                  initialValue=""
+                  placeholder={t("folders.newPlaceholder")}
+                  onCommit={handleCreate}
+                  onCancel={handleCancelCreate}
+                />
+              </View>
+            </View>
+          ) : null}
+          {folderSections && !hasFolders && !creating ? (
+            <FolderHint testID="sidebar-folders-empty">{t("folders.empty")}</FolderHint>
+          ) : null}
+          {folderSections?.map((section) => (
+            <FolderBlock
+              key={section.key}
+              section={section}
+              open={openKeys.includes(section.key)}
+              deps={deps}
             />
-          </View>
+          ))}
         </View>
-      ) : null}
-      {hasFolders || creating ? null : (
-        <Text style={styles.hint} testID="sidebar-folders-empty">
-          {t("folders.empty")}
-        </Text>
       )}
-      {folderSections.map((section) => (
-        <FolderBlock
-          key={section.key}
-          section={section}
-          open={openKeys.includes(section.key)}
-          deps={deps}
-        />
-      ))}
-    </View>
+      {folderSections ? null : <ShelfFallbackHeader />}
+    </>
+  );
+}
+
+/**
+ * The old Shelf's header, kept for a sidebar whose hosts have no folders (an older daemon): the
+ * list below still draws the Shelf rows under it. Project / Status grouping stays reachable from
+ * the display menu (gear, Group by).
+ */
+function ShelfFallbackHeader() {
+  const { t } = useTranslation();
+  const { shelfCount } = useSidebarModel();
+  const collapsed = useDeskStore((state) => state.shelfCollapsed);
+  const toggleCollapsed = useDeskStore((state) => state.toggleShelfCollapsed);
+  return (
+    <SidebarSectionHeader
+      title={t("sidebar.shelf.title")}
+      collapsed={collapsed}
+      onToggle={toggleCollapsed}
+      chevronAlwaysVisible
+      testID="sidebar-shelf-header"
+      count={shelfCount}
+      countTestID="sidebar-shelf-count"
+    />
   );
 }
 
@@ -241,7 +275,7 @@ const FolderBlock = memo(function FolderBlock({
   const toggleFolder = useFolderUiStore((state) => state.toggleFolder);
   const handleToggle = useCallback(() => toggleFolder(section.key), [section.key, toggleFolder]);
   return (
-    <View style={styles.block} testID={`sidebar-folder-${section.key}`}>
+    <FolderBlockFrame testID={`sidebar-folder-${section.key}`}>
       <FolderHeaderRow
         folderKey={section.key}
         group={group}
@@ -250,7 +284,7 @@ const FolderBlock = memo(function FolderBlock({
         onToggle={handleToggle}
       />
       {open ? <FolderRows section={section} deps={deps} /> : null}
-    </View>
+    </FolderBlockFrame>
   );
 });
 
@@ -270,8 +304,6 @@ function FolderHeaderRow({
   const { t } = useTranslation();
   const { renameFolder, deleteFolder } = useFolderActions();
   const [renaming, setRenaming] = useState(false);
-  const Chevron = open ? ThemedChevronDown : ThemedChevronRight;
-  const accessibilityState = useMemo(() => ({ expanded: open }), [open]);
   const name = group ? group.name : t("folders.unfiled");
 
   const handleStartRename = useCallback(() => setRenaming(true), [setRenaming]);
@@ -293,45 +325,23 @@ function FolderHeaderRow({
     router.navigate(buildNewWorkspaceRoute() as never);
   }, [folderKey]);
 
-  const lead = <FolderLead group={group} />;
-
-  if (renaming && group) {
-    return (
-      <View style={styles.headerRow} testID={`sidebar-folder-row-${folderKey}`}>
-        {lead}
-        <View style={styles.nameSlot}>
-          <ViewRenameField
-            initialValue={formatFolderNameInput(group)}
-            placeholder={t("folders.newPlaceholder")}
-            onCommit={handleCommitRename}
-            onCancel={handleCancelRename}
-          />
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.headerRow} testID={`sidebar-folder-row-${folderKey}`}>
-      <PressHighlight
-        style={styles.toggle}
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityState={accessibilityState}
-        accessibilityLabel={name}
-        testID={`sidebar-folder-toggle-${folderKey}`}
-      >
-        <Chevron size={12} uniProps={mutedMapping} />
-        {lead}
-        <Text style={styles.name} numberOfLines={1}>
-          {name}
-        </Text>
-        <Text style={styles.count} testID={`sidebar-folder-count-${folderKey}`}>
-          {count}
-        </Text>
-      </PressHighlight>
-      {group ? (
-        <View style={styles.actions}>
+  const lead = useMemo(() => <FolderLead group={group} />, [group]);
+  const editor = useMemo(
+    () =>
+      renaming && group ? (
+        <ViewRenameField
+          initialValue={formatFolderNameInput(group)}
+          placeholder={t("folders.newPlaceholder")}
+          onCommit={handleCommitRename}
+          onCancel={handleCancelRename}
+        />
+      ) : undefined,
+    [group, handleCancelRename, handleCommitRename, renaming, t],
+  );
+  const actions = useMemo(
+    () =>
+      group ? (
+        <>
           <DeskIconButton
             icon={Plus}
             label={t("folders.newWorkspace")}
@@ -350,9 +360,24 @@ function FolderHeaderRow({
             onPress={handleDelete}
             testID={`sidebar-folder-delete-${folderKey}`}
           />
-        </View>
-      ) : null}
-    </View>
+        </>
+      ) : undefined,
+    [folderKey, group, handleDelete, handleNewWorkspace, handleStartRename, t],
+  );
+
+  return (
+    <FolderHeaderFrame
+      rowTestID={`sidebar-folder-row-${folderKey}`}
+      toggleTestID={`sidebar-folder-toggle-${folderKey}`}
+      countTestID={`sidebar-folder-count-${folderKey}`}
+      name={name}
+      count={count}
+      open={open}
+      onToggle={onToggle}
+      lead={lead}
+      editor={editor}
+      actions={actions}
+    />
   );
 }
 
@@ -412,7 +437,7 @@ function FolderRows({
 
   return (
     <FolderRowContext.Provider value>
-      <View style={styles.rows} testID={`sidebar-folder-rows-${section.key}`}>
+      <FolderRowsFrame testID={`sidebar-folder-rows-${section.key}`}>
         {section.boards.map((board) => (
           <ViewRow
             key={board.id}
@@ -436,31 +461,19 @@ function FolderRows({
           />
         ) : null}
         {section.key === UNFILED_FOLDER_KEY && section.count === 0 ? <FolderEmptyHint /> : null}
-      </View>
+      </FolderRowsFrame>
     </FolderRowContext.Provider>
   );
 }
 
 function FolderEmptyHint() {
   const { t } = useTranslation();
-  return <Text style={styles.hint}>{t("folders.unfiledEmpty")}</Text>;
+  return <FolderHint>{t("folders.unfiledEmpty")}</FolderHint>;
 }
 
 const styles = StyleSheet.create((theme) => ({
   body: {
     marginBottom: theme.spacing[1],
-  },
-  block: {
-    marginBottom: theme.spacing[0.5],
-  },
-  headerRow: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    paddingLeft: theme.spacing[2],
-    paddingRight: 4,
   },
   newRow: {
     minHeight: 36,
@@ -470,42 +483,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[2],
   },
-  toggle: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    userSelect: "none",
-  },
   nameSlot: { flex: 1, minWidth: 0 },
   emoji: { fontSize: 14, width: 14, textAlign: "center" },
-  name: {
-    flexShrink: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-  },
-  count: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    opacity: 0.8,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flexShrink: 0,
-  },
-  rows: {
-    paddingLeft: theme.spacing[2],
-    paddingBottom: theme.spacing[1],
-  },
-  hint: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    paddingHorizontal: theme.spacing[2],
-    paddingBottom: theme.spacing[2],
-    opacity: 0.8,
-  },
 }));

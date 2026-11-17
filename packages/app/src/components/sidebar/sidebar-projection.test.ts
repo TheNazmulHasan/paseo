@@ -252,6 +252,19 @@ describe("buildSidebarProjection — Desk and Shelf", () => {
     ]);
   });
 
+  it("folds the Desk away with the Folders section even when no host has folders", () => {
+    const projection = buildSidebarProjection({
+      ...deskInput("project", ["srv:on-desk"]),
+      foldersSectionCollapsed: true,
+    });
+
+    expect(workspaceIds(projection.deskGroups.flatMap((group) => group.rows))).toEqual(["on-desk"]);
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-shelf",
+    ]);
+  });
+
   it("is the old projection when the Desk is empty", () => {
     const projection = buildSidebarProjection(deskInput("project", []));
 
@@ -289,8 +302,8 @@ describe("buildSidebarProjection — Folders replace the Shelf", () => {
         ]),
         boards: options.boards ?? [],
         openKeys: new Set(options.openKeys ?? []),
-        sectionCollapsed: options.sectionCollapsed ?? false,
       },
+      foldersSectionCollapsed: options.sectionCollapsed ?? false,
     };
   }
 
@@ -361,10 +374,55 @@ describe("buildSidebarProjection — Folders replace the Shelf", () => {
         deskKeys: ["srv:on-desk"],
       }),
     );
+    // The Desk is the first folder of the section, so folding the section folds the Desk too.
     expect(sectionFolded.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+    ]);
+  });
+
+  it("numbers Pinned, then the Desk folder, then user folders, then Unfiled, in display order", () => {
+    const projection = buildSidebarProjection(
+      folderInput({
+        membership: { other: "fld_faith" },
+        deskKeys: ["srv:on-desk"],
+        openKeys: ["faith", UNFILED_FOLDER_KEY],
+      }),
+    );
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-desk",
+      "other",
+    ]);
+  });
+
+  it("numbers a Desk workspace once even when it also sits in an open user folder", () => {
+    const projection = buildSidebarProjection(
+      folderInput({
+        membership: { "on-desk": "fld_faith" },
+        deskKeys: ["srv:on-desk"],
+        openKeys: ["faith"],
+      }),
+    );
+    expect(
+      projection.shortcutModel.shortcutTargets.filter((t) => t.workspaceId === "on-desk"),
+    ).toHaveLength(1);
+    expect([...(projection.folderSections?.[0]?.numberedKeys ?? [])]).toEqual([]);
+  });
+
+  it("numbers a Desk workspace in its open folder when the Desk folder is folded", () => {
+    const projection = buildSidebarProjection({
+      ...folderInput({
+        membership: { "on-desk": "fld_faith" },
+        deskKeys: ["srv:on-desk"],
+        openKeys: ["faith"],
+      }),
+      deskCollapsed: true,
+    });
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
       "pinned",
       "on-desk",
     ]);
+    expect([...(projection.folderSections?.[0]?.numberedKeys ?? [])]).toEqual(["srv:on-desk"]);
   });
 
   it("numbers a pinned workspace in its folder when the Pinned section is folded", () => {

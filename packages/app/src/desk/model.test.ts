@@ -7,6 +7,7 @@ import type {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { mergeWorkspaceOrder } from "@/workspace-switcher/model";
 import {
+  availableDeskGroupings,
   buildDeskGroups,
   buildDeskRows,
   DESK_SEED_LIMIT,
@@ -16,6 +17,7 @@ import {
   partitionDeskWorkspaces,
   pickDeskSeed,
   reconcileDesk,
+  resolveDeskGrouping,
   selectClearableDeskKeys,
   splitDeskFromProjects,
   type DeskSyncState,
@@ -532,5 +534,22 @@ describe("orderKeysDeskFirst", () => {
       "left",
       "d-never-visited",
     ]);
+  });
+});
+
+describe("Desk grouping menu", () => {
+  it("offers all four groupings, in menu order, while folders exist", () => {
+    expect(availableDeskGroupings(true)).toEqual(["recent", "project", "status", "folder"]);
+  });
+
+  it("drops Folder when no host has folders", () => {
+    expect(availableDeskGroupings(false)).toEqual(["recent", "project", "status"]);
+  });
+
+  it("shows Recent for a stored Folder grouping without folders, and keeps every other value", () => {
+    expect(resolveDeskGrouping("folder", false)).toBe("recent");
+    expect(resolveDeskGrouping("folder", true)).toBe("folder");
+    expect(resolveDeskGrouping("status", false)).toBe("status");
+    expect(resolveDeskGrouping("project", true)).toBe("project");
   });
 });
