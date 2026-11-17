@@ -17,6 +17,7 @@ import { deriveAgentStreamTurnLiveness } from "@/timeline/session-stream-reducer
 import { ingestAgentStreamEvent } from "@/timeline/ingest-agent-stream-event";
 import { useForkSessionEvents } from "@/runtime/fork-session-events";
 import { useFoldersSync } from "@/folders/use-folders-sync";
+import { useChiefCommands } from "@/chief/use-chief-commands"; // Nazmul mod (chief)
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { requestTimelineReplacement } from "@/timeline/timeline-replacement";
 import { type ViewedTimelineOwner } from "@/timeline/viewed-timeline-sync";
@@ -258,6 +259,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   useForkSessionEvents(client, serverId);
   useFoldersSync(client, serverId, isConnected);
+  useChiefCommands(client, serverId);
 
   // Client activity tracking (heartbeat, push token registration)
   useClientActivity({

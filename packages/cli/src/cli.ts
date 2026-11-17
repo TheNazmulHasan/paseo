@@ -15,6 +15,7 @@ import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { createWorkspaceCommand } from "./commands/workspace/index.js";
 import { createFolderCommand } from "./commands/folder/index.js";
+import { createChiefCommand } from "./commands/chief/index.js"; // Nazmul mod (chief)
 import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
 import { createHubCommand } from "./commands/hub/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
@@ -164,6 +165,8 @@ export function createCli(): Command {
   program.addCommand(createWorkspaceCommand());
   // Nazmul mod (folders).
   program.addCommand(createFolderCommand());
+  // Nazmul mod (chief).
+  program.addCommand(createChiefCommand());
   // COMPAT(worktreeCli): legacy command alias added before workspace was the product unit.
   // Added in v0.2.0; remove after 2027-01-17.
   program.addCommand(createWorktreeCommand(), { hidden: true });

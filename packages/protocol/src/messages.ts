@@ -42,6 +42,13 @@ import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { TopicTrailSchema } from "./topic-trail.js";
+// Nazmul mod (chief)
+import {
+  AppCommandMessageSchema,
+  AppCommandResultRequestSchema,
+  ChiefQueryRequestSchema,
+  ChiefQueryResponseSchema,
+} from "./chief.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
@@ -4023,6 +4030,8 @@ export const FORK_SESSION_EVENTS = [
   "agent.background_tasks.output.update",
   "agent.provider_heartbeats.update",
   "folders_update",
+  // Nazmul mod (chief): an agent driving the desktop app.
+  "app_command",
 ] as const;
 
 // These connection event streams have no directory bootstrap or timeline membership.
@@ -4129,6 +4138,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FoldersDeleteRequestSchema,
   FoldersReorderRequestSchema,
   FoldersAssignRequestSchema,
+  // Nazmul mod (chief)
+  AppCommandResultRequestSchema,
+  ChiefQueryRequestSchema,
   WorkspaceLabelListRequestSchema,
   WorkspaceLabelAssignmentSetRequestSchema,
   WorkspaceLabelUpdateRequestSchema,
@@ -8670,6 +8682,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FoldersReorderResponseSchema,
   FoldersAssignResponseSchema,
   FoldersUpdateMessageSchema,
+  // Nazmul mod (chief)
+  AppCommandMessageSchema,
+  ChiefQueryResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
   WaitForFinishResponseMessageSchema,

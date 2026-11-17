@@ -279,6 +279,10 @@ const INBOUND_PERMISSION = {
   "folders.delete.request": "workspace.manage",
   "folders.reorder.request": "workspace.manage",
   "folders.assign.request": "workspace.manage",
+  // Nazmul mod (chief): the app reports the outcome of an app_command, which needed workspace.manage to be sent.
+  "app_command.result.request": "workspace.manage",
+  // Nazmul mod (chief): same as list_agents (fetch_agents_request).
+  "chief.query.request": ["workspace.read", "hub.execute"],
   "workspace.recovery.inspect.request": ["workspace.read", "hub.execute"],
   "workspace.recovery.restore.request": ["workspace.manage", "hub.execute"],
   "workspace.script.list.request": "workspace.read",
@@ -588,6 +592,9 @@ const OUTBOUND_PERMISSION = {
   "folders.reorder.response": "workspace.manage",
   "folders.assign.response": "workspace.manage",
   folders_update: "workspace.read",
+  // Nazmul mod (chief): only a client allowed to manage workspaces is told to drive the app.
+  app_command: "workspace.manage",
+  "chief.query.response": ["workspace.read", "hub.execute"],
   "workspace.recovery.inspect.response": ["workspace.read", "hub.execute"],
   "workspace.recovery.restore.response": ["workspace.manage", "hub.execute"],
   "workspace.script.list.response": "workspace.read",

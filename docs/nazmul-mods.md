@@ -239,3 +239,26 @@ scripts/nazmul-bundle-has.sh 'sidebar-tabs-chevron-'
 scripts/nazmul-bundle-has.sh 'sidebar-tab-line-'
 scripts/nazmul-bundle-has.sh 'sidebar-pane-line-'
 ```
+
+## chief
+
+The tool layer of Chief, the personal-assistant agent (design: myos/paseo/home-map.md). Four MCP tools: `session_states` (every open session as needs_you / working / your_move / parked from one pure `deriveSessionState`, with workspace, project, folder, flags, last activity, the topic trail's "Your move" line and a link; filters state, workspaceId, folder, staleDays, limit), `search_sessions` (text of user and agent messages across every session, archived included, read from the provider's own transcript with SpecStory as fallback; a workspace is private when its id is in `<paseoHome>/chief.json` `privateWorkspaceIds`, it is titled Debrief, or its cwd is in a `.local-only` folder or a folder named `(local-only)`; private workspaces return no text unless `chief.json` sets `searchPrivateText`), `app_command` (the daemon pushes the `app_command` fork session event; the app opens a workspace/tab, opens a view, or runs a keyboard action through the keyboard's own router or a Command Center item, and answers with `app_command.result.request`) and `list_app_actions` (asked of the live app). CLI: `paseo chief states` and `paseo chief search <query>` over the `chief.query` RPC. Doc: myos/paseo/home-map.md
+
+```bash
+npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/chief --bail=1
+npx vitest run packages/cli/src/commands/chief --bail=1
+npm test --workspace=@getpaseo/app -- --project unit src/chief src/keyboard --bail=1
+grep -q app_command packages/protocol/src/messages.ts
+grep -q registerChiefTools packages/server/src/server/agent/tools/paseo-tools.ts
+grep -q dispatchChiefMessage packages/server/src/server/session.ts
+grep -q 'app_command: "workspace.manage"' packages/server/src/server/authorization/operation-permissions.ts
+grep -q session_states packages/protocol/src/paseo-tool-presentation/catalog.ts
+grep -q appCommandBus.bind packages/server/src/server/bootstrap.ts
+grep -q useChiefCommands packages/app/src/contexts/session-context.tsx
+grep -q registerShortcutRunner packages/app/src/hooks/use-keyboard-shortcuts.ts
+grep -q ChiefHost packages/app/src/app/_layout.tsx
+grep -q createChiefCommand packages/cli/src/cli.ts
+scripts/nazmul-bundle-has.sh 'app_command'
+scripts/nazmul-bundle-has.sh 'Call list_app_actions for the ids that exist'
+scripts/nazmul-bundle-has.sh 'open_workspace needs args.workspaceId'
+```

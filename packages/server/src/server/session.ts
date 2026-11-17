@@ -212,6 +212,8 @@ import { UiStateSession } from "./ui-state/session.js";
 import { UiStateStore } from "./ui-state/store.js";
 import { resolveFolderRegistry, type FileBackedFolderRegistry } from "./folders/folder-registry.js";
 import { FolderSession } from "./folders/folder-session.js";
+import { dispatchChiefMessage } from "./chief/chief-session.js"; // Nazmul mod (chief)
+import { createChiefCore, type ChiefCore } from "./chief/chief-tools.js"; // Nazmul mod (chief)
 
 function resolveUiStateStore(store: UiStateStore | undefined, paseoHome: string): UiStateStore {
   return store ?? new UiStateStore(paseoHome);
@@ -954,6 +956,7 @@ export class Session {
   private readonly uiStateSession: UiStateSession;
   private readonly folderRegistry: FileBackedFolderRegistry;
   private readonly folderSession: FolderSession;
+  private readonly chiefCore: ChiefCore; // Nazmul mod (chief)
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly usageSession: UsageSession;
   private readonly speechModelsSession: SpeechModelsSession;
@@ -1443,6 +1446,16 @@ export class Session {
       host: { emit: (msg) => this.emit(msg) },
       registry: this.folderRegistry,
       logger: this.sessionLogger,
+    });
+    // Nazmul mod (chief): the read side behind `paseo chief`, same core as the MCP tools.
+    this.chiefCore = createChiefCore({
+      serverId,
+      paseoHome: this.paseoHome,
+      listAgents: () => this.agentDirectory.list({ includeBackground: true, includeArchived: false }),
+      listStoredAgents: () => this.agentStorage.list(),
+      workspaceRegistry: this.workspaceRegistry,
+      projectRegistry: this.projectRegistry,
+      folderRegistry: this.folderRegistry,
     });
 
     this.voiceSessions = new VoiceSessions(
@@ -2855,6 +2868,11 @@ export class Session {
     this.emitSubscribedEvent(message, source);
   }
 
+  /** Nazmul mod (chief): does any client of this session subscribe to `event`? */
+  public hasEventSubscriber(event: SessionEventSubscription): boolean {
+    return this.wantsEvent(event);
+  }
+
   public wantsSourceEvent(source: object, event: SessionEventSubscription): boolean {
     return this.wantsEvent(event, source);
   }
@@ -3814,6 +3832,7 @@ export class Session {
       this.dispatchTaskMessage(msg) ??
       this.dispatchUiStateMessage(msg) ??
       this.folderSession.dispatch(msg) ??
+      dispatchChiefMessage(msg, { core: this.chiefCore, emit: (m) => this.emit(m) }) ??
       this.dispatchWorkspaceLabelMessage(msg)
     );
   }

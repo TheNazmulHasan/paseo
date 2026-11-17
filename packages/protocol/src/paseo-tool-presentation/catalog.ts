@@ -264,6 +264,32 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: ["folderName", "created", "assigned"],
     },
   },
+  // Nazmul mod (chief)
+  session_states: {
+    label: "Session states",
+    completedLabel: "Read session states",
+    context: field("folder"),
+    detail: {
+      inputOrder: ["state", "folder", "workspaceId", "staleDays", "limit"],
+      outputFields: ["matched", "counts"],
+    },
+  },
+  search_sessions: {
+    label: "Search sessions",
+    completedLabel: "Searched sessions",
+    context: field("query"),
+    detail: {
+      inputOrder: ["query", "includeArchived", "since", "until", "workspaceId", "limit"],
+      outputFields: ["sessionsScanned", "partial", "elapsedMs"],
+    },
+  },
+  app_command: {
+    label: "App command",
+    completedLabel: "Ran app command",
+    context: field("action"),
+    detail: { inputOrder: ["action", "args"], outputFields: ["delivered", "ok", "error"] },
+  },
+  list_app_actions: { label: "List app actions", completedLabel: "Listed app actions" },
   archive_workspace: {
     label: "Archive workspace",
     completedLabel: "Archived workspace",

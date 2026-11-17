@@ -32,6 +32,7 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeybindingsFileSync } from "@/hooks/use-keybindings-file-sync";
+import { registerShortcutRunner } from "@/chief/chief-runtime"; // Nazmul mod (chief)
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
@@ -268,6 +269,17 @@ export function useKeyboardShortcuts({
     }
     return handled;
   };
+
+  // Nazmul mod (chief): an agent's `run_action` goes through this same router and performer.
+  const routeAndPerformRef = useRef(routeAndPerformShortcut);
+  useEffect(() => {
+    routeAndPerformRef.current = routeAndPerformShortcut;
+  });
+  useEffect(
+    () =>
+      registerShortcutRunner((input) => routeAndPerformRef.current({ ...input, domEvent: null })),
+    [],
+  );
 
   const resolveAndPerformShortcut = (input: {
     event: KeyboardShortcutInput;

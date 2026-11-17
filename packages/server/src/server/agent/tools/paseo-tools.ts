@@ -113,6 +113,7 @@ import {
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
 import { registerFolderTools, type FolderToolsOptions } from "../../folders/folder-tools.js";
+import { registerChiefTools } from "../../chief/chief-tools.js"; // Nazmul mod (chief)
 import {
   mergeBacklogIntoCreateAgentPrompt,
   registerBacklogTools,
@@ -1417,6 +1418,34 @@ function createToolCatalog(
       registerTool,
       registry: options.folderRegistry,
       workspaceRegistry: options.workspaceRegistry,
+    });
+  }
+
+  // Nazmul mod (chief): session_states, search_sessions, app_command, list_app_actions.
+  if (options.workspaceRegistry) {
+    registerChiefTools({
+      registerTool,
+      serverId: options.serverId,
+      paseoHome: options.paseoHome,
+      workspaceRegistry: options.workspaceRegistry,
+      projectRegistry: options.projectRegistry,
+      folderRegistry: options.folderRegistry,
+      listStoredAgents: () => agentStorage.list(),
+      listAgents: () =>
+        new AgentDirectory({
+          manager: agentManager,
+          storage: agentStorage,
+          workspaces: options.workspaceRegistry!,
+          projectLive: (snapshot) =>
+            serializeSnapshotWithMetadata(agentStorage, snapshot, childLogger),
+          projectStored: (record) =>
+            buildStoredAgentPayload(
+              record,
+              new Set(providerSnapshotManager.listRegisteredProviderIds()),
+            ),
+          isProviderVisible: () => true,
+          isStoredProviderAvailable: () => true,
+        }).list({ includeBackground: true, includeArchived: false }),
     });
   }
 

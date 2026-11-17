@@ -161,6 +161,7 @@ import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { createFolderRegistry } from "./folders/folder-registry.js";
+import { appCommandBus } from "./chief/app-command-bus.js"; // Nazmul mod (chief)
 import { createGitHubService } from "../services/github-service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -2280,6 +2281,8 @@ export async function createPaseoDaemon(
             );
             wsServer.wakeUpHolds = wakeUpHolds;
             pluginRuntime.bindPaseoSessionHost(wsServer);
+            // Nazmul mod (chief): app_command reaches the app through the live client sessions.
+            appCommandBus.bind(() => wsServer?.listSessions() ?? []);
             await pluginRuntime.start();
             providerSnapshotManager.settlePluginProviders();
             void bootCatalogWarmup

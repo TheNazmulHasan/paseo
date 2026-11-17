@@ -11,6 +11,8 @@ import {
 import { messageTooLargeError } from "./daemon-client-transport-utils.js";
 import type { HostAdd, HostUpdate, HostDirectory } from "@getpaseo/protocol/hosts";
 import type { Folder, FoldersSnapshot } from "@getpaseo/protocol/folders";
+// Nazmul mod (chief)
+import type { AppActionInfo } from "@getpaseo/protocol/chief";
 import { legacyUsageIcon } from "./legacy-usage-icons.js";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
@@ -4215,6 +4217,25 @@ export class DaemonClient {
     });
     if (payload.error) throw new Error(payload.error);
     return { itemKeys: payload.itemKeys, folderId: payload.folderId };
+  }
+
+  /** Nazmul mod (chief): `paseo chief states|search`. The result is the tool's own output. */
+  async chiefQuery(query: "states" | "search", input: Record<string, unknown> = {}): Promise<unknown> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"chief.query.response">({
+      message: { type: "chief.query.request", query, input },
+    });
+    if (payload.error) throw new Error(payload.error);
+    return payload.result;
+  }
+
+  /** Nazmul mod (chief): the app's answer to an `app_command` push. Fire and forget. */
+  sendAppCommandResult(input: {
+    commandId: string;
+    ok: boolean;
+    error?: string | null;
+    data?: { actions: AppActionInfo[] };
+  }): void {
+    this.sendSessionMessage({ type: "app_command.result.request", ...input });
   }
 
   async inspectWorkspaceRecovery(
