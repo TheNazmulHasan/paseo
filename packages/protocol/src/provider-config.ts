@@ -56,6 +56,15 @@ export const ProviderProfileModelSchema = z.object({
   thinkingOptions: z.array(ProviderProfileThinkingOptionSchema).optional(),
 });
 
+/**
+ * Menu shape for one provider's models (Nazmul's model-menu mod): ids matching `first` lead the
+ * list in pattern order, ids matching `hide` stay resolvable but are not offered. `*` = any run.
+ */
+export const ProviderModelMenuSchema = z.object({
+  first: z.array(z.string().min(1)).optional(),
+  hide: z.array(z.string().min(1)).optional(),
+});
+
 export const ProviderOverrideSchema = z.object({
   extends: z.string().optional(),
   label: z.string().optional(),
@@ -71,6 +80,7 @@ export const ProviderOverrideSchema = z.object({
   paseoTools: ProviderPaseoToolsPolicySchema.optional(),
   enabled: z.boolean().optional(),
   order: z.number().optional(),
+  modelMenu: ProviderModelMenuSchema.optional(),
 });
 
 const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;

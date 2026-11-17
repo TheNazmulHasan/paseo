@@ -180,3 +180,13 @@ grep -q followUpstreamRoute packages/server/src/server/agent/gateway/session-rou
 grep -q expandUpstreamAccounts packages/server/src/server/agent/gateway/quota.ts
 grep -q setGatewayUpstream packages/server/src/server/bootstrap.ts
 ```
+
+## model-menu
+
+`agents.providers.<id>.modelMenu: {first, hide}` shapes one provider's model picker: ids matching `first` (glob `*`) lead in pattern order, ids matching `hide` stay resolvable (old chats keep their label) but are not offered. Used on base claude so the switchboard's account rows sit at the top and the router's GPT/old rows are hidden. Doc: myos/paseo/model-menu.md
+
+```bash
+npx vitest run packages/server/src/server/agent/model-menu.test.ts --bail=1
+grep -q modelMenu packages/protocol/src/provider-config.ts
+grep -q applyModelMenu packages/server/src/server/agent/provider-registry.ts
+```

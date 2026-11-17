@@ -51,6 +51,7 @@ import { TraeACPAgentClient } from "./providers/trae-acp-agent.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
 import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import { ToolPolicyUnsupportedError, mergeProviderOptions } from "./provider-options.js";
+import { applyModelMenu, type ModelMenuConfig } from "./model-menu.js";
 import {
   GATEWAY_PROVIDER_ID,
   claudeGatewayEnv,
@@ -158,6 +159,8 @@ interface ResolvedProvider {
   enabled: boolean;
   derivedFromProviderId: string | null;
   providerOptions?: ProviderOptions;
+  /** `modelMenu` from the provider override (model-menu.ts). */
+  modelMenu?: ModelMenuConfig;
   createBaseClient: (logger: Logger) => AgentClient;
   contract: ProviderContract;
 }
@@ -795,7 +798,7 @@ function createResolvedProviderClient(
   const inner = resolved.createBaseClient(logger);
   const profileModels = resolveConfiguredModels(provider, inner, resolved.profileModels);
   const additionalModels = resolveConfiguredModels(provider, inner, resolved.additionalModels);
-  return wrapClientProvider(
+  const client = wrapClientProvider(
     provider,
     inner,
     profileModels,
@@ -803,6 +806,15 @@ function createResolvedProviderClient(
     resolved.profileModelsAreAdditive,
     resolved.providerOptions,
   );
+  const menu = resolved.modelMenu;
+  if (!menu) return client;
+  // Patched in place: spreading would freeze the client's live `capabilities` getter.
+  const fetchCatalog = client.fetchCatalog.bind(client);
+  client.fetchCatalog = async (options, context) => {
+    const catalog = await fetchCatalog(options, context);
+    return { ...catalog, models: applyModelMenu(catalog.models, menu) };
+  };
+  return client;
 }
 
 interface RegisteredProvider {
@@ -825,6 +837,7 @@ function resolveRegisteredProvider(input: RegisteredProvider): ResolvedProvider 
     enabled: override?.enabled ?? definition.enabledByDefault ?? true,
     derivedFromProviderId: null,
     providerOptions: configuredProviderOptions(override),
+    modelMenu: override?.modelMenu,
     createBaseClient: (logger) => input.createClient(logger, runtimeSettings),
     contract,
   };
