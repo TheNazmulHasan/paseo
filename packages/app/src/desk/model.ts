@@ -10,7 +10,7 @@ import type {
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 
-export type DeskGrouping = "recent" | "project" | "status";
+export type DeskGrouping = "recent" | "project" | "status" | "folder";
 
 export const DEFAULT_DESK_GROUPING: DeskGrouping = "recent";
 export const DESK_SEED_LIMIT = 12;
@@ -284,17 +284,50 @@ export function buildDeskRows(input: {
   });
 }
 
+/**
+ * Folders mod: what the "Folder" grouping needs. Folders in display order, the built-in Unfiled
+ * last, and the folder key of every filed workspace (no entry = Unfiled).
+ */
+export interface DeskFolderGrouping {
+  folders: readonly { key: string; label: string }[];
+  keyByWorkspaceKey: ReadonlyMap<string, string>;
+  unfiled: { key: string; label: string };
+}
+
+function buildDeskFolderGroups(
+  rows: readonly SidebarWorkspaceEntry[],
+  folders: DeskFolderGrouping,
+): DeskGroup[] {
+  const byKey = new Map<string, DeskGroup>(
+    [...folders.folders, folders.unfiled].map((folder) => [
+      folder.key,
+      { key: folder.key, label: folder.label, bucket: null, rows: [] },
+    ]),
+  );
+  for (const row of rows) {
+    const key = folders.keyByWorkspaceKey.get(row.workspaceKey);
+    (byKey.get(key ?? folders.unfiled.key) ?? byKey.get(folders.unfiled.key))?.rows.push(row);
+  }
+  return [...byKey.values()].filter((group) => group.rows.length > 0);
+}
+
 export function buildDeskGroups(input: {
   rows: readonly SidebarWorkspaceEntry[];
   grouping: DeskGrouping;
   projectNamesByViewKey: Map<string, string>;
   t: TFunction;
+  /** Absent (or grouping not "folder") means the Folder grouping falls back to Recent. */
+  folders?: DeskFolderGrouping;
 }): DeskGroup[] {
   const { rows, grouping } = input;
   if (rows.length === 0) {
     return [];
   }
   switch (grouping) {
+    case "folder":
+      return input.folders
+        ? buildDeskFolderGroups(rows, input.folders)
+        : [{ key: "recent", label: null, bucket: null, rows: [...rows] }];
     case "recent":
       return [{ key: "recent", label: null, bucket: null, rows: [...rows] }];
     case "status":

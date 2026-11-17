@@ -175,9 +175,14 @@ export interface WorkspaceRegistry {
   ): () => void;
 }
 
-type RegistryRecord = PersistedProjectRecord | PersistedWorkspaceRecord;
+// Nazmul mod (folders): also exported, with the record bound opened to anything that can carry
+// archivedAt, so folders/ can reuse the file-backed, queued, atomic store.
+export interface RegistryRecord {
+  archivedAt?: string | null;
+  [field: string]: unknown;
+}
 
-class FileBackedRegistry<TRecord extends RegistryRecord> {
+export class FileBackedRegistry<TRecord extends RegistryRecord> {
   private readonly filePath: string;
   protected readonly logger: Logger;
   private readonly schema: z.ZodType<TRecord, unknown>;

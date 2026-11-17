@@ -47,6 +47,7 @@ import { lockInteractionScreen, unlockInteractionScreen } from "@/interaction-lo
 import { useInteractionLocked } from "@/stores/interaction-lock-store";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
 import { DeskMenuItem } from "@/desk/desk-menu-item";
+import { useFolderMenuPages, WorkspaceFolderSubTrigger } from "@/folders/folder-menu";
 import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 import {
   workspaceServiceLabelKey,
@@ -268,6 +269,9 @@ function SidebarWorkspaceMenuItems({
           {t("workspaceLabels.title")}
         </DropdownMenuSubTrigger>
       ) : null}
+      {serverId && workspaceId ? (
+        <WorkspaceFolderSubTrigger workspaceKey={workspaceKey} serverId={serverId} />
+      ) : null}
       <OpenInFileManagerMenuItem
         surface={surface}
         path={openInFileManagerPath}
@@ -317,7 +321,8 @@ export function SidebarWorkspaceMenu({
       serverId && workspaceId ? { serverId, workspaceId, labels: workspaceLabels ?? [] } : null,
     [serverId, workspaceId, workspaceLabels],
   );
-  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
+  const labelPages = useWorkspaceLabelMenuPages(workspaceTarget);
+  const pages = useFolderMenuPages(labelPages, workspaceTarget);
   return (
     <DropdownMenu compactMode="sheet" open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
@@ -431,7 +436,8 @@ export function SidebarWorkspaceContextMenu({
     }),
     [workspace],
   );
-  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
+  const labelPages = useWorkspaceLabelMenuPages(workspaceTarget);
+  const pages = useFolderMenuPages(labelPages, workspaceTarget);
 
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>

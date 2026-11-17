@@ -10,6 +10,7 @@ import {
 } from "@getpaseo/protocol/binary-frames/index";
 import { messageTooLargeError } from "./daemon-client-transport-utils.js";
 import type { HostAdd, HostUpdate, HostDirectory } from "@getpaseo/protocol/hosts";
+import type { Folder, FoldersSnapshot } from "@getpaseo/protocol/folders";
 import { legacyUsageIcon } from "./legacy-usage-icons.js";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
@@ -4151,6 +4152,69 @@ export class DaemonClient {
       throw new Error(payload.error ?? "setWorkspacePinned rejected");
     }
     return { pinnedAt: payload.pinnedAt };
+  }
+
+  // Nazmul mod (folders). The live state arrives as the `folders_update` event; see
+  // FORK_SESSION_EVENTS. These calls only change it.
+  async listFolders(): Promise<FoldersSnapshot> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.list.response">({
+      message: { type: "folders.list.request" },
+    });
+    if (payload.error) throw new Error(payload.error);
+    return { folders: payload.folders, membership: payload.membership };
+  }
+
+  async createFolder(input: {
+    name: string;
+    emoji?: string | null;
+    order?: number;
+  }): Promise<Folder> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.create.response">({
+      message: { type: "folders.create.request", ...input },
+    });
+    if (payload.error || !payload.folder) throw new Error(payload.error ?? "createFolder rejected");
+    return payload.folder;
+  }
+
+  async updateFolder(input: {
+    folderId: string;
+    name?: string;
+    emoji?: string | null;
+  }): Promise<Folder> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.update.response">({
+      message: { type: "folders.update.request", ...input },
+    });
+    if (payload.error || !payload.folder) throw new Error(payload.error ?? "updateFolder rejected");
+    return payload.folder;
+  }
+
+  /** The folder's items become Unfiled; `releasedItemKeys` lets the caller offer Undo. */
+  async deleteFolder(folderId: string): Promise<{ folder: Folder; releasedItemKeys: string[] }> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.delete.response">({
+      message: { type: "folders.delete.request", folderId },
+    });
+    if (payload.error || !payload.folder) throw new Error(payload.error ?? "deleteFolder rejected");
+    return { folder: payload.folder, releasedItemKeys: payload.releasedItemKeys };
+  }
+
+  async reorderFolders(folderIds: string[]): Promise<Folder[]> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.reorder.response">({
+      message: { type: "folders.reorder.request", folderIds },
+    });
+    if (payload.error) throw new Error(payload.error);
+    return payload.folders;
+  }
+
+  /** Files items (workspace ids, `board:<id>` for views) into a folder; null means Unfiled. */
+  async assignToFolder(
+    itemKeys: string[],
+    folderId: string | null,
+  ): Promise<{ itemKeys: string[]; folderId: string | null }> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"folders.assign.response">({
+      message: { type: "folders.assign.request", itemKeys, folderId },
+    });
+    if (payload.error) throw new Error(payload.error);
+    return { itemKeys: payload.itemKeys, folderId: payload.folderId };
   }
 
   async inspectWorkspaceRecovery(

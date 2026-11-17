@@ -104,6 +104,7 @@ import { BoardsSection } from "@/boards/boards-section";
 import { DeskSection } from "@/desk/desk-section";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
+import { FoldersBody, useFoldersReplaceShelf } from "@/folders/folders-section";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { createWorkspaceVisibilityPolicy } from "@/components/sidebar/sidebar-group-visibility";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -2304,6 +2305,7 @@ function ProjectModeList({
     (state) => state.togglePinnedCollapsed,
   );
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
+  const foldersReplaceShelf = useFoldersReplaceShelf();
 
   const manualSort = useSidebarViewStore((state) => state.workspaceSort === "manual");
   const getWorkspaceOrder = useSidebarOrderStore((state) => state.getWorkspaceOrder);
@@ -2606,7 +2608,7 @@ function ProjectModeList({
     ) : (
       <DraggableList
         testID="sidebar-project-list"
-        data={shelfCollapsed ? EMPTY_SHELF : unpinnedProjects}
+        data={shelfCollapsed || foldersReplaceShelf ? EMPTY_SHELF : unpinnedProjects}
         keyExtractor={projectViewKeyExtractor}
         renderItem={renderProject}
         onDragEnd={handleProjectDragEnd}
@@ -2675,6 +2677,9 @@ function ProjectModeList({
       sidebarFilterEmpty
         ? listHeaderComponent
         : null}
+      {foldersReplaceShelf && !sidebarFilterEmpty ? (
+        <FoldersBody onWorkspacePress={onWorkspacePress} />
+      ) : null}
       {sidebarFilterEmpty ? <SidebarFilterEmptyState /> : projectBody}
       {listFooterComponent}
     </>

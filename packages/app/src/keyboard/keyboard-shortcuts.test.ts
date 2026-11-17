@@ -358,6 +358,56 @@ describe("workspace desk toggle shortcut", () => {
   });
 });
 
+describe("workspace folder move shortcut", () => {
+  it("maps Ctrl+Cmd+M on mac to workspace.folder.move, even while typing", () => {
+    for (const focusScope of ["other", "message-input", "terminal"] as const) {
+      expectShortcutResolution({
+        event: { key: "m", code: "KeyM", ctrlKey: true, metaKey: true },
+        context: { isMac: true, isDesktop: true, focusScope },
+        action: "workspace.folder.move",
+      });
+    }
+  });
+
+  it("maps Ctrl+Alt+M on non-mac to workspace.folder.move, but not while typing", () => {
+    expectShortcutResolution({
+      event: { key: "m", code: "KeyM", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "other" },
+      action: "workspace.folder.move",
+    });
+    expectNoShortcutResolution({
+      event: { key: "m", code: "KeyM", ctrlKey: true, altKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "message-input" },
+    });
+  });
+
+  it("shares its default chords with no other binding", () => {
+    const combos = new Set(
+      DEFAULT_BINDINGS.filter((binding) => binding.action === "workspace.folder.move").map(
+        (binding) => binding.combo,
+      ),
+    );
+    expect([...combos].sort()).toEqual(["Cmd+Ctrl+M", "Ctrl+Alt+M"]);
+    const clashes = DEFAULT_BINDINGS.filter(
+      (binding) => binding.action !== "workspace.folder.move" && combos.has(binding.combo),
+    );
+    expect(clashes).toEqual([]);
+  });
+
+  it("lists the action in the workspaces help section", () => {
+    const sections = buildKeyboardShortcutHelpSections({ isMac: true, isDesktop: true });
+    const rows = sections.find((section) => section.id === "workspaces")?.rows ?? [];
+    expect(rows.some((row) => row.id === "folder-move")).toBe(true);
+  });
+
+  it("honours a rebind through the override store keyed by binding id", () => {
+    const overrides = { "workspace-folder-move-ctrl-cmd-m-mac": "Cmd+Ctrl+Y" };
+    expect(
+      resolveShortcutKeysForAction("folder-move", overrides, { isMac: true, isDesktop: true }),
+    ).toEqual([["mod", "ctrl", "Y"]]);
+  });
+});
+
 describe("workspace board split shortcut", () => {
   it("maps Ctrl+Cmd+O on mac to workspace.board.split, even while typing", () => {
     for (const focusScope of ["other", "message-input", "terminal"] as const) {

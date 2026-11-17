@@ -151,6 +151,7 @@ import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.
 import type { WorkspaceLabelService } from "./workspace-labels/index.js";
 import { WorkspaceTodoStore } from "./workspace-todos/store.js";
 import { WorkspaceRecentFoldersStore } from "./workspace-recent-folders/store.js";
+import { resolveFolderRegistry, type FileBackedFolderRegistry } from "./folders/folder-registry.js";
 import { ExplorerThumbnailService } from "./file-explorer/thumbnails/service.js";
 import { planAgentMessageHold, type WakeUpHolds } from "./agent/wake-up-hold.js";
 import { ThumbnailRenderer } from "./file-explorer/thumbnails/renderer.js";
@@ -614,6 +615,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly workspaceLabelService: WorkspaceLabelService | null;
+  private readonly folderRegistry: FileBackedFolderRegistry;
   private readonly scheduleService: ScheduleService;
   private readonly checkoutDiffManager: CheckoutDiffManager;
   private readonly github: ForgeService;
@@ -766,6 +768,7 @@ export class VoiceAssistantWebSocketServer {
     pluginRuntime?: SessionOptions["pluginRuntime"],
     orchestrationSkills?: SessionOptions["orchestrationSkills"],
     workspaceLabelService?: WorkspaceLabelService,
+    folderRegistry?: FileBackedFolderRegistry,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -825,6 +828,8 @@ export class VoiceAssistantWebSocketServer {
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
     this.workspaceRegistry = workspaceRegistry ?? createNoopWorkspaceRegistry();
     this.workspaceLabelService = workspaceLabelService ?? null;
+    // Nazmul mod (folders): one registry for every session, so a change reaches them all.
+    this.folderRegistry = resolveFolderRegistry(folderRegistry, paseoHome, this.logger);
     const requiredServices = requireWebSocketServices({
       scheduleService,
       checkoutDiffManager,
@@ -1778,6 +1783,7 @@ export class VoiceAssistantWebSocketServer {
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       workspaceLabelService: this.workspaceLabelService ?? undefined,
+      folderRegistry: this.folderRegistry,
       directorySync: this.directorySync,
       scheduleService: this.scheduleService,
       taskStore: this.taskStore,
@@ -2305,6 +2311,8 @@ export class VoiceAssistantWebSocketServer {
         uiState: true,
         // COMPAT(forkSessionEvents): added in v0.14.901, drop gate after 2027-05-01.
         forkSessionEvents: true,
+        // COMPAT(folders): Nazmul mod, drop gate after 2027-05-01.
+        folders: true,
         // COMPAT(nativeForkModel): added in v0.14.903, drop gate after 2027-05-01.
         nativeForkModel: true,
         // COMPAT(compactThenSend): added in v0.14.903, drop gate after 2027-05-01.

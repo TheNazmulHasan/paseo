@@ -16,6 +16,10 @@ describe("migrateDeskState", () => {
     }
   });
 
+  it("keeps the Folder grouping", () => {
+    expect(migrateDeskState({ deskGrouping: "folder" }).deskGrouping).toBe("folder");
+  });
+
   it("rejects an unknown grouping instead of crashing", () => {
     expect(migrateDeskState({ deskGrouping: "label" }).deskGrouping).toBe("recent");
   });

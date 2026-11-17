@@ -40,6 +40,7 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.archive", { id: "workspace.archive", scope: "sidebar" }],
     ["workspace.pin", { id: "workspace.pin", scope: "sidebar" }],
     ["workspace.desk.toggle", { id: "workspace.desk.toggle", scope: "sidebar" }],
+    ["workspace.folder.move", { id: "workspace.folder.move", scope: "sidebar" }],
     ["workspace.board.split", { id: "workspace.board.split", scope: "sidebar" }],
     ["worktree.new", { id: "worktree.new", scope: "sidebar" }],
     ["workspace.terminal.new", { id: "workspace.terminal.new", scope: "workspace" }],

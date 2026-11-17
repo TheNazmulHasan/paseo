@@ -160,6 +160,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
+import { createFolderRegistry } from "./folders/folder-registry.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -1106,6 +1107,8 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     workspaceRegistry,
   });
+  // Nazmul mod (folders): user-made folders for workspaces and views.
+  const folderRegistry = createFolderRegistry(config.paseoHome, logger);
   const github = createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
@@ -1140,6 +1143,7 @@ export async function createPaseoDaemon(
     workspaceGitService,
     isDirectory: async (target) => (await stat(target).catch(() => null))?.isDirectory() ?? false,
     logger,
+    folders: folderRegistry,
   });
   const agentProviderRuntime = await createAgentProviderRuntime({
     paseoHome: config.paseoHome,
@@ -1960,6 +1964,7 @@ export async function createPaseoDaemon(
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createPaseoWorktree: createAgentCommandDependencies.createPaseoWorktree,
     taskStore,
+    folderRegistry,
     browserToolsEnabled: browserToolsPolicy.isEnabled(),
     browserToolsBroker,
     paseoToolPolicy:
@@ -2271,6 +2276,7 @@ export async function createPaseoDaemon(
               pluginRuntime,
               orchestrationSkills,
               workspaceLabelService,
+              folderRegistry,
             );
             wsServer.wakeUpHolds = wakeUpHolds;
             pluginRuntime.bindPaseoSessionHost(wsServer);

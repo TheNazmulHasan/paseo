@@ -248,6 +248,22 @@ export const PASEO_TOOL_CATALOG = {
     context: field("title"),
     detail: { inputOrder: ["title", "workspaceId"] },
   },
+  list_folders: { label: "List folders", completedLabel: "Listed folders" },
+  create_folder: {
+    label: "Create folder",
+    completedLabel: "Created folder",
+    context: field("name"),
+    detail: { inputOrder: ["name", "emoji"] },
+  },
+  set_workspace_folder: {
+    label: "Set workspace folder",
+    completedLabel: "Set workspace folder",
+    context: field("folder"),
+    detail: {
+      inputOrder: ["folder", "workspaceIds", "workspaceId", "createIfMissing"],
+      outputFields: ["folderName", "created", "assigned"],
+    },
+  },
   archive_workspace: {
     label: "Archive workspace",
     completedLabel: "Archived workspace",

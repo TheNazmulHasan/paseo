@@ -68,6 +68,7 @@ export type KeyboardActionId =
   | "workspace.pin"
   | "workspace.desk.toggle"
   | "workspace.board.split"
+  | "workspace.folder.move"
   | "view.toggle.focus"
   | "theme.cycle"
   | "message-input.action";

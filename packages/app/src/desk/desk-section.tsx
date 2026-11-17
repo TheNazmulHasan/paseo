@@ -23,6 +23,7 @@ import { useDeskStore } from "@/desk/desk-store";
 import { useDeskTargetView } from "@/desk/target-view";
 import type { DeskGroup, DeskGrouping } from "@/desk/model";
 import { useClearDesk } from "@/desk/use-clear-desk";
+import { useFoldersAvailable } from "@/folders/use-folder-actions";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
 import {
@@ -48,7 +49,10 @@ const EMPTY_SHORTCUT_INDEX = new Map<string, number>();
 export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => void }) {
   const { t } = useTranslation();
   const { deskGroups, shelfCount, projects, projectIconTargets, shortcutModel } = useSidebarModel();
-  const deskGrouping = useDeskStore((state) => state.deskGrouping);
+  const storedGrouping = useDeskStore((state) => state.deskGrouping);
+  const foldersAvailable = useFoldersAvailable();
+  // The Folder grouping only exists while folders do; without them the sidebar shows Recent.
+  const deskGrouping = storedGrouping === "folder" && !foldersAvailable ? "recent" : storedGrouping;
   const setDeskGrouping = useDeskStore((state) => state.setDeskGrouping);
   const collapsed = useDeskStore((state) => state.deskCollapsed);
   const toggleCollapsed = useDeskStore((state) => state.toggleDeskCollapsed);
@@ -163,8 +167,17 @@ export function DeskSection({ onWorkspacePress }: { onWorkspacePress?: () => voi
         label: t("sidebar.desk.groupStatus"),
         testID: "desk-group-status",
       },
+      ...(foldersAvailable
+        ? [
+            {
+              value: "folder" as const,
+              label: t("sidebar.desk.groupFolder"),
+              testID: "desk-group-folder",
+            },
+          ]
+        : []),
     ],
-    [t],
+    [foldersAvailable, t],
   );
   const handleGroupingChange = useCallback(
     (grouping: DeskGrouping) => setDeskGrouping(grouping),

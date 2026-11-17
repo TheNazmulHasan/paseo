@@ -32,7 +32,7 @@ interface DeskStoreState extends DeskPersistedState {
   setDeskGrouping: (grouping: DeskGrouping) => void;
 }
 
-const DeskGroupingSchema = z.enum(["recent", "project", "status"]);
+const DeskGroupingSchema = z.enum(["recent", "project", "status", "folder"]);
 const DeskPersistedStateSchema = z.strictObject({
   deskKeys: z.array(z.string()).optional(),
   seenKeys: z.array(z.string()).optional(),

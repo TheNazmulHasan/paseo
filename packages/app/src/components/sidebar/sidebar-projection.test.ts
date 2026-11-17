@@ -5,6 +5,7 @@ import type {
   SidebarWorkspaceEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import { buildFolderIndex, UNFILED_FOLDER_KEY } from "@/folders/model";
 import { buildSidebarProjection } from "./sidebar-projection";
 
 function makeWorkspace(
@@ -256,5 +257,133 @@ describe("buildSidebarProjection — Desk and Shelf", () => {
 
     expect(projection.deskGroups).toEqual([]);
     expect(projection.shelfCount).toBe(2);
+  });
+});
+
+describe("buildSidebarProjection — Folders replace the Shelf", () => {
+  const faith = { id: "fld_faith", name: "Faith", emoji: "🕌", order: 0, createdAt: "2026-11-01" };
+
+  function folderInput(options: {
+    membership: Record<string, string>;
+    deskKeys?: string[];
+    openKeys?: string[];
+    boards?: { id: string; name: string; kind: "user"; sessionCount: number }[];
+    sectionCollapsed?: boolean;
+    pinnedCollapsed?: boolean;
+  }) {
+    const pinned = makeWorkspace("pinned", "running");
+    const onDesk = makeWorkspace("on-desk", "needs_input");
+    const other = makeWorkspace("other", "done");
+    return {
+      ...projectionInput({ groupMode: "status", pinnedCollapsed: options.pinnedCollapsed }),
+      projects: [makeProject([pinned.placement, onDesk.placement, other.placement])],
+      workspaceEntriesByKey: new Map([
+        [pinned.entry.workspaceKey, pinned.entry],
+        [onDesk.entry.workspaceKey, onDesk.entry],
+        [other.entry.workspaceKey, other.entry],
+      ]),
+      deskKeys: new Set(options.deskKeys ?? []),
+      folders: {
+        index: buildFolderIndex([
+          { serverId: "srv", snapshot: { folders: [faith], membership: options.membership } },
+        ]),
+        boards: options.boards ?? [],
+        openKeys: new Set(options.openKeys ?? []),
+        sectionCollapsed: options.sectionCollapsed ?? false,
+      },
+    };
+  }
+
+  it("is null (the Shelf shows) when no host has folders", () => {
+    expect(buildSidebarProjection(projectionInput()).folderSections).toBeNull();
+  });
+
+  it("lists every workspace in its folder or Unfiled, Desk and Pinned ones included", () => {
+    const projection = buildSidebarProjection(
+      folderInput({
+        membership: { "on-desk": "fld_faith", pinned: "fld_faith" },
+        deskKeys: ["srv:on-desk"],
+      }),
+    );
+    const sections = projection.folderSections ?? [];
+    expect(sections.map((section) => section.key)).toEqual(["faith", UNFILED_FOLDER_KEY]);
+    expect(workspaceIds(sections[0]?.workspaces ?? []).sort()).toEqual(["on-desk", "pinned"]);
+    expect(workspaceIds(sections[1]?.workspaces ?? [])).toEqual(["other"]);
+    // The Desk still shows its own workspace.
+    expect(workspaceIds(projection.deskGroups.flatMap((group) => group.rows))).toEqual(["on-desk"]);
+  });
+
+  it("puts a filed view in its folder and an unfiled view in Unfiled", () => {
+    const boards = [
+      { id: "b1", name: "One", kind: "user" as const, sessionCount: 2 },
+      { id: "b2", name: "Two", kind: "user" as const, sessionCount: 3 },
+    ];
+    const sections =
+      buildSidebarProjection(folderInput({ membership: { "board:b1": "fld_faith" }, boards }))
+        .folderSections ?? [];
+    expect(sections[0]?.boards.map((board) => board.id)).toEqual(["b1"]);
+    expect(sections[1]?.boards.map((board) => board.id)).toEqual(["b2"]);
+    expect(sections.map((section) => section.count)).toEqual([1, 4]);
+  });
+
+  it("numbers open folders after Pinned and the Desk, and a repeated workspace once", () => {
+    const projection = buildSidebarProjection(
+      folderInput({
+        membership: { "on-desk": "fld_faith", pinned: "fld_faith" },
+        deskKeys: ["srv:on-desk"],
+        openKeys: ["faith", UNFILED_FOLDER_KEY],
+      }),
+    );
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-desk",
+      "other",
+    ]);
+    const sections = projection.folderSections ?? [];
+    // Neither repeated row shows a number inside the folder; the Unfiled one does.
+    expect([...(sections[0]?.numberedKeys ?? [])]).toEqual([]);
+    expect([...(sections[1]?.numberedKeys ?? [])]).toEqual(["srv:other"]);
+  });
+
+  it("does not number folded folders, or any folder while the section is folded", () => {
+    const folded = buildSidebarProjection(
+      folderInput({ membership: {}, openKeys: [], deskKeys: ["srv:on-desk"] }),
+    );
+    expect(folded.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-desk",
+    ]);
+    const sectionFolded = buildSidebarProjection(
+      folderInput({
+        membership: {},
+        openKeys: [UNFILED_FOLDER_KEY],
+        sectionCollapsed: true,
+        deskKeys: ["srv:on-desk"],
+      }),
+    );
+    expect(sectionFolded.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual([
+      "pinned",
+      "on-desk",
+    ]);
+  });
+
+  it("numbers a pinned workspace in its folder when the Pinned section is folded", () => {
+    const projection = buildSidebarProjection(
+      folderInput({
+        membership: { pinned: "fld_faith" },
+        openKeys: ["faith"],
+        pinnedCollapsed: true,
+      }),
+    );
+    expect(projection.shortcutModel.shortcutTargets.map((t) => t.workspaceId)).toEqual(["pinned"]);
+    expect([...(projection.folderSections?.[0]?.numberedKeys ?? [])]).toEqual(["srv:pinned"]);
+  });
+
+  it("groups the Desk by folder when asked", () => {
+    const projection = buildSidebarProjection({
+      ...folderInput({ membership: { "on-desk": "fld_faith" }, deskKeys: ["srv:on-desk"] }),
+      deskGrouping: "folder" as const,
+    });
+    expect(projection.deskGroups.map((group) => group.label)).toEqual(["🕌 Faith"]);
   });
 });

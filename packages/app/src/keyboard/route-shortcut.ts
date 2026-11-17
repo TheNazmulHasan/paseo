@@ -56,6 +56,7 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.pin": { id: "workspace.pin", scope: "sidebar" },
   "workspace.desk.toggle": { id: "workspace.desk.toggle", scope: "sidebar" },
   "workspace.board.split": { id: "workspace.board.split", scope: "sidebar" },
+  "workspace.folder.move": { id: "workspace.folder.move", scope: "sidebar" },
   "worktree.new": { id: "worktree.new", scope: "sidebar" },
   "workspace.terminal.new": { id: "workspace.terminal.new", scope: "workspace" },
   "workspace.tab.close.current": { id: "workspace.tab.close-current", scope: "workspace" },

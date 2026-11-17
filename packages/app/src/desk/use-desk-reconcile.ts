@@ -8,6 +8,7 @@ import { useHydratedWorkspaceServerIds } from "@/stores/session-store-hooks";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { reconcileDesk, type DeskWorkspaceFact } from "@/desk/model";
 import { useDeskStore, useDeskStoreHydrated } from "@/desk/desk-store";
+import { landNewWorkspaces } from "@/folders/landing";
 
 /**
  * Keeps the Desk's bookkeeping in step with the live workspace list: seeds it on first run, puts
@@ -81,6 +82,11 @@ export function useDeskReconcile(input: {
     });
     if (next !== current) {
       store.applySync(next);
+      if (current.seeded) {
+        // Folders mod: what just landed on the Desk is the new workspaces; file them where I was.
+        const before = new Set(current.deskKeys);
+        landNewWorkspaces(next.deskKeys.filter((key) => !before.has(key)));
+      }
     }
   }, [enabled, entryCount, hydrated, loadedServerIds, placements, seedEntries]);
 }

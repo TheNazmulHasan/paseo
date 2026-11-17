@@ -77,6 +77,10 @@ function project(viewKey: string, workspaces: SidebarWorkspacePlacement[]): Side
   };
 }
 
+function rowKey(row: SidebarWorkspaceEntry): string {
+  return row.workspaceKey;
+}
+
 function seededState(overrides: Partial<DeskSyncState> = {}): DeskSyncState {
   return { ...EMPTY_DESK_SYNC_STATE, seeded: true, ...overrides };
 }
@@ -205,6 +209,62 @@ describe("desk rows and grouping", () => {
     expect(
       buildDeskGroups({ rows: [], grouping: "status", projectNamesByViewKey: names, t: i18n.t }),
     ).toEqual([]);
+  });
+
+  describe("Folder grouping", () => {
+    const summarize = (groups: ReturnType<typeof buildDeskGroups>) =>
+      groups.map((group) => [group.key, group.label, group.rows.map(rowKey)]);
+    const folders = {
+      folders: [
+        { key: "faith", label: "Faith" },
+        { key: "work", label: "Work" },
+      ],
+      keyByWorkspaceKey: new Map([
+        ["s:old", "work"],
+        ["s:new", "faith"],
+        ["s:mid", "work"],
+      ]),
+      unfiled: { key: "__unfiled__", label: "Unfiled" },
+    };
+
+    it("groups in folder order, rows still recent-first, empty folders left out", () => {
+      const groups = buildDeskGroups({
+        rows,
+        grouping: "folder",
+        projectNamesByViewKey: names,
+        t: i18n.t,
+        folders,
+      });
+      expect(summarize(groups)).toEqual([
+        ["faith", "Faith", ["s:new"]],
+        ["work", "Work", ["s:mid", "s:old"]],
+      ]);
+    });
+
+    it("puts workspaces with no folder in Unfiled, last", () => {
+      const groups = buildDeskGroups({
+        rows,
+        grouping: "folder",
+        projectNamesByViewKey: names,
+        t: i18n.t,
+        folders: { ...folders, keyByWorkspaceKey: new Map([["s:old", "faith"]]) },
+      });
+      expect(summarize(groups)).toEqual([
+        ["faith", "Faith", ["s:old"]],
+        ["__unfiled__", "Unfiled", ["s:new", "s:mid"]],
+      ]);
+    });
+
+    it("falls back to the flat Recent list while no folders exist", () => {
+      const groups = buildDeskGroups({
+        rows,
+        grouping: "folder",
+        projectNamesByViewKey: names,
+        t: i18n.t,
+      });
+      expect(groups).toHaveLength(1);
+      expect(groups[0]?.label).toBeNull();
+    });
   });
 });
 

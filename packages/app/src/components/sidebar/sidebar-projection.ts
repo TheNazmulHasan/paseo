@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
+import { sortSidebarWorkspacesByRecentActivity } from "@/hooks/sidebar-workspaces-view-model";
 import {
   splitPinnedSidebarGroups,
   type PinnedSidebarGroups,
@@ -21,6 +22,14 @@ import {
   type SidebarShortcutSection,
 } from "@/utils/sidebar-shortcuts";
 import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
+import type { BoardSummary } from "@/boards/types";
+import {
+  buildFolderSections,
+  buildFolderShortcutSections,
+  UNFILED_FOLDER_KEY,
+  type FolderIndex,
+  type FolderSection,
+} from "@/folders/model";
 import {
   buildDeskGroups,
   buildDeskRows,
@@ -38,6 +47,8 @@ export interface SidebarProjection {
   deskGroups: DeskGroup[];
   /** Workspaces left on the Shelf (neither pinned nor on the Desk). */
   shelfCount: number;
+  /** Fork mod #16: the Folders section that replaces the Shelf. Null = no folders, Shelf as before. */
+  folderSections: FolderSection<SidebarWorkspaceEntry, BoardSummary>[] | null;
   workspaceGroups: SidebarWorkspaceGroup[];
   /**
    * The project icons this projection needs fetched, keyed by `projectViewKey` — one per project,
@@ -66,6 +77,14 @@ export interface SidebarProjectionInput {
   deskGrouping?: DeskGrouping;
   shelfCollapsed?: boolean;
   deskCollapsed?: boolean;
+  /** Fork mod #16; absent means no folders, so the Shelf renders and numbers as before. */
+  folders?: {
+    index: FolderIndex;
+    /** Saved views only: the built-in Live view is not fileable. */
+    boards: readonly BoardSummary[];
+    openKeys: ReadonlySet<string>;
+    sectionCollapsed: boolean;
+  };
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
   t: TFunction;
@@ -94,7 +113,25 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     grouping: input.deskGrouping ?? "recent",
     projectNamesByViewKey: input.projectNamesByViewKey,
     t: input.t,
+    folders: input.folders && {
+      folders: input.folders.index.groups.map((group) => ({
+        key: group.key,
+        label: group.emoji ? `${group.emoji} ${group.name}` : group.name,
+      })),
+      keyByWorkspaceKey: input.folders.index.workspaceFolderKey,
+      unfiled: { key: UNFILED_FOLDER_KEY, label: input.t("folders.unfiled") },
+    },
   });
+  let folderSections = input.folders
+    ? buildFolderSections({
+        index: input.folders.index,
+        boards: input.folders.boards,
+        workspaces: sortSidebarWorkspacesByRecentActivity({
+          workspaces: Array.from(input.workspaceEntriesByKey.values()),
+          workspaceEntriesByKey: input.workspaceEntriesByKey,
+        }),
+      })
+    : null;
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(
     (workspace) =>
@@ -113,7 +150,34 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     workspaces: flattenDeskGroups(deskGroups),
     collapsed: input.deskCollapsed,
   });
-  if (input.groupMode === "project") {
+  if (input.folders && folderSections) {
+    // The folders replace the Shelf. Pinned and Desk rows repeat in their folder; they are
+    // numbered once, at their first visible place.
+    const alreadyNumbered = new Set<string>();
+    if (!input.pinnedCollapsed) {
+      for (const workspace of pinnedGroups.pinnedChats) alreadyNumbered.add(workspace.workspaceKey);
+    }
+    if (!input.deskCollapsed) {
+      for (const workspace of flattenDeskGroups(deskGroups)) {
+        alreadyNumbered.add(workspace.workspaceKey);
+      }
+    }
+    const folderShortcutSections = buildFolderShortcutSections({
+      sections: folderSections,
+      openKeys: input.folders.openKeys,
+      sectionCollapsed: input.folders.sectionCollapsed,
+      alreadyNumbered,
+    });
+    sections.push(...folderShortcutSections);
+    folderSections = folderSections.map((section, index) => ({
+      ...section,
+      numberedKeys: new Set(
+        (folderShortcutSections[index]?.workspaces ?? []).map(
+          (workspace) => workspace.workspaceKey,
+        ),
+      ),
+    }));
+  } else if (input.groupMode === "project") {
     sections.push(
       ...pinnedGroups.unpinnedProjects.map((project) => ({
         workspaces: project.workspaces,
@@ -133,6 +197,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     pinnedGroups,
     deskGroups,
     shelfCount: deskSplit.shelfCount,
+    folderSections,
     workspaceGroups,
     projectIconTargets: resolveSidebarProjectIconTargets(input.projects),
     shortcutModel: buildSidebarShortcutSections({ sections }),

@@ -20,6 +20,7 @@ import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.j
 import { deriveProjectKey } from "../../project-key.js";
 import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
 import type { UntrustedWorkspaceSource } from "../../workspace-automation-gate.js";
+import type { FileBackedFolderRegistry } from "../../folders/folder-registry.js";
 
 export interface ResolveOrCreateWorkspaceIdInput {
   createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
@@ -107,8 +108,24 @@ export function createWorkspaceProvisioningService(deps: {
   isDirectory: (path: string) => Promise<boolean>;
   logger: Logger;
   lifecycle?: PluginLifecycle;
+  /** Nazmul mod (folders): a workspace made from a caller's workspace lands in its folder. */
+  folders?: Pick<FileBackedFolderRegistry, "inheritFolder">;
 }): WorkspaceProvisioningService {
   const { serverId, workspaceRegistry, projectRegistry, workspaceGitService, logger } = deps;
+
+  // Before the upsert, so a client sees the workspace in its folder the moment it appears.
+  // A folder problem never fails the workspace.
+  async function inheritCallerFolder(
+    workspaceId: string,
+    callerWorkspaceId: string | undefined,
+  ): Promise<void> {
+    if (!deps.folders || !callerWorkspaceId) return;
+    try {
+      await deps.folders.inheritFolder(workspaceId, callerWorkspaceId);
+    } catch (error) {
+      logger.warn({ err: error, workspaceId, callerWorkspaceId }, "Folder inheritance failed");
+    }
+  }
 
   /**
    * Placement facts at a workspace directory, or null when there is nothing
@@ -262,6 +279,7 @@ export function createWorkspaceProvisioningService(deps: {
       updatedAt: timestamp,
       background: await resolveBackground(context),
     });
+    await inheritCallerFolder(workspace.workspaceId, context?.callerWorkspaceId);
     await workspaceRegistry.upsert(workspace, {
       expectsInitialAgent: context?.expectsInitialAgent,
     });
@@ -299,6 +317,7 @@ export function createWorkspaceProvisioningService(deps: {
       ...(input.untrustedSource ? { untrustedSource: input.untrustedSource } : {}),
       background: await resolveBackground(input),
     });
+    await inheritCallerFolder(workspace.workspaceId, input.callerWorkspaceId);
     await workspaceRegistry.upsert(workspace, {
       expectsInitialAgent: input.expectsInitialAgent,
     });

@@ -112,6 +112,7 @@ import {
   createPaseoWorktreeCommand,
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
+import { registerFolderTools, type FolderToolsOptions } from "../../folders/folder-tools.js";
 import {
   mergeBacklogIntoCreateAgentPrompt,
   registerBacklogTools,
@@ -164,6 +165,8 @@ export interface PaseoToolHostDependencies {
   clearWorkspaceArchiving?: ArchiveDependencies["clearWorkspaceArchiving"];
   createPaseoWorktree?: CreatePaseoWorktreeWorkflowFn;
   taskStore?: TaskStore | null;
+  /** Nazmul mod (folders): enables list_folders, create_folder and set_workspace_folder. */
+  folderRegistry?: FolderToolsOptions["registry"];
   // Mints a fresh directory workspace for a cwd and returns its id.
   ensureWorkspaceForCreate?: (
     cwd: string,
@@ -1406,6 +1409,14 @@ function createToolCatalog(
       workspaceRegistry: options.workspaceRegistry,
       callerAgentId,
       resolveCallerAgent,
+    });
+  }
+
+  if (options.folderRegistry) {
+    registerFolderTools({
+      registerTool,
+      registry: options.folderRegistry,
+      workspaceRegistry: options.workspaceRegistry,
     });
   }
 

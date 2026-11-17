@@ -79,6 +79,7 @@ import { BoardsSection } from "@/boards/boards-section";
 import { DeskSection } from "@/desk/desk-section";
 import { useDeskStore } from "@/desk/desk-store";
 import { EMPTY_SHELF } from "@/desk/model";
+import { FoldersBody, useFoldersReplaceShelf } from "@/folders/folders-section";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
@@ -161,6 +162,7 @@ export function SidebarStatusWorkspaceList({
     (state) => state.togglePinnedCollapsed,
   );
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
+  const foldersReplaceShelf = useFoldersReplaceShelf();
   const {
     leadingItem: leadingPinnedWorkspace,
     visibleItems: visiblePinnedWorkspaces,
@@ -266,11 +268,14 @@ export function SidebarStatusWorkspaceList({
       <BoardsSection onWorkspacePress={onWorkspacePress} />
       <DeskSection onWorkspacePress={onWorkspacePress} />
       {listHeaderComponent}
+      {foldersReplaceShelf && !sidebarFilterEmpty ? (
+        <FoldersBody onWorkspacePress={onWorkspacePress} />
+      ) : null}
       {sidebarFilterEmpty ? (
         <SidebarFilterEmptyState />
       ) : (
         <StatusGroupList
-          groups={shelfCollapsed ? EMPTY_SHELF : groups}
+          groups={shelfCollapsed || foldersReplaceShelf ? EMPTY_SHELF : groups}
           collapsedWorkspaceGroupKeys={collapsedWorkspaceGroupKeys}
           projectIconByProjectViewKey={projectIconByProjectViewKey}
           shortcutIndex={statusShortcutIndex}

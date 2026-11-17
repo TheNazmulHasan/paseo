@@ -210,6 +210,8 @@ import { TaskSession } from "./tasks/task-session.js";
 import { TaskStore } from "./tasks/task-store.js";
 import { UiStateSession } from "./ui-state/session.js";
 import { UiStateStore } from "./ui-state/store.js";
+import { resolveFolderRegistry, type FileBackedFolderRegistry } from "./folders/folder-registry.js";
+import { FolderSession } from "./folders/folder-session.js";
 
 function resolveUiStateStore(store: UiStateStore | undefined, paseoHome: string): UiStateStore {
   return store ?? new UiStateStore(paseoHome);
@@ -574,6 +576,8 @@ export interface SessionOptions {
   workspaceRegistry: WorkspaceRegistry;
   directorySync?: DirectorySyncService;
   workspaceLabelService?: WorkspaceLabelService;
+  /** Nazmul mod (folders). Defaults to the registry under `paseoHome` (tests / older constructors). */
+  folderRegistry?: FileBackedFolderRegistry;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
   taskStore: TaskStore;
@@ -888,6 +892,7 @@ export class Session {
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private unsubscribeAgentEvents: (() => void) | null = null;
   private unsubscribeScheduleChanges: (() => void) | null = null;
+  private unsubscribeFolderChanges: (() => void) | null = null;
   private unsubscribeProjectMutations: (() => void) | null = null;
   private unsubscribePluginChanges: (() => void) | null = null;
   private unsubscribeWorkspaceMutations: (() => void) | null = null;
@@ -947,6 +952,8 @@ export class Session {
   private readonly scheduleService: ScheduleService;
   private readonly taskSession: TaskSession;
   private readonly uiStateSession: UiStateSession;
+  private readonly folderRegistry: FileBackedFolderRegistry;
+  private readonly folderSession: FolderSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly usageSession: UsageSession;
   private readonly speechModelsSession: SpeechModelsSession;
@@ -1095,6 +1102,7 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.workspaceAutoName = workspaceAutoName;
+    this.folderRegistry = resolveFolderRegistry(options.folderRegistry, this.paseoHome, logger);
     this.workspaceProvisioning = createWorkspaceProvisioningService({
       lifecycle: this.pluginRuntime,
       serverId,
@@ -1103,6 +1111,7 @@ export class Session {
       workspaceGitService: this.workspaceGitService,
       isDirectory: (path) => this.filesystem.isDirectory(path),
       logger: this.sessionLogger,
+      folders: this.folderRegistry,
     });
     this.workspaceRecovery = createWorkspaceRecoveryService({
       paseoHome: this.paseoHome,
@@ -1430,6 +1439,11 @@ export class Session {
       this.paseoHome,
     );
     this.broadcastWorkspaceTodos = options.broadcastWorkspaceTodos;
+    this.folderSession = new FolderSession({
+      host: { emit: (msg) => this.emit(msg) },
+      registry: this.folderRegistry,
+      logger: this.sessionLogger,
+    });
 
     this.voiceSessions = new VoiceSessions(
       {
@@ -2147,6 +2161,19 @@ export class Session {
     this.refreshWorkspaceProducers(workspaces);
     this.refreshCatalogProducers(legacy);
     this.refreshScheduleProducer();
+    this.refreshFolderProducer();
+  }
+
+  // Nazmul mod (folders): every change, from any device, agent tool or CLI, pushes the full state.
+  private refreshFolderProducer(): void {
+    if (!this.wantsEvent("folders_update")) {
+      this.unsubscribeFolderChanges?.();
+      this.unsubscribeFolderChanges = null;
+      return;
+    }
+    this.unsubscribeFolderChanges ??= this.folderRegistry.subscribeToChanges((snapshot) =>
+      this.emit({ type: "folders_update", payload: snapshot }),
+    );
   }
 
   private refreshScheduleProducer(): void {
@@ -3786,6 +3813,7 @@ export class Session {
     return (
       this.dispatchTaskMessage(msg) ??
       this.dispatchUiStateMessage(msg) ??
+      this.folderSession.dispatch(msg) ??
       this.dispatchWorkspaceLabelMessage(msg)
     );
   }
@@ -10103,6 +10131,8 @@ export class Session {
     this.unsubscribeProjectMutations = null;
     this.unsubscribeScheduleChanges?.();
     this.unsubscribeScheduleChanges = null;
+    this.unsubscribeFolderChanges?.();
+    this.unsubscribeFolderChanges = null;
     this.unsubscribePluginChanges?.();
     this.unsubscribePluginChanges = null;
     this.unsubscribeWorkspaceMutations?.();
@@ -10239,8 +10269,9 @@ function legacyWantsEvent(
       return !capabilities.has(CLIENT_CAPS.explicitEventSubscriptions);
     case "agent.provider_subagents.update":
       return capabilities.has(CLIENT_CAPS.providerSubagents);
-    // A client that predates explicit subscriptions predates this message too.
+    // A client that predates explicit subscriptions predates these messages too.
     case "schedules.changed":
+    case "folders_update":
       return false;
     default:
       return true;

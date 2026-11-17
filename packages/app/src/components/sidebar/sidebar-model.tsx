@@ -22,6 +22,12 @@ import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useDeskStore } from "@/desk/desk-store";
 import { toKeySet, type DeskGroup } from "@/desk/model";
 import { useDeskReconcile } from "@/desk/use-desk-reconcile";
+import { useBoards } from "@/boards/controller";
+import { LIVE_BOARD_ID, type BoardSummary } from "@/boards/types";
+import { useFolderIndex } from "@/folders/folder-store";
+import { useFolderUiStore } from "@/folders/folder-ui-store";
+import type { FolderSection } from "@/folders/model";
+import { useFoldersAvailable } from "@/folders/use-folder-actions";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { buildSidebarProjection } from "./sidebar-projection";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
@@ -51,6 +57,8 @@ interface SidebarModel extends SidebarWorkspacesListResult {
   /** Fork mod #12: the Desk's groups and how many workspaces the Shelf still holds. */
   deskGroups: DeskGroup[];
   shelfCount: number;
+  /** Fork mod #16: the folders that replace the Shelf; null while no host has folders. */
+  folderSections: FolderSection<SidebarWorkspaceEntry, BoardSummary>[] | null;
   collapsedProjectKeys: ReadonlySet<string>;
   toggleProjectCollapsed: (projectViewKey: string) => void;
   shortcutModel: SidebarShortcutModel;
@@ -88,6 +96,23 @@ export function SidebarModelProvider({
   const shelfCollapsed = useDeskStore((state) => state.shelfCollapsed);
   const deskCollapsed = useDeskStore((state) => state.deskCollapsed);
   const deskKeys = useMemo(() => toKeySet(deskKeyList), [deskKeyList]);
+  const foldersAvailable = useFoldersAvailable();
+  const folderIndex = useFolderIndex();
+  const boards = useBoards();
+  const folderOpenKeyList = useFolderUiStore((state) => state.openKeys);
+  const folderSectionCollapsed = useFolderUiStore((state) => state.sectionCollapsed);
+  const foldersInput = useMemo(
+    () =>
+      foldersAvailable
+        ? {
+            index: folderIndex,
+            boards: boards.filter((board) => board.kind !== "live" && board.id !== LIVE_BOARD_ID),
+            openKeys: new Set(folderOpenKeyList),
+            sectionCollapsed: folderSectionCollapsed,
+          }
+        : undefined,
+    [boards, folderIndex, folderOpenKeyList, folderSectionCollapsed, foldersAvailable],
+  );
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
@@ -117,6 +142,7 @@ export function SidebarModelProvider({
   // for a filter that does not need it costs a retained-but-inactive sidebar real work.
   // The recent sorts read `statusEnteredAt`, which only exists on a hydrated entry.
   const needsWorkspaceEntries =
+    foldersAvailable ||
     groupMode !== "project" ||
     hasActiveLabelFilter ||
     projectSort === "recent" ||
@@ -209,6 +235,7 @@ export function SidebarModelProvider({
       deskGrouping,
       shelfCollapsed,
       deskCollapsed,
+      folders: foldersInput,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       t,
@@ -218,6 +245,7 @@ export function SidebarModelProvider({
       collapsedWorkspaceGroupKeys,
       deskGrouping,
       deskKeys,
+      foldersInput,
       shelfCollapsed,
       deskCollapsed,
       groupMode,
@@ -246,6 +274,7 @@ export function SidebarModelProvider({
       pinnedGroups: projection.pinnedGroups,
       deskGroups: projection.deskGroups,
       shelfCount: projection.shelfCount,
+      folderSections: projection.folderSections,
       collapsedProjectKeys,
       toggleProjectCollapsed,
       shortcutModel: projection.shortcutModel,

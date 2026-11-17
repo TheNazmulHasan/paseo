@@ -171,6 +171,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "pin-workspace",
     "desk-toggle",
     "workspace-board-split",
+    "folder-move",
     "archive-workspace",
   ],
   "tabs-panes": [
@@ -267,6 +268,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "tab-switcher-recent": "settings.shortcuts.help.switchRecentTabs",
   "desk-toggle": "settings.shortcuts.help.toggleDesk",
   "workspace-board-split": "settings.shortcuts.help.splitWorkspaces",
+  "folder-move": "settings.shortcuts.help.moveToFolder",
   "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
@@ -459,6 +461,31 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "workspace-board-split",
       section: "workspaces",
       label: "Split workspaces",
+    },
+  },
+
+  // --- Move to folder (fork mod #16, Folders) ---
+  // Same Ctrl+Cmd / Ctrl+Alt family as Desk and Boards; the non-mac chord skips text fields.
+  {
+    id: "workspace-folder-move-ctrl-cmd-m-mac",
+    action: "workspace.folder.move",
+    combo: "Cmd+Ctrl+M",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "folder-move",
+      section: "workspaces",
+      label: "Move to folder",
+    },
+  },
+  {
+    id: "workspace-folder-move-ctrl-alt-m-non-mac",
+    action: "workspace.folder.move",
+    combo: "Ctrl+Alt+M",
+    when: { mac: false, commandCenter: false, terminal: false, editable: false },
+    help: {
+      id: "folder-move",
+      section: "workspaces",
+      label: "Move to folder",
     },
   },
 

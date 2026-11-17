@@ -47,6 +47,7 @@ import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { DeskShortcutHandler } from "@/desk/desk-shortcut-handler";
 import { BoardsHost } from "@/boards/boards-host";
+import { FolderPickerHost } from "@/folders/folder-picker-host";
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
 import { WorkspaceExplorerOpenGesture } from "@/mobile-panels/explorer-open-gesture";
 import { ProviderSettingsHost } from "@/components/provider-settings-host";
@@ -536,6 +537,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <WorkspacePinShortcutHandler />
         <DeskShortcutHandler />
         <BoardsHost />
+        <FolderPickerHost />
         <WorkspaceRenameHost />
         <CommandCenter />
         <TabSwitcherHost />

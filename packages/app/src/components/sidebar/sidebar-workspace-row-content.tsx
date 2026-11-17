@@ -38,6 +38,7 @@ import { useWorkspaceHeartbeatRows } from "@/hooks/use-workspace-heartbeat";
 import { buildHeartbeatPillPresentation } from "@/heartbeats/track-presentation";
 import { useWorkspaceCacheWarm } from "@/prompt-cache/use-workspace-cache-warm";
 import { DeskRowToggle } from "@/desk/desk-row-toggle";
+import { WorkspaceFolderButton } from "@/folders/folder-row-button";
 
 const needsInputColorMapping = (theme: Theme) => ({
   color: theme.colors.surface0,
@@ -208,12 +209,20 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               {/* After the slot, not before: the kebab overlays leftwards from the slot's edge,
                   so a button to its left would sit under it. The Cmd+N badge owns this corner. */}
               {showShortcutBadge && shortcutNumber !== null ? null : (
-                <DeskRowToggle
-                  workspaceKey={workspace.workspaceKey}
-                  serverId={workspace.serverId}
-                  workspaceId={workspace.workspaceId}
-                  isHovered={isHovered}
-                />
+                <>
+                  <DeskRowToggle
+                    workspaceKey={workspace.workspaceKey}
+                    serverId={workspace.serverId}
+                    workspaceId={workspace.workspaceId}
+                    isHovered={isHovered}
+                  />
+                  <WorkspaceFolderButton
+                    workspaceKey={workspace.workspaceKey}
+                    serverId={workspace.serverId}
+                    workspaceId={workspace.workspaceId}
+                    pinned={Boolean(workspace.pinnedAt)}
+                  />
+                </>
               )}
             </View>
           </View>

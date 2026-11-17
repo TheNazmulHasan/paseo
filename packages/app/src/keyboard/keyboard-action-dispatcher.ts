@@ -64,6 +64,7 @@ export type KeyboardActionId =
   | "workspace.pin"
   | "workspace.desk.toggle"
   | "workspace.board.split"
+  | "workspace.folder.move"
   // Command-center only: no keybind, so these are absent from route-shortcut.ts.
   | "workspace.rename"
   | "workspace.setup.show";
@@ -134,6 +135,7 @@ export type KeyboardActionDefinition =
   | { id: "workspace.pin"; scope: KeyboardActionScope }
   | { id: "workspace.desk.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.board.split"; scope: KeyboardActionScope }
+  | { id: "workspace.folder.move"; scope: KeyboardActionScope }
   | { id: "workspace.rename"; scope: KeyboardActionScope }
   | { id: "workspace.setup.show"; scope: KeyboardActionScope };
 

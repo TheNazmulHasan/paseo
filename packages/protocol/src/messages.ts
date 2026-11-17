@@ -48,6 +48,12 @@ import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import { WORKSPACE_LABEL_COLORS } from "./workspace-labels.js";
 import {
+  FOLDER_EMOJI_MAX_LENGTH,
+  FOLDER_NAME_MAX_LENGTH,
+  FolderMembershipSchema,
+  FolderSchema,
+} from "./folders.js";
+import {
   ChatCreateRequestSchema,
   ChatListRequestSchema,
   ChatInspectRequestSchema,
@@ -1465,6 +1471,53 @@ export const WorkspacePinSetRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// --- Nazmul mod (folders): requests --------------------------------------------------------
+// User-made folders for workspaces and views. Item keys are a workspace id or `board:<id>`.
+export const FoldersListRequestSchema = z.object({
+  type: z.literal("folders.list.request"),
+  requestId: z.string(),
+});
+
+export const FoldersCreateRequestSchema = z.object({
+  type: z.literal("folders.create.request"),
+  name: z.string().max(FOLDER_NAME_MAX_LENGTH),
+  emoji: z.string().max(FOLDER_EMOJI_MAX_LENGTH).nullable().optional(),
+  // Sort position. Omitted: the new folder goes last.
+  order: z.number().optional(),
+  requestId: z.string(),
+});
+
+export const FoldersUpdateRequestSchema = z.object({
+  type: z.literal("folders.update.request"),
+  folderId: z.string(),
+  name: z.string().max(FOLDER_NAME_MAX_LENGTH).optional(),
+  // Null clears the emoji; omitted leaves it alone.
+  emoji: z.string().max(FOLDER_EMOJI_MAX_LENGTH).nullable().optional(),
+  requestId: z.string(),
+});
+
+export const FoldersDeleteRequestSchema = z.object({
+  type: z.literal("folders.delete.request"),
+  folderId: z.string(),
+  requestId: z.string(),
+});
+
+export const FoldersReorderRequestSchema = z.object({
+  type: z.literal("folders.reorder.request"),
+  // The full display order. Folders left out keep their order after the listed ones.
+  folderIds: z.array(z.string()),
+  requestId: z.string(),
+});
+
+export const FoldersAssignRequestSchema = z.object({
+  type: z.literal("folders.assign.request"),
+  itemKeys: z.array(z.string()),
+  // Null moves the items to Unfiled.
+  folderId: z.string().nullable(),
+  requestId: z.string(),
+});
+// --- end Nazmul mod (folders): requests ----------------------------------------------------
+
 export const WorkspaceLabelColorSchema = z.enum(WORKSPACE_LABEL_COLORS);
 export const WorkspaceLabelDefinitionSchema = z.object({
   name: z.string(),
@@ -2766,6 +2819,78 @@ export const WorkspacePinSetResponseSchema = z.object({
   payload: WorkspacePinSetResponsePayloadSchema,
 });
 
+// --- Nazmul mod (folders): responses and the live push -------------------------------------
+// Every response carries `error`: null on success, else a message and empty data.
+export const FoldersListResponseSchema = z.object({
+  type: z.literal("folders.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    folders: z.array(FolderSchema),
+    membership: FolderMembershipSchema,
+    error: z.string().nullable(),
+  }),
+});
+
+export const FoldersCreateResponseSchema = z.object({
+  type: z.literal("folders.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    folder: FolderSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const FoldersUpdateResponseSchema = z.object({
+  type: z.literal("folders.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    folder: FolderSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const FoldersDeleteResponseSchema = z.object({
+  type: z.literal("folders.delete.response"),
+  payload: z.object({
+    requestId: z.string(),
+    folder: FolderSchema.nullable(),
+    // Item keys that were in the folder; they are Unfiled now.
+    releasedItemKeys: z.array(z.string()),
+    error: z.string().nullable(),
+  }),
+});
+
+export const FoldersReorderResponseSchema = z.object({
+  type: z.literal("folders.reorder.response"),
+  payload: z.object({
+    requestId: z.string(),
+    // The folders in their new order.
+    folders: z.array(FolderSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const FoldersAssignResponseSchema = z.object({
+  type: z.literal("folders.assign.response"),
+  payload: z.object({
+    requestId: z.string(),
+    itemKeys: z.array(z.string()),
+    folderId: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+// The full state after any change, from any device, agent tool or CLI. A subscribed event
+// (FORK_SESSION_EVENTS), so it also reaches the device that made the change.
+export const FoldersUpdateMessageSchema = z.object({
+  type: z.literal("folders_update"),
+  payload: z.object({
+    folders: z.array(FolderSchema),
+    membership: FolderMembershipSchema,
+  }),
+});
+// --- end Nazmul mod (folders): responses and the live push ---------------------------------
+
 export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("recoverable"),
@@ -3897,6 +4022,7 @@ export const FORK_SESSION_EVENTS = [
   "agent.background_tasks.update",
   "agent.background_tasks.output.update",
   "agent.provider_heartbeats.update",
+  "folders_update",
 ] as const;
 
 // These connection event streams have no directory bootstrap or timeline membership.
@@ -3996,6 +4122,13 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceRecentFoldersGetRequestSchema,
   WorkspaceRecentFoldersUpdateRequestSchema,
   WorkspacePinSetRequestSchema,
+  // Nazmul mod (folders)
+  FoldersListRequestSchema,
+  FoldersCreateRequestSchema,
+  FoldersUpdateRequestSchema,
+  FoldersDeleteRequestSchema,
+  FoldersReorderRequestSchema,
+  FoldersAssignRequestSchema,
   WorkspaceLabelListRequestSchema,
   WorkspaceLabelAssignmentSetRequestSchema,
   WorkspaceLabelUpdateRequestSchema,
@@ -4571,6 +4704,9 @@ export const ServerInfoStatusPayloadSchema = z
         uiState: z.boolean().optional(),
         // COMPAT(forkSessionEvents): added in v0.14.901, drop gate after 2027-05-01.
         forkSessionEvents: z.boolean().optional(),
+        // COMPAT(folders): Nazmul mod, added in the fork on 2026-11-17, drop gate after 2027-05-01.
+        // True when the host serves folders.* and pushes folders_update (a fork session event).
+        folders: z.boolean().optional(),
         // COMPAT(agentNativeFork): added in v0.2.916, drop gate after 2027-02-01.
         agentNativeFork: z.boolean().optional(),
         // COMPAT(nativeForkModel): added in v0.14.903, drop gate after 2027-05-01.
@@ -8526,6 +8662,14 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceRecentFoldersUpdateResponseSchema,
   WorkspaceTodosUpdateMessageSchema,
   WorkspacePinSetResponseSchema,
+  // Nazmul mod (folders)
+  FoldersListResponseSchema,
+  FoldersCreateResponseSchema,
+  FoldersUpdateResponseSchema,
+  FoldersDeleteResponseSchema,
+  FoldersReorderResponseSchema,
+  FoldersAssignResponseSchema,
+  FoldersUpdateMessageSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
   WaitForFinishResponseMessageSchema,
@@ -8770,6 +8914,14 @@ export type WorkspaceTitleSetResponsePayload = z.infer<
 >;
 export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSchema>;
 export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
+// Nazmul mod (folders)
+export type FoldersListResponse = z.infer<typeof FoldersListResponseSchema>;
+export type FoldersCreateResponse = z.infer<typeof FoldersCreateResponseSchema>;
+export type FoldersUpdateResponse = z.infer<typeof FoldersUpdateResponseSchema>;
+export type FoldersDeleteResponse = z.infer<typeof FoldersDeleteResponseSchema>;
+export type FoldersReorderResponse = z.infer<typeof FoldersReorderResponseSchema>;
+export type FoldersAssignResponse = z.infer<typeof FoldersAssignResponseSchema>;
+export type FoldersUpdateMessage = z.infer<typeof FoldersUpdateMessageSchema>;
 export type WorkspaceRecoveryState = z.infer<typeof WorkspaceRecoveryStateSchema>;
 export type WorkspaceRecoveryInspectResponse = z.infer<
   typeof WorkspaceRecoveryInspectResponseSchema
@@ -8969,6 +9121,13 @@ export type ProjectIconSetRequest = z.infer<typeof ProjectIconSetRequestSchema>;
 export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
 export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
+// Nazmul mod (folders)
+export type FoldersListRequest = z.infer<typeof FoldersListRequestSchema>;
+export type FoldersCreateRequest = z.infer<typeof FoldersCreateRequestSchema>;
+export type FoldersUpdateRequest = z.infer<typeof FoldersUpdateRequestSchema>;
+export type FoldersDeleteRequest = z.infer<typeof FoldersDeleteRequestSchema>;
+export type FoldersReorderRequest = z.infer<typeof FoldersReorderRequestSchema>;
+export type FoldersAssignRequest = z.infer<typeof FoldersAssignRequestSchema>;
 export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
 export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
