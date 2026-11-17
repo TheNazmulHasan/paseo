@@ -430,7 +430,7 @@ export interface BoardPaneProps {
   onOpenInWorkspace: (origin: BoardTabOrigin) => void;
   /** Opens a draft ("New agent") as a tab in this pane. */
   onNewAgent: (paneId: string) => void;
-  /** Takes this pane (its workspace) out of the view; absent on the Live view (no icon). */
+  /** Takes this pane (its workspace) out of the view. */
   onRemoveWorkspace?: (paneId: string) => void;
   /** False on the view's last pane: the icon stays but is disabled. */
   canRemove: boolean;

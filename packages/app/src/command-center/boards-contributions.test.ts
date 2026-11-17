@@ -6,7 +6,6 @@ import {
 } from "./boards-contributions";
 
 const views: BoardSummary[] = [
-  { id: "live", name: "Live", kind: "live", sessionCount: 3 },
   { id: "b1", name: "api | web", kind: "user", sessionCount: 2 },
   { id: "b2", name: "docs | cli", kind: "user", sessionCount: 1 },
 ];
@@ -17,7 +16,6 @@ function setup(list: readonly BoardSummary[] = views) {
     labels: {
       section: "Views",
       split: "Split workspaces…",
-      openLive: "Open Live view",
       openView: (name) => `Open view: ${name}`,
     },
     icons: {},
@@ -30,11 +28,10 @@ function setup(list: readonly BoardSummary[] = views) {
 }
 
 describe("buildBoardsCommandCenterContributions", () => {
-  it("offers split, Live and one entry per saved split", () => {
+  it("offers split and one entry per saved split", () => {
     const { contributions } = setup();
     expect(contributions.map((entry) => entry.id)).toEqual([
       "views:split",
-      "views:open-live",
       "views:open:b1",
       "views:open:b2",
     ]);
@@ -42,22 +39,12 @@ describe("buildBoardsCommandCenterContributions", () => {
       contributions.map((entry) =>
         entry.presentation.kind === "action" ? entry.presentation.title : null,
       ),
-    ).toEqual([
-      "Split workspaces…",
-      "Open Live view",
-      "Open view: api | web",
-      "Open view: docs | cli",
-    ]);
+    ).toEqual(["Split workspaces…", "Open view: api | web", "Open view: docs | cli"]);
   });
 
-  it("shows split and Live without a query, and saved views only when searching", () => {
+  it("shows split without a query, and saved views only when searching", () => {
     const { contributions } = setup();
-    expect(contributions.map((entry) => entry.visibility)).toEqual([
-      "always",
-      "always",
-      "query",
-      "query",
-    ]);
+    expect(contributions.map((entry) => entry.visibility)).toEqual(["always", "query", "query"]);
   });
 
   it("carries the split shortcut", () => {
@@ -72,11 +59,11 @@ describe("buildBoardsCommandCenterContributions", () => {
     for (const entry of contributions) {
       void entry.run();
     }
-    expect(calls).toEqual(["split", "open:live", "open:b1", "open:b2"]);
+    expect(calls).toEqual(["split", "open:b1", "open:b2"]);
   });
 
-  it("omits Live when it has not been created yet", () => {
-    const { contributions } = setup([views[1]]);
-    expect(contributions.map((entry) => entry.id)).toEqual(["views:split", "views:open:b1"]);
+  it("offers only the split action while no view exists", () => {
+    const { contributions } = setup([]);
+    expect(contributions.map((entry) => entry.id)).toEqual(["views:split"]);
   });
 });

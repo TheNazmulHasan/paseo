@@ -569,9 +569,9 @@ describe("routeKeyboardShortcut — board routes (fork mod #13)", () => {
     expect(
       routeKeyboardShortcut(
         { action: "workspace.arrange.grid", payload: null },
-        makeCtx({ pathname: "/boards/live" }),
+        makeCtx({ pathname: "/boards/b1" }),
       ),
-    ).toMatchObject({ kind: "dispatch", boardId: "live" });
+    ).toMatchObject({ kind: "dispatch", boardId: "b1" });
   });
 
   it("keeps the arrange and pane ids as plain dispatches on a workspace route", () => {

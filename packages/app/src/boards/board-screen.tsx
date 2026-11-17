@@ -3,13 +3,12 @@ import { useBoardSidebarKeys } from "@/boards/use-board-sidebar-keys";
 import { Text, View, useWindowDimensions } from "react-native";
 import { useIsFocused } from "expo-router/react-navigation";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ArrowLeft, Plus, RefreshCw } from "lucide-react-native";
+import { StyleSheet } from "react-native-unistyles";
+import { ArrowLeft, Plus } from "lucide-react-native";
 import type { ArrangeViewport } from "@/arrange/types";
 import { BoardContainer } from "@/boards/board-container";
 import { useBoardMruStore } from "@/boards/board-mru-store";
-import { BoardIconButton } from "@/boards/board-pane";
-import { refreshLiveBoard, setBoardExplorerOpen, useBoard } from "@/boards/controller";
+import { setBoardExplorerOpen, useBoard } from "@/boards/controller";
 import { goBackFromBoard } from "@/boards/navigation";
 import { openAddWorkspacePicker } from "@/boards/split-picker-store";
 import {
@@ -28,12 +27,8 @@ import { ScreenTitle } from "@/components/headers/screen-title";
 import { SidebarMenuToggle } from "@/components/headers/sidebar-menu-toggle";
 import { Button } from "@/components/ui/button";
 import { WorkspaceExplorerToggle } from "@/screens/workspace/workspace-explorer-toggle";
-import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 
-const ThemedRefreshCw = withUnistyles(RefreshCw);
-
-const REFRESH_ICON_SIZE = 14;
 const NO_SHORTCUT_KEYS: ShortcutKey[] = [];
 
 interface BoardScreenProps {
@@ -42,7 +37,7 @@ interface BoardScreenProps {
 
 /**
  * A view of agent sessions from any workspaces and hosts, in split panes with tab strips.
- * Either a split of several workspaces (one pane each) or the Live view of every running agent.
+ * A split of several workspaces (one pane each).
  */
 export function BoardScreen({ boardId }: BoardScreenProps) {
   // Upstream registers panels only when the workspace screen mounts. A view opened first
@@ -107,16 +102,6 @@ function MissingBoard({ boardId }: { boardId: string }) {
   );
 }
 
-function LiveBadge() {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.liveBadge} testID="board-live-badge">
-      <View style={styles.liveDot} />
-      <Text style={styles.liveBadgeText}>{t("boards.screen.live")}</Text>
-    </View>
-  );
-}
-
 function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boolean }) {
   const { t } = useTranslation();
   const windowSize = useWindowDimensions();
@@ -154,9 +139,6 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
     }
   }, [activeTabId, boardId, focusedPaneId]);
 
-  const handleRefresh = useCallback(() => refreshLiveBoard(getViewport()), [getViewport]);
-
-  const isLive = board.kind === "live";
   const explorerOpen = Boolean(board.explorerOpen);
   const handleToggleExplorer = useCallback(
     () => setBoardExplorerOpen(boardId, !explorerOpen),
@@ -167,30 +149,16 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
   const headerRight = useMemo(
     () => (
       <View style={styles.headerRight}>
-        {isLive ? (
-          <>
-            <LiveBadge />
-            <BoardIconButton
-              label={t("boards.screen.refresh")}
-              onPress={handleRefresh}
-              testID="board-refresh"
-            >
-              <ThemedRefreshCw size={REFRESH_ICON_SIZE} uniProps={mutedIconColorMapping} />
-            </BoardIconButton>
-          </>
-        ) : null}
-        {isLive ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={Plus}
-            onPress={handleAddWorkspace}
-            accessibilityLabel={t("boards.screen.addWorkspace")}
-            testID="board-add-workspace"
-          >
-            {t("boards.screen.addWorkspace")}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={Plus}
+          onPress={handleAddWorkspace}
+          accessibilityLabel={t("boards.screen.addWorkspace")}
+          testID="board-add-workspace"
+        >
+          {t("boards.screen.addWorkspace")}
+        </Button>
         <WorkspaceExplorerToggle
           onPress={handleToggleExplorer}
           label={t(
@@ -205,15 +173,7 @@ function BoardScreenContent({ board, isFocused }: { board: Board; isFocused: boo
         />
       </View>
     ),
-    [
-      explorerAccessibilityState,
-      explorerOpen,
-      handleAddWorkspace,
-      handleRefresh,
-      handleToggleExplorer,
-      isLive,
-      t,
-    ],
+    [explorerAccessibilityState, explorerOpen, handleAddWorkspace, handleToggleExplorer, t],
   );
 
   const hasTabs = countVisibleBoardTabs(board.layout.root) > 0;
@@ -263,24 +223,5 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-  },
-  liveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[0.5],
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface2,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.statusSuccess,
-  },
-  liveBadgeText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
   },
 }));

@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePathname } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { LayoutGrid, Radio } from "lucide-react-native";
+import { LayoutGrid } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { useBoards } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
-import { LIVE_BOARD_ID } from "@/boards/types";
 import { useDeskStore } from "@/desk/desk-store";
 import { toKeySet } from "@/desk/model";
 import { isWeb } from "@/constants/platform";
@@ -51,7 +50,6 @@ import {
 } from "@/workspace-switcher/workspace-switcher-store";
 
 const ThemedLayoutGrid = withUnistyles(LayoutGrid);
-const ThemedRadio = withUnistyles(Radio);
 const boardIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const WORKSPACE_SWITCHER_ICON_SIZE = 22;
@@ -121,7 +119,6 @@ function createWorkspaceCandidate(input: {
 }
 
 function useWorkspaceCandidateSync(): void {
-  const { t } = useTranslation();
   const selection = useActiveWorkspaceSelection();
   const activeBoardId = parseBoardIdFromPathname(usePathname());
   const history = useWorkspaceSwitcherMruStore((state) => state.history);
@@ -188,7 +185,7 @@ function useWorkspaceCandidateSync(): void {
     [workspacePlacements],
   );
 
-  // Fork mod #13: the Live view and saved splits sit in the list as rows of their own.
+  // Fork mod #13: saved splits sit in the list as rows of their own.
   const boardByKey = useMemo(
     () => new Map(boards.map((board) => [boardRowKey(board.id), board] as const)),
     [boards],
@@ -227,14 +224,13 @@ function useWorkspaceCandidateSync(): void {
           serverId: BOARD_ROW_SERVER_ID,
           workspaceId: board.id,
           at: visitedAtByKey.get(key) ?? 0,
-          title: board.id === LIVE_BOARD_ID ? t("boards.sidebar.live") : board.name,
+          title: board.name,
           status: null,
           requiresAttention: false,
           iconDataUri: null,
           projectInitial: "",
           projectViewKey: key,
           boardId: board.id,
-          boardKind: board.kind,
           boardSessionCount: board.sessionCount,
         });
         continue;
@@ -269,7 +265,6 @@ function useWorkspaceCandidateSync(): void {
     iconDataByProjectViewKey,
     layoutByWorkspace,
     projectByWorkspaceKey,
-    t,
     switchablePlacements,
     workspaceTitleByKey,
   ]);
@@ -338,11 +333,7 @@ function WorkspaceSwitcherRow({
     <Pressable style={rowStyle} onHoverIn={onHoverIn} onPress={onPress}>
       {candidate.boardId ? (
         <View style={styles.boardIcon} testID="workspace-switcher-board-icon">
-          {candidate.boardKind === "live" ? (
-            <ThemedRadio size={16} uniProps={boardIconColorMapping} />
-          ) : (
-            <ThemedLayoutGrid size={16} uniProps={boardIconColorMapping} />
-          )}
+          <ThemedLayoutGrid size={16} uniProps={boardIconColorMapping} />
         </View>
       ) : (
         <ProjectIconView

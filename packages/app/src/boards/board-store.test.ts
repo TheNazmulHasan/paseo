@@ -23,7 +23,10 @@ import {
   useBoardStore,
 } from "@/boards/board-store";
 import { addSessionsToBoardModel, createEmptyBoardLayout } from "@/boards/model";
-import { LIVE_BOARD_ID, type Board } from "@/boards/types";
+import type { Board } from "@/boards/types";
+
+/** The id the removed Live view was stored under. */
+const LEGACY_LIVE_ID = "live";
 
 function board(id: string, agentIds: string[] = []): Board {
   const empty: Board = {
@@ -51,14 +54,13 @@ beforeEach(async () => {
 });
 
 describe("parseBoardPersistedState", () => {
-  it("turns junk into an empty state that still has the Live board", () => {
+  it("turns junk into an empty state with no boards", () => {
     for (const junk of [null, undefined, 7, "x", [], {}, { boards: "no" }, { boards: 3 }]) {
       const parsed = parseBoardPersistedState(junk);
-      expect(Object.keys(parsed.boards)).toEqual([LIVE_BOARD_ID]);
-      expect(parsed.order).toEqual([LIVE_BOARD_ID]);
+      expect(parsed.boards).toEqual({});
+      expect(parsed.order).toEqual([]);
       expect(parsed.arrangeByBoard).toEqual({});
       expect(parsed.splitPairs).toEqual({});
-      expect(parsed.boards[LIVE_BOARD_ID]).toMatchObject({ kind: "live", name: "Live" });
     }
   });
 
@@ -80,7 +82,7 @@ describe("parseBoardPersistedState", () => {
       arrangeByBoard: {},
       splitPairs: {},
     });
-    expect(Object.keys(parsed.boards).sort()).toEqual(["good", LIVE_BOARD_ID].sort());
+    expect(Object.keys(parsed.boards)).toEqual(["good"]);
     expect(parsed.boards.good?.name).toBe("Board good");
   });
 
@@ -111,28 +113,33 @@ describe("parseBoardPersistedState", () => {
     expect(parsed.boards.off?.explorerOpen).toBeUndefined();
   });
 
-  it("forces the kind from the id: only the Live id is live", () => {
+  it("drops a stored Live board, by id or by kind, and keeps the saved views beside it", () => {
     const parsed = parseBoardPersistedState({
       boards: {
+        [LEGACY_LIVE_ID]: { ...board(LEGACY_LIVE_ID), kind: "live", name: "Live" },
         sneaky: { ...board("sneaky"), kind: "live" },
-        [LIVE_BOARD_ID]: { ...board(LIVE_BOARD_ID), kind: "user", name: "Mine" },
+        renamed: { ...board(LEGACY_LIVE_ID), kind: "user", name: "Mine" },
+        keep: board("keep"),
       },
-      order: [],
-      arrangeByBoard: {},
-      splitPairs: {},
+      order: [LEGACY_LIVE_ID, "sneaky", "keep"],
+      arrangeByBoard: { [LEGACY_LIVE_ID]: { snapshot: null, lastPreset: "grid" } },
+      splitPairs: { k1: LEGACY_LIVE_ID, k2: "keep" },
     });
-    expect(parsed.boards.sneaky?.kind).toBe("user");
-    expect(parsed.boards[LIVE_BOARD_ID]?.kind).toBe("live");
+    expect(Object.keys(parsed.boards)).toEqual(["keep"]);
+    expect(parsed.boards.keep?.kind).toBe("user");
+    expect(parsed.order).toEqual(["keep"]);
+    expect(parsed.arrangeByBoard).toEqual({});
+    expect(parsed.splitPairs).toEqual({ k2: "keep" });
   });
 
-  it("puts Live first and repairs the order", () => {
+  it("repairs the order: unknown and repeated ids go, unlisted boards follow", () => {
     const parsed = parseBoardPersistedState({
       boards: { a: board("a"), b: board("b") },
-      order: ["b", "ghost", "b", LIVE_BOARD_ID],
+      order: ["b", "ghost", "b"],
       arrangeByBoard: {},
       splitPairs: {},
     });
-    expect(parsed.order).toEqual([LIVE_BOARD_ID, "b", "a"]);
+    expect(parsed.order).toEqual(["b", "a"]);
   });
 
   it("drops arrange state and split pairs that point at nothing", () => {
@@ -144,7 +151,7 @@ describe("parseBoardPersistedState", () => {
         ghost: { snapshot: null, lastPreset: "grid" },
         bad: { snapshot: null, lastPreset: "diagonal" },
       },
-      splitPairs: { k1: "a", k2: "ghost", k3: LIVE_BOARD_ID, k4: 5 },
+      splitPairs: { k1: "a", k2: "ghost", k3: LEGACY_LIVE_ID, k4: 5 },
     });
     expect(Object.keys(parsed.arrangeByBoard)).toEqual(["a"]);
     expect(parsed.splitPairs).toEqual({ k1: "a" });
@@ -152,17 +159,10 @@ describe("parseBoardPersistedState", () => {
 });
 
 describe("useBoardStore", () => {
-  it("always has the Live board, first", () => {
+  it("starts with no boards", () => {
     const state = useBoardStore.getState();
-    expect(state.boards[LIVE_BOARD_ID]?.kind).toBe("live");
-    expect(state.order).toEqual([LIVE_BOARD_ID]);
-  });
-
-  it("ensureLive puts it back at the front if it went missing", () => {
-    useBoardStore.setState({ boards: {}, order: ["x"] });
-    useBoardStore.getState().ensureLive();
-    expect(useBoardStore.getState().boards[LIVE_BOARD_ID]).toBeDefined();
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID, "x"]);
+    expect(state.boards).toEqual({});
+    expect(state.order).toEqual([]);
   });
 
   it("puts boards in order and replaces by id", () => {
@@ -170,13 +170,8 @@ describe("useBoardStore", () => {
     store.putBoard(board("a"));
     store.putBoard(board("b"));
     store.putBoard({ ...board("a"), name: "Renamed" });
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID, "a", "b"]);
+    expect(useBoardStore.getState().order).toEqual(["a", "b"]);
     expect(useBoardStore.getState().boards.a?.name).toBe("Renamed");
-  });
-
-  it("cannot delete the Live board", () => {
-    expect(useBoardStore.getState().removeBoard(LIVE_BOARD_ID)).toBe(false);
-    expect(useBoardStore.getState().boards[LIVE_BOARD_ID]).toBeDefined();
   });
 
   it("deleting a board forgets its arrange state and split-set entry", () => {
@@ -189,7 +184,7 @@ describe("useBoardStore", () => {
     expect(useBoardStore.getState().removeBoard("a")).toBe(true);
     expect(useBoardStore.getState().removeBoard("a")).toBe(false);
     const state = useBoardStore.getState();
-    expect(state.order).toEqual([LIVE_BOARD_ID, "b"]);
+    expect(state.order).toEqual(["b"]);
     expect(state.arrangeByBoard).toEqual({});
     expect(state.splitPairs).toEqual({ "set-b": "b" });
   });
@@ -222,13 +217,13 @@ describe("persistence", () => {
     await AsyncStorage.setItem("paseo-boards", written ?? "");
     await useBoardStore.persist.rehydrate();
     const state = useBoardStore.getState();
-    expect(state.order).toEqual([LIVE_BOARD_ID, "a"]);
+    expect(state.order).toEqual(["a"]);
     expect(Object.keys(state.boards.a?.origins ?? {})).toHaveLength(2);
     expect(state.arrangeByBoard.a?.lastPreset).toBe("grid");
     expect(state.splitPairs).toEqual({ set: "a" });
   });
 
-  it("starts with only Live, and does not crash, when the stored blob is corrupt", async () => {
+  it("starts empty, and does not crash, when the stored blob is corrupt", async () => {
     for (const raw of [
       "{not json",
       JSON.stringify({ state: { boards: "no" }, version: 1 }),
@@ -237,18 +232,20 @@ describe("persistence", () => {
       await AsyncStorage.setItem("paseo-boards", raw);
       resetStore();
       await expect(useBoardStore.persist.rehydrate()).resolves.not.toThrow();
-      expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID]);
-      expect(useBoardStore.getState().boards[LIVE_BOARD_ID]).toBeDefined();
+      expect(useBoardStore.getState().order).toEqual([]);
     }
   });
 
-  it("restores Live when the stored state lacks it", async () => {
+  it("loads a store saved while the Live view existed: Live is gone, the saved views stay", async () => {
     await AsyncStorage.setItem(
       "paseo-boards",
       JSON.stringify({
         state: {
-          boards: { a: board("a") },
-          order: ["a"],
+          boards: {
+            [LEGACY_LIVE_ID]: { ...board(LEGACY_LIVE_ID), kind: "live", name: "Live" },
+            a: board("a", ["a1"]),
+          },
+          order: [LEGACY_LIVE_ID, "a"],
           arrangeByBoard: {},
           splitPairs: {},
         },
@@ -256,7 +253,10 @@ describe("persistence", () => {
       }),
     );
     await useBoardStore.persist.rehydrate();
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID, "a"]);
+    const state = useBoardStore.getState();
+    expect(state.order).toEqual(["a"]);
+    expect(Object.keys(state.boards)).toEqual(["a"]);
+    expect(Object.keys(state.boards.a?.origins ?? {})).toHaveLength(1);
   });
 
   it("migrates an older stored version through the same lenient parser", async () => {

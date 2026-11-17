@@ -271,7 +271,7 @@ export function BoardContainer({ board, isScreenFocused, onViewportChange }: Boa
               onCloseTab={handleCloseTab}
               onOpenInWorkspace={handleOpenInWorkspace}
               onNewAgent={handleNewAgent}
-              onRemoveWorkspace={board.kind === "live" ? undefined : handleRemoveWorkspace}
+              onRemoveWorkspace={handleRemoveWorkspace}
               canRemove={canRemove}
               buildPaneContentModel={buildPaneContentModel}
             />

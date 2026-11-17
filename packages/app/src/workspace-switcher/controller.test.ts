@@ -195,11 +195,11 @@ describe("workspace switcher controller", () => {
           candidate("a"),
           candidate("b"),
           {
-            ...candidate("live"),
+            ...candidate("split"),
             serverId: "board",
-            title: "Live",
-            boardId: "live",
-            boardKind: "live" as const,
+            workspaceId: "board_split",
+            title: "api | web",
+            boardId: "board_split",
             boardSessionCount: 2,
           },
           candidate("c"),
@@ -210,17 +210,17 @@ describe("workspace switcher controller", () => {
     }
 
     it("opens the board, not a workspace, when a board row is committed", () => {
-      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:board_split"]));
       cycleWorkspaceSwitcher(1);
       cycleWorkspaceSwitcher(1);
       expect(useWorkspaceSwitcherStore.getState().selectedIndex).toBe(2);
       commitWorkspaceSwitcher();
-      expect(navigateToBoard).toHaveBeenCalledWith("live");
+      expect(navigateToBoard).toHaveBeenCalledWith("board_split");
       expect(navigateToWorkspace).not.toHaveBeenCalled();
     });
 
     it("still taps through to the previous workspace with boards in the list", () => {
-      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:board_split"]));
       cycleWorkspaceSwitcher(1);
       commitWorkspaceSwitcher();
       expect(navigateToWorkspace).toHaveBeenCalledWith({ serverId: "srv", workspaceId: "b" });
@@ -232,7 +232,6 @@ describe("workspace switcher controller", () => {
         ...candidate(id),
         serverId: "board",
         boardId: id,
-        boardKind: "user" as const,
         boardSessionCount: 1,
       };
     }
@@ -268,7 +267,7 @@ describe("workspace switcher controller", () => {
     });
 
     it("cancels when the board was deleted while the switcher was open", () => {
-      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:live"]));
+      seedWithBoard(new Set(["srv:a", "srv:b", "srv:c", "board:board_split"]));
       cycleWorkspaceSwitcher(1);
       cycleWorkspaceSwitcher(1);
       useWorkspaceSwitcherStore.setState({ liveKeys: new Set(["srv:a", "srv:b", "srv:c"]) });

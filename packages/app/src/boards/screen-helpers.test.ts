@@ -142,7 +142,7 @@ describe("resolveBoardTabAgentId", () => {
 
 describe("board route and keys", () => {
   it("builds an encoded route", () => {
-    expect(buildBoardRoute("live")).toBe("/boards/live");
+    expect(buildBoardRoute("b1")).toBe("/boards/b1");
     expect(buildBoardRoute("a b/c")).toBe("/boards/a%20b%2Fc");
   });
 

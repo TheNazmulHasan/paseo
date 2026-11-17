@@ -83,15 +83,15 @@ describe("views in the switcher order", () => {
       currentKey: "srv:w1",
       historyKeys: [],
       workspaceKeys: ["srv:w1", "srv:w2", "srv:w3", "srv:w4", "srv:w5"],
-      boardKeys: ["board:live", "board:b1"],
+      boardKeys: ["board:b0", "board:b1"],
       deskKeys: desk,
       ...input,
     });
 
   it("keys a view under a pseudo host so it can never collide with a workspace", () => {
-    expect(boardRowKey("live")).toBe("board:live");
-    expect(boardVisit("live")).toEqual({ serverId: "board", workspaceId: "live" });
-    expect(workspaceVisitKey(boardVisit("live"))).toBe(boardRowKey("live"));
+    expect(boardRowKey("b0")).toBe("board:b0");
+    expect(boardVisit("b0")).toEqual({ serverId: "board", workspaceId: "b0" });
+    expect(workspaceVisitKey(boardVisit("b0"))).toBe(boardRowKey("b0"));
   });
 
   it("makes a tap from a view land on the workspace you were on before it", () => {
@@ -111,9 +111,9 @@ describe("views in the switcher order", () => {
     expect(
       order({
         currentKey: "srv:w1",
-        historyKeys: ["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:live"],
+        historyKeys: ["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:b0"],
       }),
-    ).toEqual(["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:live", "srv:w4", "srv:w5"]);
+    ).toEqual(["srv:w1", "srv:w2", "board:b1", "srv:w3", "board:b0", "srv:w4", "srv:w5"]);
   });
 
   it("puts never-visited views after the Desk and visited views, ahead of the rest", () => {
@@ -122,7 +122,7 @@ describe("views in the switcher order", () => {
       "srv:w2",
       "srv:w3",
       "srv:w4",
-      "board:live",
+      "board:b0",
       "board:b1",
       "srv:w5",
     ]);
@@ -136,8 +136,8 @@ describe("views in the switcher order", () => {
 
   it("still offers a never-visited view when it is the only other place", () => {
     expect(
-      order({ workspaceKeys: ["srv:w1"], boardKeys: ["board:live"], historyKeys: ["srv:w1"] }),
-    ).toEqual(["srv:w1", "board:live"]);
+      order({ workspaceKeys: ["srv:w1"], boardKeys: ["board:b0"], historyKeys: ["srv:w1"] }),
+    ).toEqual(["srv:w1", "board:b0"]);
   });
 
   it("prunes the visit of a deleted view and keeps the current one", () => {

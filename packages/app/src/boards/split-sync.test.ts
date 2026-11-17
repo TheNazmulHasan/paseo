@@ -32,7 +32,6 @@ import {
 } from "@/boards/controller";
 import { resetSplitSyncForTests, syncSplitBoards, useSplitBoardSync } from "@/boards/split-sync";
 import type { Board } from "@/boards/types";
-import { LIVE_BOARD_ID } from "@/boards/types";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
   collectAllPanes,
@@ -158,7 +157,6 @@ function openView(): string {
 beforeEach(() => {
   resetSplitSyncForTests();
   useBoardStore.setState({ boards: {}, order: [], arrangeByBoard: {}, splitPairs: {} });
-  useBoardStore.getState().ensureLive();
   useWorkspaceLayoutStore.setState({
     layoutByWorkspace: {},
     splitSizesByWorkspace: {},
@@ -272,13 +270,10 @@ describe("B2: a split view follows its workspaces", () => {
     expect(paneAgents(mustBoard(id))).toEqual([["a1"], ["b1"]]);
   });
 
-  it("closing a tab on the Live view stays on the Live view", () => {
+  it("closing a tab on a view that does not exist changes nothing", () => {
     setAgents({ w1: ["a1"] });
     openWorkspaceAgents("w1", ["a1"]);
-    useBoardStore.getState().ensureLive();
-    const live = mustBoard(LIVE_BOARD_ID);
-    removeBoardTab(LIVE_BOARD_ID, "nothing");
-    expect(mustBoard(LIVE_BOARD_ID)).toBe(live);
+    removeBoardTab("live", "nothing");
     expect(workspaceAgents("w1")).toEqual(["a1"]);
   });
 

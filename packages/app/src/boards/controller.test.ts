@@ -34,7 +34,6 @@ import {
   moveBoardTabToPane,
   openDraftInPane,
   openFileBeside,
-  refreshLiveBoard,
   removeBoardTab,
   removeWorkspaceFromBoard,
   renameBoard,
@@ -47,10 +46,9 @@ import {
   splitWorkspaces,
   useBoard,
   useBoards,
-  useLiveBoardSync,
 } from "@/boards/controller";
 import { buildWorkspaceSplit, listBoardTabs } from "@/boards/model";
-import { LIVE_BOARD_ID, type Board, type BoardSessionRef } from "@/boards/types";
+import type { Board, BoardSessionRef } from "@/boards/types";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
   collectAllPanes,
@@ -225,7 +223,6 @@ beforeEach(() => {
     arrangeByBoard: {},
     splitPairs: {},
   });
-  useBoardStore.getState().ensureLive();
   useWorkspaceLayoutStore.setState({
     layoutByWorkspace: {},
     splitSizesByWorkspace: {},
@@ -248,7 +245,7 @@ describe("board basics", () => {
     expect(board.name).toBe("Review");
     expect(board.kind).toBe("user");
     expect(agentsOnBoard(board)).toEqual(["a", "b"]);
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID, id]);
+    expect(useBoardStore.getState().order).toEqual([id]);
   });
 
   it("defaults the name to Board N, skipping taken ones", () => {
@@ -260,28 +257,23 @@ describe("board basics", () => {
     expect(mustBoard(createBoard("")).name).toBe("Board 4");
   });
 
-  it("renames, but never to nothing and never the Live board", () => {
+  it("renames, but never to nothing", () => {
     const id = createBoard("One")!;
     renameBoard(id, "  Two ");
     expect(mustBoard(id).name).toBe("Two");
     renameBoard(id, "   ");
     expect(mustBoard(id).name).toBe("Two");
-    renameBoard(LIVE_BOARD_ID, "Hijacked");
-    expect(mustBoard(LIVE_BOARD_ID).name).toBe("Live");
   });
 
-  it("deletes a board but never the Live board", () => {
+  it("deletes a board", () => {
     const id = createBoard("One")!;
     deleteBoard(id);
     expect(getBoard(id)).toBeNull();
-    deleteBoard(LIVE_BOARD_ID);
-    expect(getBoard(LIVE_BOARD_ID)).not.toBeNull();
   });
 
-  it("getBoard creates the Live board on first read if it is missing", () => {
-    useBoardStore.setState({ boards: {}, order: [] });
-    expect(getBoard(LIVE_BOARD_ID)?.kind).toBe("live");
+  it("getBoard reads nothing for an unknown id, including the removed Live view's", () => {
     expect(getBoard("nope")).toBeNull();
+    expect(getBoard("live")).toBeNull();
   });
 
   it("adding sessions skips ones already there and reports how many were new", () => {
@@ -576,15 +568,6 @@ describe("arrangeBoard (re-lays out panes, never touches tabs)", () => {
     }
     expect(after.layout.root.group.sizes).toEqual([0.5, 0.5]);
   });
-
-  it("works on the Live board too", () => {
-    useBoardStore.getState().ensureLive();
-    putPanes([["a"], ["b"], ["c"]], "columns", LIVE_BOARD_ID);
-    expect(arrangeBoard({ boardId: LIVE_BOARD_ID, preset: "columns-2", viewport: VIEWPORT })).toBe(
-      true,
-    );
-    expect(paneAgents(mustBoard(LIVE_BOARD_ID))).toEqual([["a"], ["b"], ["c"]]);
-  });
 });
 
 const W = (workspaceId: string, serverId = "s1") => ({ serverId, workspaceId });
@@ -779,7 +762,7 @@ describe("splitWorkspaces", () => {
         viewport: null,
       }),
     ).toBeNull();
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID]);
+    expect(useBoardStore.getState().order).toEqual([]);
   });
 });
 
@@ -849,7 +832,7 @@ describe("splitWorkspaces reuse by set", () => {
     const second = split(["w4", "w3", "w2", "w1"], "grid", { width: 1600, height: 1000 });
     expect(second).toBe(first);
     expect(rowShape(mustBoard(second))).toEqual([2, 2]);
-    expect(useBoardStore.getState().order).toEqual([LIVE_BOARD_ID, first]);
+    expect(useBoardStore.getState().order).toEqual([first]);
   });
 
   it("a different set is a different board", () => {
@@ -1000,10 +983,10 @@ describe("replaceBoardWorkspaces (Desk: Empty + add)", () => {
     expect(mustBoard(id).name).toBe("Morning");
   });
 
-  it("does nothing on the Live view or with no workspaces", () => {
+  it("does nothing with no workspaces or an unknown view", () => {
     const id = setup();
     expect(replaceBoardWorkspaces(id, [], VIEWPORT)).toBe(false);
-    expect(replaceBoardWorkspaces(LIVE_BOARD_ID, [W("w1")], VIEWPORT)).toBe(false);
+    expect(replaceBoardWorkspaces("live", [W("w1")], VIEWPORT)).toBe(false);
   });
 });
 
@@ -1073,9 +1056,9 @@ describe("addWorkspacesToBoard / removeWorkspaceFromBoard", () => {
     expect(root.kind === "group" && root.group.direction).toBe("horizontal");
   });
 
-  it("refuses the Live board", () => {
-    expect(addWorkspacesToBoard(LIVE_BOARD_ID, [W("w1")], VIEWPORT)).toEqual([]);
-    expect(removeWorkspaceFromBoard(LIVE_BOARD_ID, "x")).toBe(false);
+  it("refuses an unknown view", () => {
+    expect(addWorkspacesToBoard("live", [W("w1")], VIEWPORT)).toEqual([]);
+    expect(removeWorkspaceFromBoard("live", "x")).toBe(false);
   });
 
   it("removes a pane with its tabs and origins, collapsing the group", () => {
@@ -1118,196 +1101,11 @@ describe("addWorkspacesToBoard / removeWorkspaceFromBoard", () => {
   });
 });
 
-describe("Live board", () => {
-  it("refresh builds a grid of the active agents across ALL hosts and workspaces", () => {
-    setWorld({
-      s1: {
-        run: { state: "running", workspaceId: "w1", createdAt: 1 },
-        need: { state: "attention", workspaceId: "w2", createdAt: 2 },
-        idle: { state: "idle", createdAt: 3 },
-      },
-      s2: { other: { state: "running", workspaceId: "w7", createdAt: 4 } },
-    });
-    refreshLiveBoard(VIEWPORT);
-    const board = mustBoard(LIVE_BOARD_ID);
-    expect(board.kind).toBe("live");
-    expect(agentsOnBoard(board)).toEqual(["run", "need", "other"]);
-    expect(collectAllPanes(board.layout.root)).toHaveLength(3);
-    expect(
-      Object.values(board.origins).map((o) => `${o.serverId}/${o.workspaceId}/${o.agentId}`),
-    ).toEqual(expect.arrayContaining(["s1/w1/run", "s1/w2/need", "s2/w7/other"]));
-  });
-
-  it("skips archived agents and subagents", () => {
-    setWorld({
-      s1: {
-        run: { state: "running" },
-        archived: { state: "running", archived: true },
-        child: { state: "running", parent: "run" },
-      },
-    });
-    refreshLiveBoard(VIEWPORT);
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual(["run"]);
-  });
-
-  it("refresh drops finished agents, keeps the survivors' tabs, and accepts a null viewport", () => {
-    setWorld({ s1: { a: { state: "running" }, b: { state: "running" } } });
-    refreshLiveBoard(null);
-    const before = mustBoard(LIVE_BOARD_ID);
-    const aTab = Object.entries(before.origins).find(([, o]) => o.agentId === "a")![0];
-    setWorld({ s1: { a: { state: "running" }, b: { state: "idle" }, c: { state: "attention" } } });
-    refreshLiveBoard(null);
-    const after = mustBoard(LIVE_BOARD_ID);
-    expect(agentsOnBoard(after).sort()).toEqual(["a", "c"]);
-    expect(after.origins[aTab]?.agentId).toBe("a");
-  });
-
-  it("refresh with nobody active leaves one empty pane", () => {
-    setWorld({ s1: { a: { state: "running" } } });
-    refreshLiveBoard(VIEWPORT);
-    setWorld({ s1: { a: { state: "idle" } } });
-    refreshLiveBoard(VIEWPORT);
-    const board = mustBoard(LIVE_BOARD_ID);
-    expect(collectAllPanes(board.layout.root)).toHaveLength(1);
-    expect(agentsOnBoard(board)).toEqual([]);
-  });
-
-  it("refresh resets the restore point", () => {
-    setWorld({ s1: { a: { state: "running" }, b: { state: "running" } } });
-    refreshLiveBoard(VIEWPORT);
-    arrangeBoard({ boardId: LIVE_BOARD_ID, preset: "single", viewport: VIEWPORT });
-    expect(getBoardArrangeState(LIVE_BOARD_ID).snapshot).not.toBeNull();
-    refreshLiveBoard(VIEWPORT);
-    expect(getBoardArrangeState(LIVE_BOARD_ID).snapshot).toBeNull();
-  });
-});
-
-describe("useLiveBoardSync", () => {
-  it("appends a newly active agent after the debounce, as a grid pane", () => {
-    vi.useFakeTimers();
-    setWorld({ s1: { a: { state: "running" } } });
-    renderHook(() => useLiveBoardSync());
-    act(() => {
-      vi.advanceTimersByTime(299);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual([]);
-    act(() => {
-      vi.advanceTimersByTime(2);
-    });
-    expect(paneAgents(mustBoard(LIVE_BOARD_ID))).toEqual([["a"]]);
-
-    act(() => {
-      setWorld({ s1: { a: { state: "running" }, b: { state: "running" } } });
-    });
-    act(() => {
-      vi.advanceTimersByTime(310);
-    });
-    expect(paneAgents(mustBoard(LIVE_BOARD_ID))).toEqual([["a"], ["b"]]);
-  });
-
-  it("coalesces a burst into one update", () => {
-    vi.useFakeTimers();
-    setWorld({ s1: { a: { state: "running" } } });
-    renderHook(() => useLiveBoardSync());
-    act(() => {
-      vi.advanceTimersByTime(310);
-    });
-    const putSpy = vi.spyOn(useBoardStore.getState(), "putBoard");
-    act(() => {
-      setWorld({ s1: { a: { state: "running" }, b: { state: "running" } } });
-    });
-    act(() => {
-      vi.advanceTimersByTime(150);
-    });
-    act(() => {
-      setWorld({
-        s1: { a: { state: "running" }, b: { state: "running" }, c: { state: "running" } },
-      });
-    });
-    act(() => {
-      vi.advanceTimersByTime(150);
-    });
-    expect(putSpy).not.toHaveBeenCalled();
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-    expect(putSpy).toHaveBeenCalledTimes(1);
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual(["a", "b", "c"]);
-  });
-
-  it("never removes an agent that finished", () => {
-    vi.useFakeTimers();
-    setWorld({ s1: { a: { state: "running" }, b: { state: "running" } } });
-    renderHook(() => useLiveBoardSync());
-    act(() => {
-      vi.advanceTimersByTime(310);
-    });
-    act(() => {
-      setWorld({
-        s1: { a: { state: "idle" }, b: { state: "running" }, c: { state: "running" } },
-      });
-    });
-    act(() => {
-      vi.advanceTimersByTime(310);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID)).sort()).toEqual(["a", "b", "c"]);
-    act(() => {
-      setWorld({ s1: { a: { state: "idle" }, b: { state: "idle" }, c: { state: "idle" } } });
-    });
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID)).sort()).toEqual(["a", "b", "c"]);
-  });
-
-  it("grows across hosts and leaves the restore point alone", () => {
-    vi.useFakeTimers();
-    setWorld({ s1: { a: { state: "running" } } });
-    refreshLiveBoard(VIEWPORT);
-    arrangeBoard({ boardId: LIVE_BOARD_ID, preset: "single", viewport: VIEWPORT });
-    const snapshot = getBoardArrangeState(LIVE_BOARD_ID).snapshot;
-    renderHook(() => useLiveBoardSync());
-    act(() => {
-      setWorld({
-        s1: { a: { state: "running" } },
-        s2: { z: { state: "attention", serverId: "s2" } },
-      });
-    });
-    act(() => {
-      vi.advanceTimersByTime(310);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual(["a", "z"]);
-    expect(getBoardArrangeState(LIVE_BOARD_ID).snapshot).toBe(snapshot);
-    expect(getBoardArrangeState(LIVE_BOARD_ID).lastPreset).toBeNull();
-  });
-
-  it("does nothing while nobody is active, and stops after unmount", () => {
-    vi.useFakeTimers();
-    setWorld({ s1: { a: { state: "idle" } } });
-    const hook = renderHook(() => useLiveBoardSync());
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual([]);
-    act(() => {
-      setWorld({ s1: { a: { state: "running" } } });
-    });
-    hook.unmount();
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-    expect(agentsOnBoard(mustBoard(LIVE_BOARD_ID))).toEqual([]);
-  });
-});
-
 describe("hooks", () => {
   it("useBoards lists summaries in order and keeps its reference while nothing changes", () => {
     const id = createBoard("One", [ref("a"), ref("b")])!;
     const { result, rerender } = renderHook(() => useBoards());
-    expect(result.current).toEqual([
-      { id: LIVE_BOARD_ID, name: "Live", kind: "live", sessionCount: 0 },
-      { id, name: "One", kind: "user", sessionCount: 2 },
-    ]);
+    expect(result.current).toEqual([{ id, name: "One", kind: "user", sessionCount: 2 }]);
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
@@ -1315,7 +1113,7 @@ describe("hooks", () => {
       addSessionsToBoard(id, [ref("c")]);
     });
     expect(result.current).not.toBe(first);
-    expect(result.current[1]?.sessionCount).toBe(3);
+    expect(result.current[0]?.sessionCount).toBe(3);
   });
 
   it("useBoard returns a stable board, null for none or unknown, and follows edits", () => {

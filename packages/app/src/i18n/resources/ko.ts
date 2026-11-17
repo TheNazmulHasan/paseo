@@ -528,10 +528,16 @@ export const ko: TranslationResources = {
       restored: "폴더 {{name}}을(를) 복원했습니다",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "세션 보기",
+    hide: "세션 숨기기",
+    none: "열린 세션 없음",
+    emptyPane: "빈 창",
+  },
   boards: {
     sidebar: {
       title: "보기",
-      live: "라이브",
       split: "워크스페이스 분할…",
       rename: "보기 이름 바꾸기",
       delete: "보기 삭제",
@@ -542,7 +548,6 @@ export const ko: TranslationResources = {
     menu: {
       splitWith: "워크스페이스와 분할…",
       splitWorkspaces: "워크스페이스 분할…",
-      openLive: "라이브 보기 열기",
       openView: "보기 열기: {{name}}",
     },
     picker: {
@@ -567,8 +572,6 @@ export const ko: TranslationResources = {
       addWorkspace: "워크스페이스 추가",
       removeWorkspace: "워크스페이스를 뷰에서 제거",
       paneStrip: "창",
-      live: "라이브",
-      refresh: "라이브 보기 새로 고침",
       paneEmpty: "이 창에는 세션이 없습니다",
       emptyHint:
         "아직 세션이 없습니다. 이 워크스페이스에서 에이전트를 열거나 Ctrl+Cmd+O를 눌러 워크스페이스를 분할하세요.",

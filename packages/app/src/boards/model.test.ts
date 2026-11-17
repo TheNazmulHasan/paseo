@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addSessionsToBoardModel,
-  appendActiveSessions,
   arrangeBoardPanes,
-  arrangeBoardTabs,
   boardSessionKey,
   buildWorkspaceSplit,
   countBoardSessions,
@@ -17,7 +15,6 @@ import {
   NO_EXPLORER_PANE_ID,
   openDraftInPaneModel,
   openFileBesideModel,
-  rebuildLiveBoard,
   removeTabFromBoard,
   resizeBoardSplitModel,
   restoreBoardLayout,
@@ -520,21 +517,6 @@ describe("buildWorkspaceSplit", () => {
 });
 
 describe("arrange, equalize, restore", () => {
-  it("arranges every tab and clears size overrides", () => {
-    const board = { ...withSessions(["a", "b", "c", "d"]), splitSizes: { x: [0.3, 0.7] } };
-    const arranged = arrangeBoardTabs(board, { preset: "columns-2", viewport: VIEWPORT })!;
-    expect(paneAgents(arranged)).toEqual([
-      ["a", "b"],
-      ["c", "d"],
-    ]);
-    expect(arranged.splitSizes).toEqual({});
-    expect(arranged.origins).toBe(board.origins);
-  });
-
-  it("returns null on a board with no sessions", () => {
-    expect(arrangeBoardTabs(emptyBoard(), { preset: "grid", viewport: VIEWPORT })).toBeNull();
-  });
-
   it("equalizes group sizes and clears overrides", () => {
     const ids = makeIds();
     const built = buildWorkspaceSplit({
@@ -565,7 +547,18 @@ describe("arrange, equalize, restore", () => {
     const ids = makeIds();
     const before = withSessions(["a", "b", "c"], ids);
     const snapshot = { layout: before.layout, splitSizes: {} };
-    const arranged = arrangeBoardTabs(before, { preset: "columns-3", viewport: VIEWPORT })!;
+    const built = buildWorkspaceSplit({
+      groups: [{ sessions: [ref("a")] }, { sessions: [ref("b")] }, { sessions: [ref("c")] }],
+      layout: "columns",
+      viewport: VIEWPORT,
+      keepTabIds: new Map([
+        [boardSessionKey(ref("a")), "t1"],
+        [boardSessionKey(ref("b")), "t2"],
+        [boardSessionKey(ref("c")), "t3"],
+      ]),
+      ids,
+    });
+    const arranged: Board = { ...before, layout: built.layout, origins: built.origins };
     const closed = removeTabFromBoard(arranged, "t1");
     const grown = addSessionsToBoardModel(closed, [ref("d")], ids).board;
     const restored = restoreBoardLayout(grown, snapshot, ids);
@@ -579,77 +572,6 @@ describe("arrange, equalize, restore", () => {
     const restored = restoreBoardLayout(before, { layout: before.layout, splitSizes: {} });
     expect(restored.layout.root.kind).toBe("pane");
     expect(NO_EXPLORER_PANE_ID).toBe("__no_explorer__");
-  });
-});
-
-describe("appendActiveSessions (Live board growth)", () => {
-  it("appends newcomers as grid panes after the current tabs, in order", () => {
-    const ids = makeIds();
-    const board = withSessions(["a", "b"], ids);
-    const next = appendActiveSessions(board, [ref("a"), ref("c"), ref("d")], VIEWPORT, ids)!;
-    expect(paneAgents(next).flat()).toEqual(["a", "b", "c", "d"]);
-    expect(collectAllPanes(next.layout.root)).toHaveLength(4);
-    expect(Object.keys(next.origins)).toHaveLength(4);
-  });
-
-  it("keeps existing tab ids when it re-grids", () => {
-    const ids = makeIds();
-    const board = withSessions(["a", "b"], ids);
-    const next = appendActiveSessions(board, [ref("c")], VIEWPORT, ids)!;
-    expect(findBoardTabId(next, ref("a"))).toBe("t1");
-    expect(findBoardTabId(next, ref("b"))).toBe("t2");
-  });
-
-  it("is a no-op (null) when nobody is new", () => {
-    const board = withSessions(["a", "b"]);
-    expect(appendActiveSessions(board, [ref("a")], VIEWPORT)).toBeNull();
-    expect(appendActiveSessions(board, [], VIEWPORT)).toBeNull();
-  });
-
-  it("never removes a session that is no longer active", () => {
-    const ids = makeIds();
-    const board = withSessions(["a", "b"], ids);
-    const next = appendActiveSessions(board, [ref("c")], VIEWPORT, ids)!;
-    expect(agentsOf(next)).toEqual(expect.arrayContaining(["a", "b", "c"]));
-  });
-
-  it("fills an empty Live board", () => {
-    const ids = makeIds();
-    const next = appendActiveSessions(emptyBoard(ids), [ref("a"), ref("b")], VIEWPORT, ids)!;
-    expect(agentsOf(next)).toEqual(["a", "b"]);
-  });
-});
-
-describe("rebuildLiveBoard (refresh)", () => {
-  it("becomes a grid of exactly the active sessions", () => {
-    const ids = makeIds();
-    const board = withSessions(["a", "b", "c"], ids);
-    const next = rebuildLiveBoard(board, [ref("b"), ref("d")], VIEWPORT, ids);
-    expect(agentsOf(next).sort()).toEqual(["b", "d"]);
-    expect(Object.keys(next.origins)).toHaveLength(2);
-    expect(collectAllPanes(next.layout.root)).toHaveLength(2);
-  });
-
-  it("keeps the tab of a session that stays", () => {
-    const ids = makeIds();
-    const board = withSessions(["a", "b"], ids);
-    const next = rebuildLiveBoard(board, [ref("b"), ref("c")], VIEWPORT, ids);
-    expect(findBoardTabId(next, ref("b"))).toBe("t2");
-    expect(next.splitSizes).toEqual({});
-  });
-
-  it("with nobody active is one empty pane", () => {
-    const ids = makeIds();
-    const next = rebuildLiveBoard(withSessions(["a"], ids), [], VIEWPORT, ids);
-    expect(collectAllPanes(next.layout.root)).toHaveLength(1);
-    expect(collectAllTabs(next.layout.root)).toHaveLength(0);
-    expect(next.origins).toEqual({});
-  });
-
-  it("does not duplicate a session listed twice", () => {
-    const ids = makeIds();
-    const next = rebuildLiveBoard(emptyBoard(ids), [ref("a"), ref("a")], VIEWPORT, ids);
-    expect(agentsOf(next)).toEqual(["a"]);
   });
 });
 

@@ -1,7 +1,6 @@
 /**
  * Split views follow their workspaces (fork mod #13, backlog B2). A split view copies each
- * workspace's tab list once; this keeps the copy current afterwards, the way `useLiveBoardSync`
- * keeps the Live view current.
+ * workspace's tab list once; this keeps the copy current afterwards.
  *
  * It watches CHANGES in a workspace's tab set, never the difference between the workspace and
  * the view: a file opened inside the view, or an agent a draft just became, is on the view

@@ -3,8 +3,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { z } from "zod";
 import type { ArrangePreset } from "@/arrange/types";
-import { createEmptyBoardLayout } from "@/boards/model";
-import { LIVE_BOARD_ID, type Board } from "@/boards/types";
+import type { Board } from "@/boards/types";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-actions";
 import { WorkspaceLayoutPersistedStateSchema } from "@/stores/workspace-layout-storage";
@@ -29,20 +28,18 @@ export const EMPTY_BOARD_ARRANGE_STATE: BoardArrangeState = Object.freeze({
 
 interface BoardStoreState {
   boards: Record<string, Board>;
-  /** Display order; the Live board is always first. */
+  /** Display order. */
   order: string[];
   arrangeByBoard: Record<string, BoardArrangeState>;
   /** "<leftKey>|<rightKey>" (workspace persistence keys) → the board splitWorkspaces made. */
   splitPairs: Record<string, string>;
   /** Insert or replace; a new id is appended to `order`. */
   putBoard: (board: Board) => void;
-  /** Refuses the Live board. */
   removeBoard: (boardId: string) => boolean;
   patchArrange: (boardId: string, patch: Partial<BoardArrangeState>) => void;
   setSplitPair: (pairKey: string, boardId: string) => void;
   /** Re-keys the board's split-set memory: drops its old key(s), then stores `pairKey` (if any). */
   rekeySplitPair: (boardId: string, pairKey: string | null) => void;
-  ensureLive: () => void;
 }
 
 const LayoutSchema = WorkspaceLayoutPersistedStateSchema.shape.layoutByWorkspace.valueType;
@@ -52,6 +49,8 @@ const BoardSchema = z.strictObject({
   id: z.string(),
   name: z.string(),
   createdAt: z.number(),
+  // "live" is only ever read: a store saved while the Live view existed still has that board, and
+  // a strict read must not throw the user's saved views away with it. It is dropped on load.
   kind: z.enum(["user", "live"]),
   layout: LayoutSchema,
   splitSizes: SplitSizesSchema,
@@ -79,22 +78,19 @@ const BoardPersistedStateSchema = z.strictObject({
   splitPairs: z.record(z.string(), z.string()),
 });
 
-type BoardPersistedState = z.infer<typeof BoardPersistedStateSchema>;
-
-function createLiveBoard(): Board {
-  return {
-    id: LIVE_BOARD_ID,
-    name: "Live",
-    createdAt: Date.now(),
-    kind: "live",
-    layout: createEmptyBoardLayout(),
-    splitSizes: {},
-    origins: {},
-  };
+/** What a store holds in memory: stored boards, minus anything that is not a saved view. */
+interface BoardPersistedState {
+  boards: Record<string, Board>;
+  order: string[];
+  arrangeByBoard: z.infer<typeof BoardPersistedStateSchema>["arrangeByBoard"];
+  splitPairs: Record<string, string>;
 }
 
+/** The id the removed Live view lived under; a stored board with it is never loaded. */
+const REMOVED_LIVE_VIEW_ID = "live";
+
 /** Every tab must have an origin, or the screen cannot tell which agent it shows. */
-function hasOriginsForAllTabs(board: Board): boolean {
+function hasOriginsForAllTabs(board: Pick<Board, "layout" | "origins">): boolean {
   const tabIds: string[] = [];
   const visit = (node: Board["layout"]["root"]): void => {
     if (node.kind === "pane") {
@@ -110,7 +106,8 @@ function hasOriginsForAllTabs(board: Board): boolean {
 /**
  * Anything that is not a well-formed state becomes an empty one: a screen helper must never
  * be the reason the app fails to start. Entries are checked one by one, so a single bad
- * board does not cost the others. The Live board is always put back.
+ * board does not cost the others. A stored Live board (id "live" or kind "live", from before the
+ * Live view was removed) is dropped, with its order slot, arrange state and split pairs.
  */
 export function parseBoardPersistedState(persisted: unknown): BoardPersistedState {
   const outer = z
@@ -128,17 +125,19 @@ export function parseBoardPersistedState(persisted: unknown): BoardPersistedStat
   const boards: Record<string, Board> = {};
   for (const [id, entry] of Object.entries(raw.boards)) {
     const parsed = BoardSchema.safeParse(entry);
-    if (parsed.success && parsed.data.id === id && hasOriginsForAllTabs(parsed.data)) {
-      // The id decides the kind: only the real Live id may be the Live board.
-      boards[id] = { ...parsed.data, kind: id === LIVE_BOARD_ID ? "live" : "user" };
+    if (
+      parsed.success &&
+      parsed.data.id === id &&
+      id !== REMOVED_LIVE_VIEW_ID &&
+      parsed.data.kind !== "live" &&
+      hasOriginsForAllTabs(parsed.data)
+    ) {
+      boards[id] = { ...parsed.data, kind: "user" };
     }
   }
-  if (!boards[LIVE_BOARD_ID]) {
-    boards[LIVE_BOARD_ID] = createLiveBoard();
-  }
 
-  const seen = new Set<string>([LIVE_BOARD_ID]);
-  const order = [LIVE_BOARD_ID];
+  const seen = new Set<string>();
+  const order: string[] = [];
   for (const id of [...raw.order, ...Object.keys(boards)]) {
     if (typeof id === "string" && boards[id] && !seen.has(id)) {
       seen.add(id);
@@ -155,7 +154,7 @@ export function parseBoardPersistedState(persisted: unknown): BoardPersistedStat
   }
   const splitPairs: Record<string, string> = {};
   for (const [pairKey, boardId] of Object.entries(raw.splitPairs)) {
-    if (typeof boardId === "string" && boards[boardId] && boardId !== LIVE_BOARD_ID) {
+    if (typeof boardId === "string" && boards[boardId]) {
       splitPairs[pairKey] = boardId;
     }
   }
@@ -183,7 +182,7 @@ export const useBoardStore = create<BoardStoreState>()(
       },
       removeBoard: (boardId) => {
         const { boards, order, arrangeByBoard, splitPairs } = get();
-        if (boardId === LIVE_BOARD_ID || !boards[boardId]) {
+        if (!boards[boardId]) {
           return false;
         }
         const { [boardId]: _board, ...restBoards } = boards;
@@ -217,16 +216,6 @@ export const useBoardStore = create<BoardStoreState>()(
       rekeySplitPair: (boardId, pairKey) => {
         const kept = Object.entries(get().splitPairs).filter(([, id]) => id !== boardId);
         set({ splitPairs: Object.fromEntries(pairKey ? [...kept, [pairKey, boardId]] : kept) });
-      },
-      ensureLive: () => {
-        if (get().boards[LIVE_BOARD_ID]) {
-          return;
-        }
-        const { boards, order } = get();
-        set({
-          boards: { ...boards, [LIVE_BOARD_ID]: createLiveBoard() },
-          order: [LIVE_BOARD_ID, ...order.filter((id) => id !== LIVE_BOARD_ID)],
-        });
       },
     }),
     {

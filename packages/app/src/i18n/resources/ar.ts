@@ -528,10 +528,16 @@ export const ar: TranslationResources = {
       restored: "تمت استعادة المجلد {{name}}",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "إظهار الجلسات",
+    hide: "إخفاء الجلسات",
+    none: "لا توجد جلسات مفتوحة",
+    emptyPane: "لوحة فارغة",
+  },
   boards: {
     sidebar: {
       title: "العروض",
-      live: "مباشر",
       split: "تقسيم مساحات العمل…",
       rename: "إعادة تسمية العرض",
       delete: "حذف العرض",
@@ -542,7 +548,6 @@ export const ar: TranslationResources = {
     menu: {
       splitWith: "تقسيم مع مساحات العمل…",
       splitWorkspaces: "تقسيم مساحات العمل…",
-      openLive: "فتح العرض المباشر",
       openView: "فتح العرض: {{name}}",
     },
     picker: {
@@ -567,8 +572,6 @@ export const ar: TranslationResources = {
       addWorkspace: "إضافة مساحة عمل",
       removeWorkspace: "إزالة مساحة العمل من العرض",
       paneStrip: "الألواح",
-      live: "مباشر",
-      refresh: "تحديث العرض المباشر",
       paneEmpty: "لا توجد جلسات في هذه اللوحة",
       emptyHint:
         "لا توجد جلسات هنا بعد. افتح بعض الوكلاء في مساحات العمل هذه، أو اضغط Ctrl+Cmd+O لتقسيم مساحات العمل.",

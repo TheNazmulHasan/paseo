@@ -527,10 +527,16 @@ export const zhCN: TranslationResources = {
       restored: "已恢复文件夹 {{name}}",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "显示会话",
+    hide: "隐藏会话",
+    none: "没有打开的会话",
+    emptyPane: "空窗格",
+  },
   boards: {
     sidebar: {
       title: "视图",
-      live: "实时",
       split: "拆分工作区…",
       rename: "重命名视图",
       delete: "删除视图",
@@ -541,7 +547,6 @@ export const zhCN: TranslationResources = {
     menu: {
       splitWith: "与工作区拆分…",
       splitWorkspaces: "拆分工作区…",
-      openLive: "打开实时视图",
       openView: "打开视图：{{name}}",
     },
     picker: {
@@ -566,8 +571,6 @@ export const zhCN: TranslationResources = {
       addWorkspace: "添加工作区",
       removeWorkspace: "从视图中移除工作区",
       paneStrip: "窗格",
-      live: "实时",
-      refresh: "刷新实时视图",
       paneEmpty: "此窗格中没有会话",
       emptyHint: "这里还没有会话。请在这些工作区中打开一些智能体，或按 Ctrl+Cmd+O 拆分工作区。",
       notFound: "此视图已不存在",

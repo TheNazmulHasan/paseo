@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { usePathname } from "expo-router";
 import { rememberNonBoardPathname } from "@/boards/back-store";
-import { useLiveBoardSync } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { goBackFromBoard } from "@/boards/navigation";
 import { openSplitPicker } from "@/boards/split-picker-store";
@@ -14,14 +13,13 @@ import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 const SPLIT_ACTIONS: readonly KeyboardActionId[] = ["workspace.board.split"];
 
 /**
- * Everything Boards needs mounted once at app level (fork mod #13): the Live view keeps itself in
- * step with running agents, split views keep in step with their workspaces' tabs, Ctrl+Cmd+O and
+ * Everything Boards needs mounted once at app level (fork mod #13): split views keep in step with
+ * their workspaces' tabs, Ctrl+Cmd+O and
  * the Command Center open the split picker (on a view the same key goes back to the workspace
  * instead, Esc being the agents'), and the Command Center lists the views. One element in the
  * root layout instead of four.
  */
 export function BoardsHost() {
-  useLiveBoardSync();
   useSplitBoardSync();
   useBoardsCommandCenterActions();
   const pathname = usePathname();

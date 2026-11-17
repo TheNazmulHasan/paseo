@@ -525,10 +525,16 @@ export const en = {
       restored: "Restored folder {{name}}",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "Show sessions",
+    hide: "Hide sessions",
+    none: "No sessions open",
+    emptyPane: "Empty pane",
+  },
   boards: {
     sidebar: {
       title: "Views",
-      live: "Live",
       split: "Split workspaces…",
       rename: "Rename view",
       delete: "Delete view",
@@ -539,7 +545,6 @@ export const en = {
     menu: {
       splitWith: "Split with workspaces…",
       splitWorkspaces: "Split workspaces…",
-      openLive: "Open Live view",
       openView: "Open view: {{name}}",
     },
     picker: {
@@ -564,8 +569,6 @@ export const en = {
       addWorkspace: "Add workspace",
       removeWorkspace: "Remove workspace from view",
       paneStrip: "Panes",
-      live: "Live",
-      refresh: "Refresh Live view",
       paneEmpty: "No sessions in this pane",
       emptyHint:
         "No sessions here yet. Open some agents in these workspaces, or press Ctrl+Cmd+O to split workspaces.",

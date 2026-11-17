@@ -80,7 +80,7 @@ export interface SidebarProjectionInput {
   /** Fork mod #16; absent means no folders, so the Shelf renders and numbers as before. */
   folders?: {
     index: FolderIndex;
-    /** Saved views only: the built-in Live view is not fileable. */
+    /** The saved views. */
     boards: readonly BoardSummary[];
     openKeys: ReadonlySet<string>;
   };

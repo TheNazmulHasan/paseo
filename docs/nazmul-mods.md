@@ -133,7 +133,7 @@ scripts/nazmul-bundle-has.sh 'Clear desk'
 
 ## views-keybindings-place-sidebars
 
-Split views + Live view (Desk select → Columns / Grid makes one, Add / Empty + add fills the active one); ~/.paseo/keybindings.json applies live; each workspace and view remembers its sidebars. Docs: myos/paseo/views.md, keybindings-file.md, place-sidebars.md
+Split views (the Live view was removed 2026-11-17: no row, route or refresh; a stored Live board is dropped on load) (Desk select → Columns / Grid makes one, Add / Empty + add fills the active one); ~/.paseo/keybindings.json applies live; each workspace and view remembers its sidebars. Docs: myos/paseo/views.md, keybindings-file.md, place-sidebars.md
 
 ```bash
 npm test --workspace=@getpaseo/app -- --project unit src/boards src/desk/target-view.test.ts src/keyboard/file-keybindings.test.ts src/stores/place-sidebars-store.test.ts --bail=1
@@ -146,6 +146,9 @@ scripts/nazmul-bundle-has.sh sidebar-desk-select-replace-view
 scripts/nazmul-bundle-has.sh keybindings-changed
 scripts/nazmul-bundle-has.sh paseo-place-sidebars
 scripts/nazmul-bundle-has.sh --absent global-sidebars
+! grep -rn 'LIVE_BOARD_ID\|refreshLiveBoard\|useLiveBoardSync' packages/app/src --include='*.ts' --include='*.tsx' | grep -v test
+scripts/nazmul-bundle-has.sh --absent board-refresh
+scripts/nazmul-bundle-has.sh --absent sidebar-view-live-dot
 ```
 
 ## session-mentions
@@ -219,4 +222,20 @@ scripts/nazmul-bundle-has.sh 'paseo-folders'
 scripts/nazmul-bundle-has.sh 'workspace.folder.move'
 scripts/nazmul-bundle-has.sh 'sidebar-desk-grouping'
 scripts/nazmul-bundle-has.sh 'sidebar-views-split'
+```
+
+## sidebar-tabs
+
+Arc-style vertical session list: every workspace row (Pinned, Desk folder, folders, Unfiled) has an always-visible chevron that stacks that workspace's tabs under it (same order as the top tab bar: `deriveWorkspacePaneState` over each visible pane, Explorer pane left out; the tab's own icon and status signal; full title on one line; the tab on screen highlighted; click opens the workspace with that tab focused; no close button). A view row has the same chevron and lists one line per pane (`workspace name · active tab`; click focuses the pane). Open or folded is kept per workspace / view on this device (`paseo-sidebar-tabs`). The Cmd+1..9 numbering never counts these lines. Docs: myos/paseo/sidebar-tabs.md
+
+```bash
+npm test --workspace=@getpaseo/app -- --project unit src/sidebar-tabs src/screens/workspace src/components/sidebar src/boards --bail=1
+grep -q SidebarTabsChevron packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx
+grep -q WorkspaceTabLines packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx
+grep -q ViewPaneLines packages/app/src/boards/boards-section.tsx
+grep -q deriveWorkspacePaneState packages/app/src/sidebar-tabs/model.ts
+scripts/nazmul-bundle-has.sh 'paseo-sidebar-tabs'
+scripts/nazmul-bundle-has.sh 'sidebar-tabs-chevron-'
+scripts/nazmul-bundle-has.sh 'sidebar-tab-line-'
+scripts/nazmul-bundle-has.sh 'sidebar-pane-line-'
 ```

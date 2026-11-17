@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import { usePathname } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { SquareSplitHorizontal } from "lucide-react-native";
@@ -7,24 +7,42 @@ import { ViewRow, useViewRowActions } from "@/boards/boards-section";
 import { useBoards } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { openSplitPicker } from "@/boards/split-picker-store";
-import { isViewActive, orderViewRows, pinnedSectionCount } from "@/boards/views-model";
+import { isViewActive, pinnedSectionCount } from "@/boards/views-model";
 import { DeskIconButton } from "@/desk/desk-icon-button";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 
 /**
- * The saved views and the Live view, in the order the sidebar lists them (Live first).
+ * The saved views, in the order the store keeps them.
  * Views are one part of the Pinned section: the section's count, fold and new-view icon all
  * live on the Pinned header (`PinnedSectionHeader`), and these rows come before the pinned
  * workspaces.
  */
 function usePinnedViewRows() {
-  const boards = useBoards();
-  return useMemo(() => orderViewRows(boards), [boards]);
+  return useBoards();
 }
 
-/** True while there is at least one view row, so the Pinned section shows even with nothing pinned. */
+/** True while there is at least one saved view, so the Pinned section shows with nothing pinned. */
 export function usePinnedViewsPresent(): boolean {
   return usePinnedViewRows().length > 0;
+}
+
+/**
+ * The always-visible new-view (split) icon. It sits on the Pinned header while that section is
+ * showing, and on the Folders header when it is not (no view and nothing pinned), so a first view
+ * can always be made from the sidebar.
+ */
+export function NewViewButton() {
+  const { t } = useTranslation();
+  const splitKeys = useShortcutKeys("workspace-board-split");
+  return (
+    <DeskIconButton
+      icon={SquareSplitHorizontal}
+      label={t("boards.sidebar.split")}
+      shortcutKeys={splitKeys}
+      onPress={openSplitPicker}
+      testID="sidebar-views-split"
+    />
+  );
 }
 
 /**
@@ -46,7 +64,6 @@ export function PinnedSectionHeader({
 }) {
   const { t } = useTranslation();
   const rows = usePinnedViewRows();
-  const splitKeys = useShortcutKeys("workspace-board-split");
   return (
     <SidebarSectionHeader
       title={t("sidebar.pinned.title")}
@@ -57,20 +74,13 @@ export function PinnedSectionHeader({
       countTestID={countTestID}
       chevronAlwaysVisible
     >
-      <DeskIconButton
-        icon={SquareSplitHorizontal}
-        label={t("boards.sidebar.split")}
-        shortcutKeys={splitKeys}
-        onPress={openSplitPicker}
-        testID="sidebar-views-split"
-      />
+      <NewViewButton />
     </SidebarSectionHeader>
   );
 }
 
 /**
- * The view rows at the top of the Pinned section (the Live view first), the same rows the Views
- * section had: open, rename in place, delete after a confirm, and the folder icon. Rendered only
+ * The view rows at the top of the Pinned section, the same rows the Views section had: open, rename in place, delete after a confirm, and the folder icon. Rendered only
  * while the section is open. `onWorkspacePress` closes the compact sidebar after a row opens.
  */
 export const PinnedViewRows = memo(function PinnedViewRows({

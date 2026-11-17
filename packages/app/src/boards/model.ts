@@ -2,7 +2,6 @@
 // the controller only wires results into the store. A board's layout is a normal
 // WorkspaceLayout with no Explorer, so Arrange's own model runs on it unchanged.
 import {
-  arrangeLayoutTabs,
   collectArrangeTabs,
   computeGridShape,
   equalizeLayout,
@@ -309,25 +308,6 @@ export function resizeBoardSplitModel(board: Board, groupId: string, sizes: numb
   return { ...board, splitSizes: { ...board.splitSizes, [groupId]: clampNormalizedSizes(sizes) } };
 }
 
-/**
- * Re-deals the board's TABS into fresh panes (all of them, in on-screen order unless `tabIds`
- * says otherwise). Only the Live board's own growth/refresh uses this; a user's Arrange
- * preset goes through arrangeBoardPanes, which keeps every pane.
- */
-export function arrangeBoardTabs(
-  board: Board,
-  input: { preset: ArrangePreset; viewport: ArrangeViewport; tabIds?: readonly string[] },
-): Board | null {
-  const tabIds = input.tabIds ?? listBoardTabs(board.layout).map((tab) => tab.tabId);
-  const layout = arrangeLayoutTabs(board.layout, {
-    tabIds,
-    preset: input.preset,
-    viewport: input.viewport,
-    explorerPaneId: NO_EXPLORER_PANE_ID,
-  });
-  return layout ? { ...board, layout, splitSizes: {} } : null;
-}
-
 export function equalizeBoardLayout(board: Board): Board {
   // Dragged dividers live in split-size overrides; clearing them is what makes it equal.
   return {
@@ -447,66 +427,6 @@ export function buildWorkspaceSplit(input: {
     layout: { root: asLayoutRoot(root), focusedPaneId: firstPaneId(root) },
     origins,
   };
-}
-
-/**
- * The Live board's growth step: newly active sessions join and the board is re-gridded over
- * (current tabs in order + the newcomers). Nothing is ever removed here; finished sessions
- * stay until a refresh. Returns null when nobody is new.
- */
-export function appendActiveSessions(
-  board: Board,
-  active: readonly BoardSessionRef[],
-  viewport: ArrangeViewport,
-  ids: BoardIds = DEFAULT_BOARD_IDS,
-): Board | null {
-  const current = listBoardTabs(board.layout).map((tab) => tab.tabId);
-  const { board: grown, addedTabIds } = addSessionsToBoardModel(board, active, ids);
-  if (addedTabIds.length === 0) {
-    return null;
-  }
-  return (
-    arrangeBoardTabs(grown, { preset: "grid", viewport, tabIds: [...current, ...addedTabIds] }) ??
-    grown
-  );
-}
-
-/**
- * The Live board's reset: a grid of exactly `active`. Sessions that were already on the board
- * keep their tab (and on-screen order); the rest follow in the order given.
- */
-export function rebuildLiveBoard(
-  board: Board,
-  active: readonly BoardSessionRef[],
-  viewport: ArrangeViewport,
-  ids: BoardIds = DEFAULT_BOARD_IDS,
-): Board {
-  const wanted = new Map(active.map((session) => [boardSessionKey(session), session]));
-  const kept: BoardSessionRef[] = [];
-  const keepTabIds = new Map<string, string>();
-  for (const tab of listBoardTabs(board.layout)) {
-    const origin = board.origins[tab.tabId];
-    const key = origin ? boardSessionKey(origin) : null;
-    if (origin && key && wanted.has(key) && !keepTabIds.has(key)) {
-      keepTabIds.set(key, tab.tabId);
-      kept.push(origin);
-    }
-  }
-  const ordered = [...kept, ...active];
-  const grouped = buildWorkspaceSplit({
-    groups: [{ sessions: ordered }],
-    layout: "columns",
-    viewport,
-    keepTabIds,
-    ids,
-  });
-  const single: Board = { ...board, layout: grouped.layout, origins: grouped.origins };
-  return (
-    arrangeBoardTabs({ ...single, splitSizes: {} }, { preset: "grid", viewport }) ?? {
-      ...single,
-      splitSizes: {},
-    }
-  );
 }
 
 // ---------------------------------------------------------------------------

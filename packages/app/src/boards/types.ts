@@ -20,8 +20,11 @@ export interface Board {
   id: string;
   name: string;
   createdAt: number;
-  /** "live" is the built-in board of every agent that is running or needs you. */
-  kind: "user" | "live";
+  /**
+   * Always "user". The built-in Live view is gone (Nazmul mod, 2026-11-17); the field stays so a
+   * stored board keeps its shape.
+   */
+  kind: "user";
   layout: WorkspaceLayout;
   /** Split-size overrides by group id, like the workspace store's splitSizesByWorkspace. */
   splitSizes: Record<string, number[]>;
@@ -39,5 +42,3 @@ export interface BoardSummary {
 
 /** An agent session or an open file to put on a board. */
 export type BoardSessionRef = BoardTabOrigin;
-
-export const LIVE_BOARD_ID = "live";

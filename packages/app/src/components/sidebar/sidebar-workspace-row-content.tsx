@@ -39,6 +39,8 @@ import { buildHeartbeatPillPresentation } from "@/heartbeats/track-presentation"
 import { useWorkspaceCacheWarm } from "@/prompt-cache/use-workspace-cache-warm";
 import { DeskRowToggle } from "@/desk/desk-row-toggle";
 import { WorkspaceFolderButton } from "@/folders/folder-row-button";
+// Nazmul mod (sidebar-tabs): the chevron on the row and the session lines under it.
+import { SidebarTabsChevron, WorkspaceTabLines } from "@/sidebar-tabs/tab-lines";
 
 const needsInputColorMapping = (theme: Theme) => ({
   color: theme.colors.surface0,
@@ -80,19 +82,27 @@ export function SidebarWorkspaceRowFrame({
   );
 
   return (
-    <WorkspaceHoverCard
-      workspace={workspace}
-      prHint={workspace.prHint}
-      isDragging={isDragging}
-      disabled={contextMenuOpen}
-    >
-      {children({
-        isHovered: isHovered && !contextMenuOpen && !isDragging,
-        contextMenuOpen,
-        onContextMenuOpenChange: handleContextMenuOpenChange,
-        hoverHandlers,
-      })}
-    </WorkspaceHoverCard>
+    <>
+      <WorkspaceHoverCard
+        workspace={workspace}
+        prHint={workspace.prHint}
+        isDragging={isDragging}
+        disabled={contextMenuOpen}
+      >
+        {children({
+          isHovered: isHovered && !contextMenuOpen && !isDragging,
+          contextMenuOpen,
+          onContextMenuOpenChange: handleContextMenuOpenChange,
+          hoverHandlers,
+        })}
+      </WorkspaceHoverCard>
+      {/* Nazmul mod (sidebar-tabs): this workspace's sessions, stacked under its row. */}
+      <WorkspaceTabLines
+        serverId={workspace.serverId}
+        workspaceId={workspace.workspaceId}
+        workspaceKey={workspace.workspaceKey}
+      />
+    </>
   );
 }
 
@@ -179,6 +189,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   return (
     <View style={styles.workspaceRowContent}>
       <View style={styles.workspaceRowMain}>
+        {/* Nazmul mod (sidebar-tabs): always-visible fold chevron for the session list. */}
+        <SidebarTabsChevron
+          stateKey={workspace.workspaceKey}
+          testID={`sidebar-tabs-chevron-${workspace.workspaceKey}`}
+        />
         {leadingProjectName ? (
           <ProjectStatusIndicator
             iconDataUri={leadingProjectIconDataUri}

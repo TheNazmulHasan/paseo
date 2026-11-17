@@ -2,33 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRenameSession,
   isViewActive,
-  orderViewRows,
   pinnedSectionCount,
   resolveRename,
   showRowActions,
 } from "@/boards/views-model";
-import type { BoardSummary } from "@/boards/types";
-
-const summary = (id: string, kind: BoardSummary["kind"], sessionCount = 0): BoardSummary => ({
-  id,
-  name: id,
-  kind,
-  sessionCount,
-});
-
-describe("orderViewRows", () => {
-  it("puts Live first and keeps the saved splits in order", () => {
-    expect(
-      orderViewRows([summary("a", "user"), summary("live", "live"), summary("b", "user")]).map(
-        (row) => row.id,
-      ),
-    ).toEqual(["live", "a", "b"]);
-  });
-
-  it("works with no Live board yet", () => {
-    expect(orderViewRows([summary("a", "user")]).map((row) => row.id)).toEqual(["a"]);
-  });
-});
 
 describe("isViewActive", () => {
   it("matches only the board on screen", () => {

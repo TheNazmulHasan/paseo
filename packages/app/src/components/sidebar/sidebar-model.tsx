@@ -23,7 +23,7 @@ import { useDeskStore } from "@/desk/desk-store";
 import { toKeySet, type DeskGroup } from "@/desk/model";
 import { useDeskReconcile } from "@/desk/use-desk-reconcile";
 import { useBoards } from "@/boards/controller";
-import { LIVE_BOARD_ID, type BoardSummary } from "@/boards/types";
+import type { BoardSummary } from "@/boards/types";
 import { useFolderIndex } from "@/folders/folder-store";
 import { useFolderUiStore } from "@/folders/folder-ui-store";
 import type { FolderSection } from "@/folders/model";
@@ -106,7 +106,7 @@ export function SidebarModelProvider({
       foldersAvailable
         ? {
             index: folderIndex,
-            boards: boards.filter((board) => board.kind !== "live" && board.id !== LIVE_BOARD_ID),
+            boards,
             openKeys: new Set(folderOpenKeyList),
           }
         : undefined,

@@ -5,7 +5,6 @@ import {
   equalizeBoardPanes,
   focusBoardPane,
   openDraftInPane,
-  refreshLiveBoard,
   removeBoardTab,
   restoreBoardArrangement,
   selectBoardTab,
@@ -59,11 +58,7 @@ export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboa
           arrangeBoard({ boardId, preset: command.preset, viewport: getViewport() });
           return true;
         case "watch":
-          if (board.kind === "live") {
-            refreshLiveBoard(getViewport());
-          } else {
-            arrangeBoard({ boardId, preset: "grid", viewport: getViewport() });
-          }
+          arrangeBoard({ boardId, preset: "grid", viewport: getViewport() });
           return true;
         case "restore":
           restoreBoardArrangement(boardId);
@@ -114,7 +109,6 @@ export function useBoardKeyboard({ board, enabled, getViewport }: UseBoardKeyboa
       }
     },
     [
-      board.kind,
       board.layout.focusedPaneId,
       board.layout.root,
       board.origins,

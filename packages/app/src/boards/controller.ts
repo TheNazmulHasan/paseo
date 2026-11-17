@@ -3,13 +3,12 @@
  * points code against. Rules (what moves where) live in model.ts; this file reads the
  * stores, calls the model, and writes the result back to the board store.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { ArrangePreset, ArrangeViewport } from "@/arrange/types";
 import { getBoardArrangeState, useBoardStore } from "@/boards/board-store";
 import {
   addSessionsToBoardModel,
   addWorkspacePanesToBoard,
-  appendActiveSessions,
   arrangeBoardPanes,
   boardSessionKey,
   buildWorkspaceSplit,
@@ -22,7 +21,6 @@ import {
   moveBoardTab,
   openDraftInPaneModel,
   openFileBesideModel,
-  rebuildLiveBoard,
   removeTabFromBoard,
   removeWorkspacePaneFromBoard,
   resizeBoardSplitModel,
@@ -35,7 +33,6 @@ import {
 } from "@/boards/model";
 import { closeSessionInWorkspace, rememberWorkspaceTabs } from "@/boards/split-sync";
 import {
-  LIVE_BOARD_ID,
   type Board,
   type BoardSessionRef,
   type BoardSummary,
@@ -54,14 +51,9 @@ import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 
-/** A burst of agents starting together should produce one re-arrange, not one each. */
-const LIVE_SYNC_DEBOUNCE_MS = 300;
 const DEFAULT_VIEWPORT: ArrangeViewport = { width: 1600, height: 1000 };
 /** Names listed in a split board's title before the rest collapse into "+N". */
 const MAX_NAMED_WORKSPACES = 3;
-
-/** The size the Live board was last arranged for, so auto-growth matches what is on screen. */
-let lastLiveViewport: ArrangeViewport | null = null;
 
 type SessionsState = ReturnType<typeof useSessionStore.getState>["sessions"];
 
@@ -85,7 +77,7 @@ function createBoardId(): string {
 function nextBoardName(): string {
   const boards = Object.values(boardStore().boards);
   const taken = new Set(boards.map((board) => board.name));
-  let index = boards.filter((board) => board.kind === "user").length + 1;
+  let index = boards.length + 1;
   while (taken.has(`Board ${index}`)) {
     index += 1;
   }
@@ -93,9 +85,6 @@ function nextBoardName(): string {
 }
 
 function readBoard(boardId: string): Board | null {
-  if (boardId === LIVE_BOARD_ID) {
-    boardStore().ensureLive();
-  }
   return boardStore().boards[boardId] ?? null;
 }
 
@@ -130,7 +119,7 @@ export function createBoard(
 
 export function renameBoard(boardId: string, name: string): void {
   const trimmed = name.trim();
-  if (boardId === LIVE_BOARD_ID || !trimmed) {
+  if (!trimmed) {
     return;
   }
   updateBoard(boardId, (board) => (board.name === trimmed ? board : { ...board, name: trimmed }));
@@ -154,14 +143,14 @@ export function addSessionsToBoard(boardId: string, sessions: readonly BoardSess
 }
 
 /**
- * Closes a tab in the view. On a split view the tab closes in its workspace too (the two stay
- * in step both ways; see split-sync.ts). The Live view only drops its own tab.
+ * Closes a tab in the view. The tab closes in its workspace too (the two stay in step both
+ * ways; see split-sync.ts).
  */
 export function removeBoardTab(boardId: string, tabId: string): void {
   const board = readBoard(boardId);
   const origin = board?.origins[tabId];
   updateBoard(boardId, (current) => removeTabFromBoard(current, tabId));
-  if (board?.kind === "user" && origin) {
+  if (origin) {
     closeSessionInWorkspace(origin);
   }
 }
@@ -296,9 +285,6 @@ export function arrangeBoard(input: {
   const snapshot = arrange.snapshot ?? { layout: before.layout, splitSizes: before.splitSizes };
   boardStore().putBoard(arranged);
   boardStore().patchArrange(boardId, { snapshot, lastPreset: preset });
-  if (boardId === LIVE_BOARD_ID) {
-    lastLiveViewport = viewport;
-  }
   return true;
 }
 
@@ -377,13 +363,6 @@ function listRootAgents(sessions: SessionsState): RootAgent[] {
       a.agent.createdAt.getTime() - b.agent.createdAt.getTime() ||
       boardSessionKey(a.ref).localeCompare(boardSessionKey(b.ref)),
   );
-}
-
-/** Running or needing attention, across ALL hosts and workspaces. */
-function listActiveRefs(sessions: SessionsState): BoardSessionRef[] {
-  return listRootAgents(sessions)
-    .filter(({ agent }) => isAgentActive(agent))
-    .map(({ ref }) => ref);
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +547,7 @@ export function addWorkspacesToBoard(
   viewport: ArrangeViewport | null,
 ): string[] {
   const board = readBoard(boardId);
-  if (!board || board.kind === "live") {
+  if (!board) {
     return [];
   }
   const present = new Set(boardWorkspaceKeys(board));
@@ -634,7 +613,7 @@ export function replaceBoardWorkspaces(
   viewport: ArrangeViewport | null,
 ): boolean {
   const board = readBoard(boardId);
-  if (!board || board.kind === "live") {
+  if (!board) {
     return false;
   }
   const refs: WorkspaceRef[] = [];
@@ -680,7 +659,7 @@ export function replaceBoardWorkspaces(
 /** Takes a pane (one workspace, with its tabs) out of the view. The last pane stays. */
 export function removeWorkspaceFromBoard(boardId: string, paneId: string): boolean {
   const board = readBoard(boardId);
-  if (!board || board.kind === "live") {
+  if (!board) {
     return false;
   }
   const next = removeWorkspacePaneFromBoard(board, paneId);
@@ -691,60 +670,6 @@ export function removeWorkspaceFromBoard(boardId: string, paneId: string): boole
   rememberSplitSet(next);
   boardStore().patchArrange(boardId, { lastPreset: null });
   return true;
-}
-
-// ---------------------------------------------------------------------------
-// Live board
-// ---------------------------------------------------------------------------
-
-/** Re-read every agent that is running or needs you; finished ones leave only here. */
-export function refreshLiveBoard(viewport: ArrangeViewport | null): void {
-  const board = readBoard(LIVE_BOARD_ID);
-  if (!board) {
-    return;
-  }
-  if (viewport) {
-    lastLiveViewport = viewport;
-  }
-  const active = listActiveRefs(useSessionStore.getState().sessions);
-  boardStore().putBoard(rebuildLiveBoard(board, active, viewport ?? DEFAULT_VIEWPORT));
-  boardStore().patchArrange(LIVE_BOARD_ID, { snapshot: null, lastPreset: null });
-}
-
-/** Agents that started working since the last look join the Live board; nothing leaves. */
-function growLiveBoard(): void {
-  const board = readBoard(LIVE_BOARD_ID);
-  if (!board) {
-    return;
-  }
-  const active = listActiveRefs(useSessionStore.getState().sessions);
-  const next = appendActiveSessions(board, active, lastLiveViewport ?? DEFAULT_VIEWPORT);
-  if (!next) {
-    return;
-  }
-  boardStore().putBoard(next);
-  // The restore snapshot stays, so Restore still goes back to before the Live grid grew; the
-  // preset is cleared because the grid is no longer exactly what that preset made.
-  boardStore().patchArrange(LIVE_BOARD_ID, { lastPreset: null });
-}
-
-/** Mount once at app level: running agents join the Live board as they start. */
-export function useLiveBoardSync(): void {
-  // A string, not a list: the store notifies on every agent update, and only a change in
-  // WHO is active may restart the debounce.
-  const activeKey = useSessionStore((state) =>
-    listActiveRefs(state.sessions).map(boardSessionKey).sort().join("\n\n"),
-  );
-  const growRef = useRef(growLiveBoard);
-  growRef.current = growLiveBoard;
-
-  useEffect(() => {
-    if (activeKey === "") {
-      return;
-    }
-    const timer = setTimeout(() => growRef.current(), LIVE_SYNC_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [activeKey]);
 }
 
 // ---------------------------------------------------------------------------

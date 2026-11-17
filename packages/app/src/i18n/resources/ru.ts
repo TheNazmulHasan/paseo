@@ -532,10 +532,16 @@ export const ru: TranslationResources = {
       restored: "Папка {{name}} восстановлена",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "Показать сессии",
+    hide: "Скрыть сессии",
+    none: "Нет открытых сессий",
+    emptyPane: "Пустая панель",
+  },
   boards: {
     sidebar: {
       title: "Виды",
-      live: "Прямой эфир",
       split: "Разделить рабочие пространства…",
       rename: "Переименовать вид",
       delete: "Удалить вид",
@@ -546,7 +552,6 @@ export const ru: TranslationResources = {
     menu: {
       splitWith: "Разделить с рабочими пространствами…",
       splitWorkspaces: "Разделить рабочие пространства…",
-      openLive: "Открыть вид «Прямой эфир»",
       openView: "Открыть вид: {{name}}",
     },
     picker: {
@@ -571,8 +576,6 @@ export const ru: TranslationResources = {
       addWorkspace: "Добавить рабочее пространство",
       removeWorkspace: "Убрать рабочее пространство из вида",
       paneStrip: "Панели",
-      live: "Прямой эфир",
-      refresh: "Обновить вид «Прямой эфир»",
       paneEmpty: "В этой панели нет сессий",
       emptyHint:
         "Сессий пока нет. Откройте агентов в этих рабочих пространствах или нажмите Ctrl+Cmd+O, чтобы разделить рабочие пространства.",

@@ -532,10 +532,16 @@ export const ja: TranslationResources = {
       restored: "フォルダ {{name}} を復元しました",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "セッションを表示",
+    hide: "セッションを隠す",
+    none: "開いているセッションはありません",
+    emptyPane: "空のペイン",
+  },
   boards: {
     sidebar: {
       title: "ビュー",
-      live: "ライブ",
       split: "ワークスペースを分割…",
       rename: "ビューの名前を変更",
       delete: "ビューを削除",
@@ -546,7 +552,6 @@ export const ja: TranslationResources = {
     menu: {
       splitWith: "ワークスペースと分割…",
       splitWorkspaces: "ワークスペースを分割…",
-      openLive: "ライブビューを開く",
       openView: "ビューを開く: {{name}}",
     },
     picker: {
@@ -571,8 +576,6 @@ export const ja: TranslationResources = {
       addWorkspace: "ワークスペースを追加",
       removeWorkspace: "ワークスペースをビューから外す",
       paneStrip: "ペイン",
-      live: "ライブ",
-      refresh: "ライブビューを更新",
       paneEmpty: "このペインにセッションはありません",
       emptyHint:
         "まだセッションがありません。これらのワークスペースでエージェントを開くか、Ctrl+Cmd+O でワークスペースを分割してください。",

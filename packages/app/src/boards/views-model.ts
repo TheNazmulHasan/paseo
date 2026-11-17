@@ -1,12 +1,3 @@
-import { LIVE_BOARD_ID, type BoardSummary } from "@/boards/types";
-
-/** Live first, then the saved splits in the order given. */
-export function orderViewRows(boards: readonly BoardSummary[]): BoardSummary[] {
-  const live = boards.filter((board) => board.id === LIVE_BOARD_ID || board.kind === "live");
-  const rest = boards.filter((board) => !(board.id === LIVE_BOARD_ID || board.kind === "live"));
-  return [...live, ...rest];
-}
-
 /** The Pinned section holds the views and the pinned workspaces: its one count is both. */
 export function pinnedSectionCount(viewCount: number, pinnedWorkspaceCount: number): number {
   return viewCount + pinnedWorkspaceCount;

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { SquareSplitHorizontal, LayoutGrid, Radio } from "lucide-react-native";
+import { SquareSplitHorizontal, LayoutGrid } from "lucide-react-native";
 import { getIsElectron } from "@/constants/platform";
 import { useBoards } from "@/boards/controller";
 import { navigateToBoard } from "@/boards/navigation";
@@ -14,7 +14,6 @@ import { getCommandCenterIcon } from "./icon";
 import { useCommandCenterActions } from "./provider";
 
 const SPLIT_ICON = getCommandCenterIcon(SquareSplitHorizontal);
-const LIVE_ICON = getCommandCenterIcon(Radio);
 const VIEW_ICON = getCommandCenterIcon(LayoutGrid);
 
 /** Registers the Views entries in the Command Center. Mounted once, by BoardsHost. */
@@ -30,10 +29,9 @@ export function useBoardsCommandCenterActions(): void {
         labels: {
           section: t("boards.sidebar.title"),
           split: t("boards.menu.splitWorkspaces"),
-          openLive: t("boards.menu.openLive"),
           openView: (name) => t("boards.menu.openView", { name }),
         },
-        icons: { split: SPLIT_ICON, live: LIVE_ICON, view: VIEW_ICON },
+        icons: { split: SPLIT_ICON, view: VIEW_ICON },
         shortcuts: {
           split:
             resolveShortcutKeysForAction("workspace-board-split", overrides, {

@@ -533,10 +533,16 @@ export const fr: TranslationResources = {
       restored: "Dossier {{name}} restauré",
     },
   },
+  // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
+  sidebarTabs: {
+    show: "Afficher les sessions",
+    hide: "Masquer les sessions",
+    none: "Aucune session ouverte",
+    emptyPane: "Volet vide",
+  },
   boards: {
     sidebar: {
       title: "Vues",
-      live: "En direct",
       split: "Diviser des espaces de travail…",
       rename: "Renommer la vue",
       delete: "Supprimer la vue",
@@ -548,7 +554,6 @@ export const fr: TranslationResources = {
     menu: {
       splitWith: "Diviser avec des espaces de travail…",
       splitWorkspaces: "Diviser des espaces de travail…",
-      openLive: "Ouvrir la vue en direct",
       openView: "Ouvrir la vue : {{name}}",
     },
     picker: {
@@ -573,8 +578,6 @@ export const fr: TranslationResources = {
       addWorkspace: "Ajouter un espace de travail",
       removeWorkspace: "Retirer l’espace de travail de la vue",
       paneStrip: "Panneaux",
-      live: "En direct",
-      refresh: "Actualiser la vue en direct",
       paneEmpty: "Aucune session dans ce panneau",
       emptyHint:
         "Aucune session pour l’instant. Ouvrez des agents dans ces espaces de travail, ou appuyez sur Ctrl+Cmd+O pour diviser les espaces de travail.",

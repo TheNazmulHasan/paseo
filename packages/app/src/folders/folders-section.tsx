@@ -5,6 +5,7 @@ import { Text, View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Folder, FolderPlus, Inbox, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { ViewRow, useViewRowActions } from "@/boards/boards-section";
+import { NewViewButton, usePinnedViewsPresent } from "@/boards/pinned-views";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import { isViewActive } from "@/boards/views-model";
 import { ViewRenameField } from "@/boards/view-rename-field";
@@ -80,7 +81,10 @@ export function FoldersSectionHeader({
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const { folderSections } = useSidebarModel();
+  const { folderSections, pinnedGroups } = useSidebarModel();
+  // With no saved view and nothing pinned the Pinned section is not drawn, so the new-view icon
+  // lives here instead and a first view can always be made.
+  const showNewView = !usePinnedViewsPresent() && pinnedGroups.pinnedChats.length === 0;
   const collapsed = useFolderUiStore((state) => state.sectionCollapsed);
   const toggleSection = useFolderUiStore((state) => state.toggleSection);
   const setCreating = useFolderStore((state) => state.setCreating);
@@ -101,6 +105,7 @@ export function FoldersSectionHeader({
       countTestID="sidebar-folders-count"
       onLayout={onLayout}
     >
+      {showNewView ? <NewViewButton /> : null}
       {foldersAvailable ? (
         <DeskIconButton
           icon={FolderPlus}

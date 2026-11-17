@@ -6,15 +6,13 @@ import { BOARD_ROW_SERVER_ID, type WorkspaceSwitcherVisit } from "@/workspace-sw
 
 /**
  * The view Desk → Add / Replace fills: the saved view shown last (the one on screen, else the
- * last one visited). The Live view never counts, it shows running agents, not chosen workspaces.
+ * last one visited).
  */
 export function resolveDeskTargetView(
   history: readonly Pick<WorkspaceSwitcherVisit, "serverId" | "workspaceId">[],
   boards: readonly BoardSummary[],
 ): BoardSummary | null {
-  const userViews = new Map(
-    boards.filter((board) => board.kind === "user").map((board) => [board.id, board]),
-  );
+  const userViews = new Map(boards.map((board) => [board.id, board]));
   for (const visit of history) {
     if (visit.serverId !== BOARD_ROW_SERVER_ID) continue;
     const view = userViews.get(visit.workspaceId);
