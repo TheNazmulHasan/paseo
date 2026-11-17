@@ -6,6 +6,7 @@ import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { SidebarHomeRow } from "@/home-map/sidebar-home-row"; // Nazmul mod (home-map)
 import { PluginSidebarItem } from "@/plugins/sidebar-items";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
@@ -45,7 +46,16 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
   const visibleItems = useMemo(() => items.filter((item) => item.visible), [items]);
   const groupRef = useRef<View | null>(null);
 
-  if (visibleItems.length === 0 && !firstRowTrailing) return null;
+  // Nazmul mod (home-map): the Home row leads the block and is not a configurable item.
+  const homeRow = <SidebarHomeRow onBeforeNavigate={onBeforeNavigate} />;
+
+  if (visibleItems.length === 0 && !firstRowTrailing) {
+    return (
+      <View ref={groupRef} collapsable={false} style={style}>
+        {homeRow}
+      </View>
+    );
+  }
 
   const [firstRow, ...restRows] = visibleItems.map((item) => {
     if (item.kind === "plugin") {
@@ -65,6 +75,7 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
 
   return (
     <View ref={groupRef} collapsable={false} style={style}>
+      {homeRow}
       {firstRowTrailing ? (
         <View style={styles.firstRow}>
           <View style={styles.firstRowItem}>{firstRow}</View>

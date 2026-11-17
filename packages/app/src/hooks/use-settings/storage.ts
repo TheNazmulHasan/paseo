@@ -178,6 +178,8 @@ export interface AppSettings {
   promptCacheCapWarningMinutes: PromptCacheCapWarningMinutes;
   /** Show ≈ $ API list-price estimates on the Claude prompt-cache surfaces. Default off. */
   promptCacheMoneyStats: boolean;
+  /** Nazmul mod (home-map): a desktop cold start lands on Home, not on the last workspace. Default on. */
+  openHomeOnLaunch: boolean;
 }
 
 export const PROMPT_CACHE_CAP_WARNING_MINUTES = [10, 20, 30] as const;
@@ -249,6 +251,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   pullRequestOpenLocation: "explorer",
   promptCacheCapWarningMinutes: 10,
   promptCacheMoneyStats: false,
+  openHomeOnLaunch: true, // Nazmul mod (home-map)
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -395,6 +398,7 @@ const StoredAppSettingsSchema = z
     pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).optional(),
     promptCacheCapWarningMinutes: z.union([z.literal(10), z.literal(20), z.literal(30)]).catch(10),
     promptCacheMoneyStats: z.boolean().catch(false),
+    openHomeOnLaunch: z.boolean().catch(true), // Nazmul mod (home-map)
     // COMPAT(explorerSidebarRouting): replaced by source-specific side-pane preferences in v0.6.
     openSupportingTabsInSidePanel: z.boolean().optional().catch(undefined),
     // COMPAT(rendererDesktopSettings): these fields used to share this renderer-owned key.

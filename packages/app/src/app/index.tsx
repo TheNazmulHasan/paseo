@@ -13,6 +13,7 @@ import {
   useLastWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { useHomeLaunchDecision } from "@/home-map/launch"; // Nazmul mod (home-map)
 
 const isDesktop = shouldUseDesktopDaemon();
 
@@ -32,8 +33,11 @@ export default function Index() {
     workspaceSelectionWorkspaceId,
   );
 
+  const homeLaunch = useHomeLaunchDecision(isDesktop); // Nazmul mod (home-map)
+
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
+    openHomeOnLaunch: homeLaunch.openHome, // Nazmul mod (home-map)
     startupBlocker: bootstrapState.startupBlocker,
     hostRegistryStatus,
     hosts,
@@ -49,6 +53,10 @@ export default function Index() {
   });
 
   const splash = <StartupSplashScreen bootstrapState={isDesktop ? bootstrapState : undefined} />;
+  // Nazmul mod (home-map): hold the splash until "Open Home on launch" has loaded.
+  if (!homeLaunch.ready) {
+    return splash;
+  }
   if (startupRoute.kind === "redirect") {
     // The loading screen stays up until the target route paints; a redirect alone renders nothing.
     return (

@@ -5,7 +5,11 @@ import {
   buildWorkspaceMarkdownLink,
 } from "@getpaseo/protocol/workspace-link";
 
-import { deriveSessionState, type SessionState } from "./session-state.js";
+import {
+  deriveSessionState,
+  resolveYourMoveText,
+  type SessionState,
+} from "@getpaseo/protocol/session-state";
 
 /** The slice of an agent payload the rows read; `AgentSnapshotPayload` satisfies it. */
 export interface AgentStateSource {
@@ -105,7 +109,7 @@ export function buildSessionStateRows(input: BuildRowsInput): SessionStateRow[] 
       pinned: Boolean(workspace?.pinnedAt),
       background: workspace?.background === true,
       state,
-      yourMoveText: state === "working" ? null : (agent.topicTrail?.yourMove ?? null),
+      yourMoveText: resolveYourMoveText(state, agent.topicTrail?.yourMove),
       lastActivityAt: input.lastActivityById.get(agent.id) ?? agent.updatedAt ?? null,
       link: url ? buildWorkspaceMarkdownLink(label, url) : null,
       url,

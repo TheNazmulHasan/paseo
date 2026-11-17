@@ -6,6 +6,7 @@ import type {
   StartDaemonIfEnabledInput,
 } from "@/runtime/daemon-start-service";
 import type { Href } from "expo-router";
+import { buildHomeRoute } from "@/home-map/route"; // Nazmul mod (home-map)
 import {
   buildHostRootRoute,
   buildHostWorkspaceRoute,
@@ -119,6 +120,8 @@ export interface ResolveIndexStartupRouteInput extends ResolveStartupRouteBaseIn
   hasGivenUpWaitingForHost: boolean;
   /** Setup may still open over the empty home; see `useIsSetupDecisionPending`. */
   isWaitingForSetup: boolean;
+  /** Nazmul mod (home-map): land on Home instead of restoring the last workspace. */
+  openHomeOnLaunch?: boolean;
 }
 
 export interface ResolveHostStartupRouteInput extends ResolveStartupRouteBaseInput {
@@ -186,6 +189,11 @@ function resolveReadyIndexStartupRoute(input: ResolveIndexStartupRouteInput): St
 
   if (!input.isWorkspaceSelectionLoaded) {
     return { kind: "splash" };
+  }
+
+  // Nazmul mod (home-map): a cold start opens Home, whatever workspace was open last.
+  if (input.openHomeOnLaunch === true && input.hosts.length > 0) {
+    return { kind: "redirect", href: buildHomeRoute() };
   }
 
   if (

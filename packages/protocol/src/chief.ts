@@ -7,6 +7,19 @@ import { z } from "zod";
  */
 
 /**
+ * Nazmul mod (home-map): the label that marks the Chief agent. One definition: the Home map's Chief
+ * box finds its agent by it, and whatever creates the Chief agent must set it.
+ */
+export const CHIEF_ROLE_LABEL_KEY = "paseo.role";
+export const CHIEF_ROLE_LABEL_VALUE = "chief";
+
+export function hasChiefRoleLabel(
+  labels: Readonly<Record<string, string>> | null | undefined,
+): boolean {
+  return labels?.[CHIEF_ROLE_LABEL_KEY] === CHIEF_ROLE_LABEL_VALUE;
+}
+
+/**
  * What the app is asked to do.
  * - `open_workspace` {serverId?, workspaceId, tabId?, agentId?}: like a sidebar click.
  * - `open_view` {viewId | name}: open a saved view (board).

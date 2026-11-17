@@ -533,6 +533,63 @@ export const es: TranslationResources = {
       restored: "Carpeta {{name}} restaurada",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "Inicio",
+    commandCenter: {
+      open: "Abrir Inicio",
+    },
+    bands: {
+      needsYou: "Te necesitan",
+      yourMove: "Tu turno",
+      working: "En curso",
+      needsYouEmpty: "Nada te necesita ahora",
+      yourMoveEmpty: "Nada espera tu respuesta",
+      showMore: "Mostrar {{count}} más",
+      showLess: "Mostrar menos",
+    },
+    map: {
+      title: "Mapa",
+      unfoldAll: "Desplegar todo",
+      foldAll: "Plegar todo",
+      showQuiet: "Mostrar inactivas",
+      fold: "Plegar {{name}}",
+      unfold: "Desplegar {{name}}",
+      desk: "Escritorio",
+      unfiled: "Sin carpeta",
+      empty: "No hay nada abierto. Todo está en pausa.",
+      loading: "Cargando tus sesiones...",
+      untitled: "Sesión sin título",
+    },
+    counts: {
+      needsYou: "{{count}} te necesitan",
+      yourMove: "{{count}} tu turno",
+      working: "{{count}} en curso",
+      open: "{{count}} abiertas",
+    },
+    state: {
+      needsYou: "Te necesita",
+      yourMove: "Tu turno",
+      working: "En curso",
+      parked: "En pausa",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Pregúntale lo que quieras a Chief",
+      send: "Enviar",
+      setup: "Configurar Chief",
+      setupHint:
+        "Chief aún no está configurado. Crea un agente con la etiqueta paseo.role=chief y aparecerá aquí.",
+      noReply: "Chief aún no ha respondido",
+      thinking: "Chief está trabajando...",
+      sendFailed: "No se pudo enviar a Chief",
+      open: "Abrir Chief",
+    },
+    launch: {
+      label: "Abrir Inicio al arrancar",
+      description: "Iniciar Paseo en Inicio en lugar del último espacio de trabajo",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "Mostrar sesiones",
@@ -3291,6 +3348,7 @@ export const es: TranslationResources = {
         toggleDesk: "Poner en / quitar del escritorio",
         splitWorkspaces: "Dividir espacios de trabajo",
         moveToFolder: "Mover a carpeta",
+        openHome: "Abrir Inicio",
         arrangeOnePane: "Organizar: un panel",
         arrangeColumns2: "Organizar: 2 columnas",
         arrangeColumns3: "Organizar: 3 columnas",

@@ -1,6 +1,7 @@
 import { BOARD_ROUTED_ACTION_IDS, parseBoardIdFromPathname } from "@/boards/keyboard-contract";
 import type { KeyboardShortcutPayload, MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
+import { HOME_ROUTE } from "@/home-map/route"; // Nazmul mod (home-map)
 import { buildSettingsRoute, parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
 import {
   getRelativeSidebarShortcutTarget,
@@ -257,6 +258,8 @@ function routeWorkspaceShortcut(
       return { kind: "open-project-picker" };
     case "settings.toggle":
       return routeSettingsToggle(ctx);
+    case "home.open": // Nazmul mod (home-map)
+      return { kind: "router-push", route: HOME_ROUTE };
     case "command-center.toggle":
       return { kind: "command-center-toggle", nextOpen: !ctx.commandCenterOpen };
     case "command-center.files":

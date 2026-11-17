@@ -528,6 +528,63 @@ export const ko: TranslationResources = {
       restored: "폴더 {{name}}을(를) 복원했습니다",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "홈",
+    commandCenter: {
+      open: "홈 열기",
+    },
+    bands: {
+      needsYou: "당신이 필요함",
+      yourMove: "당신의 차례",
+      working: "작업 중",
+      needsYouEmpty: "지금 당신이 필요한 항목이 없습니다",
+      yourMoveEmpty: "당신의 답을 기다리는 항목이 없습니다",
+      showMore: "{{count}}개 더 보기",
+      showLess: "간략히 보기",
+    },
+    map: {
+      title: "지도",
+      unfoldAll: "모두 펼치기",
+      foldAll: "모두 접기",
+      showQuiet: "조용한 항목 표시",
+      fold: "{{name}} 접기",
+      unfold: "{{name}} 펼치기",
+      desk: "데스크",
+      unfiled: "분류 안 됨",
+      empty: "열린 항목이 없습니다. 모두 보류 중입니다.",
+      loading: "세션을 불러오는 중...",
+      untitled: "제목 없는 세션",
+    },
+    counts: {
+      needsYou: "{{count}}개가 당신을 필요로 함",
+      yourMove: "{{count}}개 당신의 차례",
+      working: "{{count}}개 작업 중",
+      open: "{{count}}개 열림",
+    },
+    state: {
+      needsYou: "당신이 필요함",
+      yourMove: "당신의 차례",
+      working: "작업 중",
+      parked: "보류",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Chief에게 무엇이든 물어보세요",
+      send: "보내기",
+      setup: "Chief 설정",
+      setupHint:
+        "Chief가 아직 설정되지 않았습니다. paseo.role=chief 레이블이 붙은 에이전트를 만들면 여기에 표시됩니다.",
+      noReply: "Chief의 답변이 아직 없습니다",
+      thinking: "Chief가 작업 중입니다...",
+      sendFailed: "Chief에게 보내지 못했습니다",
+      open: "Chief 열기",
+    },
+    launch: {
+      label: "시작할 때 홈 열기",
+      description: "마지막 작업 공간 대신 홈에서 Paseo를 시작합니다",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "세션 보기",
@@ -3244,6 +3301,7 @@ export const ko: TranslationResources = {
         toggleDesk: "데스크에 올리기 / 내리기",
         splitWorkspaces: "워크스페이스 분할",
         moveToFolder: "폴더로 이동",
+        openHome: "홈 열기",
         arrangeOnePane: "정렬: 창 하나",
         arrangeColumns2: "정렬: 2열",
         arrangeColumns3: "정렬: 3열",

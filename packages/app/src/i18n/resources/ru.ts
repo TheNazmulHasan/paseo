@@ -532,6 +532,63 @@ export const ru: TranslationResources = {
       restored: "Папка {{name}} восстановлена",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "Главная",
+    commandCenter: {
+      open: "Открыть главную",
+    },
+    bands: {
+      needsYou: "Нужны вы",
+      yourMove: "Ваш ход",
+      working: "В работе",
+      needsYouEmpty: "Сейчас от вас ничего не требуется",
+      yourMoveEmpty: "Никто не ждёт вашего ответа",
+      showMore: "Показать ещё {{count}}",
+      showLess: "Показать меньше",
+    },
+    map: {
+      title: "Карта",
+      unfoldAll: "Развернуть всё",
+      foldAll: "Свернуть всё",
+      showQuiet: "Показать неактивные",
+      fold: "Свернуть {{name}}",
+      unfold: "Развернуть {{name}}",
+      desk: "Стол",
+      unfiled: "Без папки",
+      empty: "Нет открытых дел. Всё отложено.",
+      loading: "Загрузка сессий...",
+      untitled: "Сессия без названия",
+    },
+    counts: {
+      needsYou: "{{count}} ждут вас",
+      yourMove: "{{count}} ваш ход",
+      working: "{{count}} в работе",
+      open: "{{count}} открыто",
+    },
+    state: {
+      needsYou: "Нужны вы",
+      yourMove: "Ваш ход",
+      working: "В работе",
+      parked: "Отложено",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Спросите Chief о чём угодно",
+      send: "Отправить",
+      setup: "Настроить Chief",
+      setupHint:
+        "Chief ещё не настроен. Создайте агента с меткой paseo.role=chief, и он появится здесь.",
+      noReply: "Chief ещё не ответил",
+      thinking: "Chief работает...",
+      sendFailed: "Не удалось отправить Chief",
+      open: "Открыть Chief",
+    },
+    launch: {
+      label: "Открывать главную при запуске",
+      description: "Запускать Paseo с главной, а не с последнего рабочего пространства",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "Показать сессии",
@@ -3283,6 +3340,7 @@ export const ru: TranslationResources = {
         toggleDesk: "Положить на стол / убрать со стола",
         splitWorkspaces: "Разделить рабочие пространства",
         moveToFolder: "Переместить в папку",
+        openHome: "Открыть главную",
         arrangeOnePane: "Расположение: одна панель",
         arrangeColumns2: "Расположение: 2 колонки",
         arrangeColumns3: "Расположение: 3 колонки",

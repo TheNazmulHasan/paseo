@@ -525,6 +525,63 @@ export const en = {
       restored: "Restored folder {{name}}",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "Home",
+    commandCenter: {
+      open: "Open Home",
+    },
+    bands: {
+      needsYou: "Needs you",
+      yourMove: "Your move",
+      working: "Working",
+      needsYouEmpty: "Nothing needs you right now",
+      yourMoveEmpty: "Nothing is waiting for your answer",
+      showMore: "Show {{count}} more",
+      showLess: "Show less",
+    },
+    map: {
+      title: "Map",
+      unfoldAll: "Unfold all",
+      foldAll: "Fold all",
+      showQuiet: "Show quiet",
+      fold: "Fold {{name}}",
+      unfold: "Unfold {{name}}",
+      desk: "Desk",
+      unfiled: "Unfiled",
+      empty: "No open loops. Everything is parked.",
+      loading: "Loading your sessions...",
+      untitled: "Untitled session",
+    },
+    counts: {
+      needsYou: "{{count}} need you",
+      yourMove: "{{count}} your move",
+      working: "{{count}} working",
+      open: "{{count}} open",
+    },
+    state: {
+      needsYou: "Needs you",
+      yourMove: "Your move",
+      working: "Working",
+      parked: "Parked",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Ask Chief anything",
+      send: "Send",
+      setup: "Set up Chief",
+      setupHint:
+        "Chief is not set up yet. Create an agent labelled paseo.role=chief and it appears here.",
+      noReply: "No reply from Chief yet",
+      thinking: "Chief is working...",
+      sendFailed: "Could not send to Chief",
+      open: "Open Chief",
+    },
+    launch: {
+      label: "Open Home on launch",
+      description: "Start Paseo on Home instead of the last workspace",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "Show sessions",
@@ -3359,6 +3416,7 @@ export const en = {
         toggleDesk: "Put on / take off Desk",
         splitWorkspaces: "Split workspaces",
         moveToFolder: "Move to folder",
+        openHome: "Open Home",
         arrangeOnePane: "Arrange: one pane",
         arrangeColumns2: "Arrange: 2 columns",
         arrangeColumns3: "Arrange: 3 columns",

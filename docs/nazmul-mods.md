@@ -262,3 +262,30 @@ scripts/nazmul-bundle-has.sh 'app_command'
 scripts/nazmul-bundle-has.sh 'Call list_app_actions for the ids that exist'
 scripts/nazmul-bundle-has.sh 'open_workspace needs args.workspaceId'
 ```
+
+## home-map
+
+Home, the screen Paseo opens on: what needs me, and where is everything (design: myos/paseo/home-map.md, part 3). Route `/home`. Top to bottom: Needs you, Your move (each with its one-line "Your move" text) and Working bands, then the map Folder -> workspace -> session (Desk folder first, my folders in order, Unfiled last; every level folds, fold state kept in `paseo-home-map`, an always-visible Unfold all / Fold all and Show quiet button; open loops only by default; each node has a state dot, counts "2 need you · 3 your move · 5 open" and the last-activity age; a click opens the session like a sidebar tab line), and a Chief box docked at the bottom (finds the agent labelled `paseo.role=chief`, sends a prompt, shows the latest reply as markdown; no Chief agent shows a "Set up Chief" hint, Home never creates one). The state rule is the one function `deriveSessionState` in `packages/protocol/src/session-state.ts`, imported by the server's `session_states` and by Home. Reached from a Home row at the top of the sidebar nav block, the Command Center item "Open Home" (`command:open-home`) and the keyboard action `home.open` (no default key). A desktop cold start lands on Home unless Settings > General > "Open Home on launch" is off. Doc: myos/paseo/home-map.md
+
+```bash
+npx vitest run packages/protocol/src/session-state.test.ts packages/protocol/src/chief.test.ts --bail=1
+npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/chief --bail=1
+npm test --workspace=@getpaseo/app -- --project unit src/home-map src/keyboard src/navigation src/i18n src/hooks/use-settings --bail=1
+grep -q "@getpaseo/protocol/session-state" packages/app/src/home-map/model.ts
+grep -q "@getpaseo/protocol/session-state" packages/server/src/server/chief/session-rows.ts
+grep -q hasChiefRoleLabel packages/app/src/home-map/model.ts
+grep -q buildHomeRoute packages/app/src/navigation/host-runtime-bootstrap.ts
+grep -q useHomeLaunchDecision packages/app/src/app/index.tsx
+grep -q SidebarHomeRow packages/app/src/components/sidebar/sidebar-nav-rows.tsx
+grep -q HomeMapHost packages/app/src/app/_layout.tsx
+grep -q 'name="home"' packages/app/src/app/_layout.tsx
+grep -q '"home.open"' packages/app/src/keyboard/keyboard-shortcuts.ts
+grep -q '"home.open"' packages/app/src/keyboard/route-shortcut.ts
+grep -q openHomeOnLaunch packages/app/src/hooks/use-settings/storage.ts
+grep -q OpenHomeSection packages/app/src/screens/settings-screen.tsx
+scripts/nazmul-bundle-has.sh 'paseo-home-map'
+scripts/nazmul-bundle-has.sh 'home-band-needs-you'
+scripts/nazmul-bundle-has.sh 'home-chief-send'
+scripts/nazmul-bundle-has.sh 'Open Home on launch'
+scripts/nazmul-bundle-has.sh 'sidebar-home'
+```

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveSessionState, selectSessionStates, type SessionState } from "./session-state.js";
+import {
+  deriveSessionState,
+  resolveYourMoveText,
+  selectSessionStates,
+  type SessionState,
+} from "./session-state.js";
 
 describe("deriveSessionState", () => {
   it("needs_you for a pending permission, whatever the status", () => {
@@ -153,5 +158,23 @@ describe("selectSessionStates", () => {
       "x",
       "y",
     ]);
+  });
+});
+
+describe("resolveYourMoveText", () => {
+  it("has no line while the session works, whatever the trail says", () => {
+    expect(resolveYourMoveText("working", "Pick a name")).toBeNull();
+  });
+
+  it("returns the trimmed line for every state that waits", () => {
+    expect(resolveYourMoveText("needs_you", "  Approve the push ")).toBe("Approve the push");
+    expect(resolveYourMoveText("your_move", "Pick a name")).toBe("Pick a name");
+    expect(resolveYourMoveText("parked", "Reply when ready")).toBe("Reply when ready");
+  });
+
+  it("treats a blank or missing line as none", () => {
+    expect(resolveYourMoveText("your_move", "   ")).toBeNull();
+    expect(resolveYourMoveText("your_move", null)).toBeNull();
+    expect(resolveYourMoveText("your_move", undefined)).toBeNull();
   });
 });

@@ -160,6 +160,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "show-shortcuts",
     "toggle-settings",
     "cycle-theme",
+    "home-open", // Nazmul mod (home-map)
   ],
   workspaces: [
     "new-agent",
@@ -269,6 +270,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "desk-toggle": "settings.shortcuts.help.toggleDesk",
   "workspace-board-split": "settings.shortcuts.help.splitWorkspaces",
   "folder-move": "settings.shortcuts.help.moveToFolder",
+  "home-open": "settings.shortcuts.help.openHome", // Nazmul mod (home-map)
   "workspace-switcher-recent": "settings.shortcuts.help.switchRecentWorkspaces",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
@@ -486,6 +488,22 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "folder-move",
       section: "workspaces",
       label: "Move to folder",
+    },
+  },
+
+  // --- Open Home (fork mod, home-map) ---
+  // No default key on purpose: the keymap owner assigns one in ~/.paseo/keybindings.json. An empty
+  // combo is the supported "default-less binding", and it is what makes the action known to that
+  // file (unknown actions are skipped) and to the Settings > Keyboard shortcuts list.
+  {
+    id: "home-open",
+    action: "home.open",
+    combo: "",
+    when: { commandCenter: false },
+    help: {
+      id: "home-open",
+      section: "general",
+      label: "Open Home",
     },
   },
 

@@ -532,6 +532,63 @@ export const ja: TranslationResources = {
       restored: "フォルダ {{name}} を復元しました",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "ホーム",
+    commandCenter: {
+      open: "ホームを開く",
+    },
+    bands: {
+      needsYou: "対応が必要",
+      yourMove: "あなたの番",
+      working: "実行中",
+      needsYouEmpty: "今、対応が必要なものはありません",
+      yourMoveEmpty: "あなたの返信を待っているものはありません",
+      showMore: "さらに {{count}} 件を表示",
+      showLess: "表示を減らす",
+    },
+    map: {
+      title: "マップ",
+      unfoldAll: "すべて展開",
+      foldAll: "すべて折りたたむ",
+      showQuiet: "静止中も表示",
+      fold: "{{name}} を折りたたむ",
+      unfold: "{{name}} を展開",
+      desk: "デスク",
+      unfiled: "未分類",
+      empty: "未完了のものはありません。すべて保留中です。",
+      loading: "セッションを読み込み中...",
+      untitled: "無題のセッション",
+    },
+    counts: {
+      needsYou: "{{count}} 件が対応待ち",
+      yourMove: "{{count}} 件があなたの番",
+      working: "{{count}} 件が実行中",
+      open: "{{count}} 件が開いています",
+    },
+    state: {
+      needsYou: "対応が必要",
+      yourMove: "あなたの番",
+      working: "実行中",
+      parked: "保留",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Chief に何でも聞く",
+      send: "送信",
+      setup: "Chief を設定",
+      setupHint:
+        "Chief はまだ設定されていません。ラベル paseo.role=chief を付けたエージェントを作成すると、ここに表示されます。",
+      noReply: "Chief からの返信はまだありません",
+      thinking: "Chief が作業中です...",
+      sendFailed: "Chief に送信できませんでした",
+      open: "Chief を開く",
+    },
+    launch: {
+      label: "起動時にホームを開く",
+      description: "最後のワークスペースではなく、ホームで Paseo を起動します",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "セッションを表示",
@@ -3255,6 +3312,7 @@ export const ja: TranslationResources = {
         toggleDesk: "デスクに置く / 外す",
         splitWorkspaces: "ワークスペースを分割",
         moveToFolder: "フォルダに移動",
+        openHome: "ホームを開く",
         arrangeOnePane: "整列: 1ペイン",
         arrangeColumns2: "整列: 2列",
         arrangeColumns3: "整列: 3列",

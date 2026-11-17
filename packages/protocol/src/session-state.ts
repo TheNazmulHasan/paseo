@@ -1,6 +1,7 @@
 /**
- * Nazmul mod (chief): what state is a session in, from the user's seat? One pure function, so the
- * `session_states` tool and the future Home map read a session the same way.
+ * Nazmul mod (chief): what state is a session in, from the user's seat? One pure function, shared
+ * by the server (`session_states` tool) and the app (Home map, `packages/app/src/home-map/`), so
+ * both read a session the same way. Lives in protocol because both import it; never copy it.
  *
  * Every signal is one Paseo already keeps. Nothing here guesses from message timestamps: a
  * finished turn almost always ends with the agent replying, so "the agent spoke last" does not
@@ -45,6 +46,19 @@ export function deriveSessionState(input: SessionStateInput): SessionState {
     return "your_move";
   }
   return "parked";
+}
+
+/**
+ * The one line that says what the user is owed, from the topic trail's "Your move". It is only
+ * true while the agent waits, so a working session has none; a blank line is no line.
+ */
+export function resolveYourMoveText(
+  state: SessionState,
+  yourMove: string | null | undefined,
+): string | null {
+  if (state === "working") return null;
+  const text = yourMove?.trim();
+  return text ? text : null;
 }
 
 const STATE_RANK: Record<SessionState, number> = {

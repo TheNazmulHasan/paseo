@@ -532,6 +532,63 @@ export const ptBR: TranslationResources = {
       restored: "Pasta {{name}} restaurada",
     },
   },
+  // Nazmul mod (home-map): the Home screen, its Chief box and the launch setting.
+  homeMap: {
+    title: "Início",
+    commandCenter: {
+      open: "Abrir Início",
+    },
+    bands: {
+      needsYou: "Precisam de você",
+      yourMove: "Sua vez",
+      working: "Em andamento",
+      needsYouEmpty: "Nada precisa de você agora",
+      yourMoveEmpty: "Nada aguarda sua resposta",
+      showMore: "Mostrar mais {{count}}",
+      showLess: "Mostrar menos",
+    },
+    map: {
+      title: "Mapa",
+      unfoldAll: "Expandir tudo",
+      foldAll: "Recolher tudo",
+      showQuiet: "Mostrar inativas",
+      fold: "Recolher {{name}}",
+      unfold: "Expandir {{name}}",
+      desk: "Mesa",
+      unfiled: "Sem pasta",
+      empty: "Nada em aberto. Tudo está em pausa.",
+      loading: "Carregando suas sessões...",
+      untitled: "Sessão sem título",
+    },
+    counts: {
+      needsYou: "{{count}} precisam de você",
+      yourMove: "{{count}} sua vez",
+      working: "{{count}} em andamento",
+      open: "{{count}} abertas",
+    },
+    state: {
+      needsYou: "Precisa de você",
+      yourMove: "Sua vez",
+      working: "Em andamento",
+      parked: "Em pausa",
+    },
+    chief: {
+      title: "Chief",
+      placeholder: "Pergunte qualquer coisa ao Chief",
+      send: "Enviar",
+      setup: "Configurar o Chief",
+      setupHint:
+        "O Chief ainda não está configurado. Crie um agente com o rótulo paseo.role=chief e ele aparecerá aqui.",
+      noReply: "O Chief ainda não respondeu",
+      thinking: "O Chief está trabalhando...",
+      sendFailed: "Não foi possível enviar ao Chief",
+      open: "Abrir o Chief",
+    },
+    launch: {
+      label: "Abrir o Início ao iniciar",
+      description: "Iniciar o Paseo no Início em vez do último espaço de trabalho",
+    },
+  },
   // Nazmul mod (sidebar-tabs): a workspace's sessions listed under its sidebar row.
   sidebarTabs: {
     show: "Mostrar sessões",
@@ -3271,6 +3328,7 @@ export const ptBR: TranslationResources = {
         toggleDesk: "Pôr na / tirar da mesa",
         splitWorkspaces: "Dividir espaços de trabalho",
         moveToFolder: "Mover para pasta",
+        openHome: "Abrir Início",
         arrangeOnePane: "Organizar: um painel",
         arrangeColumns2: "Organizar: 2 colunas",
         arrangeColumns3: "Organizar: 3 colunas",

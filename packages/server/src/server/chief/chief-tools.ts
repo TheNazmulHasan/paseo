@@ -23,7 +23,11 @@ import {
   searchSessions,
   type SearchableSession,
 } from "./search.js";
-import { SESSION_STATES, selectSessionStates, type SessionState } from "./session-state.js";
+import {
+  SESSION_STATES,
+  selectSessionStates,
+  type SessionState,
+} from "@getpaseo/protocol/session-state";
 import {
   buildSessionStateRows,
   type AgentStateSource,

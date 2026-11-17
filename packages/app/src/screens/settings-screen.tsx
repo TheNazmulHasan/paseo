@@ -57,6 +57,7 @@ import { ChatSection } from "@/screens/settings/chat/chat-section";
 import { SidebarNavSection } from "@/screens/settings/sidebar/sidebar-nav-section";
 import { SendingSection } from "@/screens/settings/general/sending-section";
 import { KeepAwakeSection } from "@/screens/settings/general/keep-awake-section";
+import { OpenHomeSection } from "@/screens/settings/general/open-home-section"; // Nazmul mod (home-map)
 import {
   useAppSettings,
   useSettings,
@@ -1379,6 +1380,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             <>
               <GeneralSection settings={settings} handleLanguageChange={handleLanguageChange} />
               <KeepAwakeSection />
+              {isDesktopApp ? <OpenHomeSection /> : null}
               <SendingSection />
               {isDesktopApp ? <OpenLocationSection /> : null}
             </>

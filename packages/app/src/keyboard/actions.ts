@@ -69,6 +69,7 @@ export type KeyboardActionId =
   | "workspace.desk.toggle"
   | "workspace.board.split"
   | "workspace.folder.move"
+  | "home.open" // Nazmul mod (home-map)
   | "view.toggle.focus"
   | "theme.cycle"
   | "message-input.action";

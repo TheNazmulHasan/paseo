@@ -49,6 +49,8 @@ import { DeskShortcutHandler } from "@/desk/desk-shortcut-handler";
 import { BoardsHost } from "@/boards/boards-host";
 import { FolderPickerHost } from "@/folders/folder-picker-host";
 import { ChiefHost } from "@/chief/chief-host"; // Nazmul mod (chief)
+import { HomeMapHost } from "@/home-map/home-host"; // Nazmul mod (home-map)
+import { isHomePathname } from "@/home-map/route"; // Nazmul mod (home-map)
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
 import { WorkspaceExplorerOpenGesture } from "@/mobile-panels/explorer-open-gesture";
 import { ProviderSettingsHost } from "@/components/provider-settings-host";
@@ -540,6 +542,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <BoardsHost />
         <FolderPickerHost />
         <ChiefHost />
+        <HomeMapHost />
         <WorkspaceRenameHost />
         <CommandCenter />
         <TabSwitcherHost />
@@ -829,6 +832,7 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/backlog" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
+      isHomePathname(pathname) || // Nazmul mod (home-map)
       // Views (fork mod #13) need the sidebar and keyboard shortcuts like a workspace does.
       pathname.startsWith("/boards/") ||
       routeHasKnownHost);
@@ -864,6 +868,7 @@ function RootStack() {
         <Stack.Screen name="open-project" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="home" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
