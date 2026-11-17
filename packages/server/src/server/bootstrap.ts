@@ -246,6 +246,7 @@ import type {
 } from "./agent/provider-launch-config.js";
 import type { GatewayPersistedConfig } from "./agent/gateway/config.js";
 import { resolveGatewayConfig } from "./agent/gateway/config.js";
+import { setGatewayUpstream } from "./agent/gateway/upstream.js";
 import { type PersistedConfig } from "./persisted-config.js";
 import { createServiceProxySubsystem, type ServiceProxySubsystem } from "./service-proxy.js";
 import { createBrowserPreviewSubsystem } from "./browser-preview/index.js";
@@ -1155,6 +1156,8 @@ export async function createPaseoDaemon(
     },
   });
   const providerSnapshotManager = agentProviderRuntime.snapshotManager;
+  // Read once at start, like the Gateway: names the real account behind a pool credential.
+  setGatewayUpstream(config.agentGateway?.upstream);
   daemonConfigStore.onFieldChange("catalogRefreshTimeoutMs", (value) => {
     providerSnapshotManager.setRefreshTimeoutMs(typeof value === "number" ? value : undefined);
   });

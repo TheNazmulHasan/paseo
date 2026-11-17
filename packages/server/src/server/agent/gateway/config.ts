@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GatewayUpstreamConfigSchema } from "./upstream.js";
 
 /**
  * First-party CLIProxyAPI configuration (`agents.cliproxyapi` in config.json).
@@ -10,6 +11,8 @@ export const GatewayConfigSchema = z
     enabled: z.boolean().optional(),
     baseUrl: z.string().optional(),
     apiKey: z.string().optional(),
+    /** The CLIProxyAPI an API-key credential of this Gateway forwards to (gateway/upstream.ts). */
+    upstream: GatewayUpstreamConfigSchema.optional(),
   })
   .strict();
 

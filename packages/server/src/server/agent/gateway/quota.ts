@@ -3,6 +3,7 @@
 // (and every other failure) degrade to unsupported so callers hide quota
 // instead of surfacing errors.
 import { z } from "zod";
+import { getGatewayUpstream, upstreamModelSlug } from "./upstream.js";
 
 export const GATEWAY_QUOTA_TIMEOUT_MS = 10_000;
 const GATEWAY_QUOTA_CACHE_TTL_MS = 60_000;
@@ -79,6 +80,8 @@ export interface FetchGatewayQuotaOptions {
   token: string;
   model: string;
   fetchImpl?: typeof fetch;
+  /** false = do not expand an API-key account into `agents.cliproxyapi.upstream`'s accounts. */
+  followUpstream?: boolean;
 }
 
 export async function fetchGatewayQuota(
@@ -105,7 +108,10 @@ export async function fetchGatewayQuota(
     const payload: unknown = await response.json().catch(() => undefined);
     const parsed = GatewayQuotaResponsePayloadSchema.safeParse(payload);
     if (!parsed.success) return failed;
-    return { supported: true, accounts: parsed.data.map(mapQuotaAccount) };
+    return {
+      supported: true,
+      accounts: await expandUpstreamAccounts(parsed.data.map(mapQuotaAccount), options),
+    };
   }
 
   // An error envelope proves the route exists (unknown model, bad key,
@@ -119,6 +125,32 @@ export async function fetchGatewayQuota(
   return response.status === 404
     ? { supported: true, accounts: [] }
     : { supported: true, accounts: [], failed: true };
+}
+
+/**
+ * An API-key account is another CLIProxyAPI (the user's pool): list the accounts behind it in its
+ * place. An upstream account the local router also holds is the same login with the same quota,
+ * so it is listed once, as the local one. Any upstream failure keeps the local list.
+ */
+async function expandUpstreamAccounts(
+  accounts: GatewayQuotaAccount[],
+  options: FetchGatewayQuotaOptions,
+): Promise<GatewayQuotaAccount[]> {
+  const upstream = options.followUpstream === false ? null : getGatewayUpstream();
+  if (!upstream || !accounts.some((account) => account.type === "api")) return accounts;
+  const behind = await fetchGatewayQuota({
+    ...options,
+    baseUrl: upstream.baseUrl,
+    token: upstream.apiKey,
+    model: upstreamModelSlug(options.model),
+    followUpstream: false,
+  });
+  if (!behind.supported || behind.failed) return accounts;
+  const identity = (account: GatewayQuotaAccount) =>
+    `${account.providerName ?? account.provider} ${account.name ?? ""}`;
+  const local = new Set(accounts.filter((a) => a.type !== "api").map(identity));
+  const expanded = behind.accounts.filter((account) => !local.has(identity(account)));
+  return accounts.flatMap((account) => (account.type === "api" ? expanded : [account]));
 }
 
 function mapQuotaAccount(

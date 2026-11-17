@@ -6,6 +6,7 @@
 // `supported` tell the warm-up account check, which must not guess, why.
 import { z } from "zod";
 import type { AgentProvider } from "../agent-sdk-types.js";
+import { getGatewayUpstream } from "./upstream.js";
 
 export const GATEWAY_SESSION_ROUTE_TIMEOUT_MS = 10_000;
 /** Matches the quota cache: the tooltip re-reads on open, the turn watcher bypasses it. */
@@ -82,6 +83,8 @@ export interface FetchGatewaySessionRouteOptions {
   /** Canonical CLIProxyAPI session id, e.g. `claude:<session id>`. */
   session: string;
   fetchImpl?: typeof fetch;
+  /** false = do not follow an API-key account through to `agents.cliproxyapi.upstream`. */
+  followUpstream?: boolean;
 }
 
 /**
@@ -168,13 +171,39 @@ export async function fetchGatewaySessionRoute(
   if (response.status !== 200) return failed;
   const parsed = SessionRoutePayloadSchema.safeParse(payload);
   if (!parsed.success) return failed;
+  const route: GatewaySessionRoute = {
+    account: mapAccount(parsed.data.account),
+    since: parsed.data.since,
+    switches: parsed.data.switches.map(mapSwitch),
+  };
+  return { supported: true, route: await followUpstreamRoute(route, parsed.data.account, options) };
+}
+
+/**
+ * An API-key account is another CLIProxyAPI (the user's pool): ask it which of its accounts
+ * served the same session. Its account replaces the pool's `config:<provider>[<hash>]` label;
+ * the local `since` stays (it is when this router last moved the session).
+ */
+async function followUpstreamRoute(
+  route: GatewaySessionRoute,
+  account: z.infer<typeof AccountPayloadSchema>,
+  options: FetchGatewaySessionRouteOptions,
+): Promise<GatewaySessionRoute> {
+  const upstream = options.followUpstream === false ? null : getGatewayUpstream();
+  if (!upstream || account.type !== "api") return route;
+  const followed = await fetchGatewaySessionRoute({
+    ...options,
+    baseUrl: upstream.baseUrl,
+    token: upstream.apiKey,
+    followUpstream: false,
+  });
+  if (!followed.route) return route;
   return {
-    supported: true,
-    route: {
-      account: mapAccount(parsed.data.account),
-      since: parsed.data.since,
-      switches: parsed.data.switches.map(mapSwitch),
-    },
+    account: followed.route.account,
+    since: route.since,
+    switches: [...route.switches, ...followed.route.switches].sort(
+      (a, b) => Date.parse(a.at) - Date.parse(b.at),
+    ),
   };
 }
 

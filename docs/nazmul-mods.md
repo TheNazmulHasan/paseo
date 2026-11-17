@@ -169,3 +169,14 @@ grep -q topic-trail-service packages/server/src/server/bootstrap.ts
 grep -q TopicTrailStrip packages/app/src/components/split-container.tsx
 scripts/nazmul-bundle-has.sh 'topic-trail-strip-'
 ```
+
+## gateway-upstream
+
+When the local CLIProxyAPI router (Nazmul's switchboard) serves a chat from its API-key credential (Riajul's pool), Paseo asks that upstream pool the same session/quota question, so the context popover names the real pool account (not `config:claude[<hash>]`) and "All accounts" lists the pool's accounts, each login once. Config `agents.cliproxyapi.upstream: {baseUrl, apiKey}`, read once at daemon start. Doc: myos/paseo/gateway-upstream.md
+
+```bash
+npx vitest run packages/server/src/server/agent/gateway/upstream.test.ts --bail=1
+grep -q followUpstreamRoute packages/server/src/server/agent/gateway/session-route.ts
+grep -q expandUpstreamAccounts packages/server/src/server/agent/gateway/quota.ts
+grep -q setGatewayUpstream packages/server/src/server/bootstrap.ts
+```
