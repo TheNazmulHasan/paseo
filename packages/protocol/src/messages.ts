@@ -49,6 +49,7 @@ import {
   ChiefQueryRequestSchema,
   ChiefQueryResponseSchema,
 } from "./chief.js";
+import { HomeRequestSchema, HomeResponseSchema, HomeUpdateMessageSchema } from "./home.js"; // Nazmul mod (home-map)
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
 import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
@@ -4032,6 +4033,8 @@ export const FORK_SESSION_EVENTS = [
   "folders_update",
   // Nazmul mod (chief): an agent driving the desktop app.
   "app_command",
+  // Nazmul mod (home-map): the Home brief/state changed.
+  "home_update",
 ] as const;
 
 // These connection event streams have no directory bootstrap or timeline membership.
@@ -4141,6 +4144,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   // Nazmul mod (chief)
   AppCommandResultRequestSchema,
   ChiefQueryRequestSchema,
+  HomeRequestSchema, // Nazmul mod (home-map)
   WorkspaceLabelListRequestSchema,
   WorkspaceLabelAssignmentSetRequestSchema,
   WorkspaceLabelUpdateRequestSchema,
@@ -8685,6 +8689,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   // Nazmul mod (chief)
   AppCommandMessageSchema,
   ChiefQueryResponseSchema,
+  HomeResponseSchema, // Nazmul mod (home-map)
+  HomeUpdateMessageSchema, // Nazmul mod (home-map)
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
   WaitForFinishResponseMessageSchema,

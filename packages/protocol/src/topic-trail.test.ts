@@ -36,4 +36,29 @@ describe("topic trail schema", () => {
     expect(AgentSnapshotPayloadSchema.shape.topicTrail.safeParse(undefined).success).toBe(true);
     expect(AgentSnapshotPayloadSchema.shape.topicTrail.safeParse(null).success).toBe(true);
   });
+
+  it("carries the Home card inside the trail, and a trail without one stays valid", () => {
+    const card = {
+      what: "OAuth",
+      status: "Secret saved.",
+      waitingOn: "nazmul",
+      kind: "decision",
+      nextStep: "Tell Riajul yes",
+      urgency: "now",
+      importance: "high",
+      why: "Riajul waits.",
+      looksFinished: false,
+      stopped: false,
+      openItems: ["Test the secret"],
+      basedOnSeq: 4,
+      updatedAt: "t",
+    };
+    // A card stored before `title` and `renamed` existed is still valid.
+    expect(TopicTrailSchema.parse({ ...trail, card }).card).toEqual(card);
+    const full = { ...card, title: "Google OAuth secret", renamed: { from: null, to: "Google OAuth secret", at: "t" } };
+    expect(TopicTrailSchema.parse({ ...trail, card: full }).card).toEqual(full);
+    expect(TopicTrailSchema.parse(trail).card).toBeUndefined();
+    expect(TopicTrailSchema.parse({ ...trail, card: null }).card).toBeNull();
+    expect(TopicTrailSchema.safeParse({ ...trail, card: { ...card, urgency: "soon" } }).success).toBe(false);
+  });
 });

@@ -283,6 +283,8 @@ const INBOUND_PERMISSION = {
   "app_command.result.request": "workspace.manage",
   // Nazmul mod (chief): same as list_agents (fetch_agents_request).
   "chief.query.request": ["workspace.read", "hub.execute"],
+  // Nazmul mod (home-map): one request type reads Home and also snoozes, keeps and re-lays it out, so it needs workspace.manage.
+  "home.request": "workspace.manage",
   "workspace.recovery.inspect.request": ["workspace.read", "hub.execute"],
   "workspace.recovery.restore.request": ["workspace.manage", "hub.execute"],
   "workspace.script.list.request": "workspace.read",
@@ -595,6 +597,9 @@ const OUTBOUND_PERMISSION = {
   // Nazmul mod (chief): only a client allowed to manage workspaces is told to drive the app.
   app_command: "workspace.manage",
   "chief.query.response": ["workspace.read", "hub.execute"],
+  // Nazmul mod (home-map): the reply to home.request, and the push after any Home change.
+  "home.response": "workspace.manage",
+  home_update: "workspace.read",
   "workspace.recovery.inspect.response": ["workspace.read", "hub.execute"],
   "workspace.recovery.restore.response": ["workspace.manage", "hub.execute"],
   "workspace.script.list.response": "workspace.read",

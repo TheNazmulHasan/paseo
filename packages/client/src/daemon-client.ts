@@ -13,6 +13,7 @@ import type { HostAdd, HostUpdate, HostDirectory } from "@getpaseo/protocol/host
 import type { Folder, FoldersSnapshot } from "@getpaseo/protocol/folders";
 // Nazmul mod (chief)
 import type { AppActionInfo } from "@getpaseo/protocol/chief";
+import type { HomeSnapshot } from "@getpaseo/protocol/home"; // Nazmul mod (home-map)
 import { legacyUsageIcon } from "./legacy-usage-icons.js";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
@@ -4226,6 +4227,21 @@ export class DaemonClient {
     });
     if (payload.error) throw new Error(payload.error);
     return payload.result;
+  }
+
+  /**
+   * Nazmul mod (home-map): Home's daemon side. `get` and `refresh` return the brief and state;
+   * `snooze`, `keep` and `set_layout` change the state (inputs: see HomeRequestSchema).
+   */
+  async homeRequest(
+    action: "get" | "refresh" | "snooze" | "keep" | "set_layout",
+    input: Record<string, unknown> = {},
+  ): Promise<HomeSnapshot> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"home.response">({
+      message: { type: "home.request", action, input },
+    });
+    if (payload.error || !payload.snapshot) throw new Error(payload.error ?? "Home is not running");
+    return payload.snapshot;
   }
 
   /** Nazmul mod (chief): the app's answer to an `app_command` push. Fire and forget. */

@@ -290,6 +290,28 @@ export const PASEO_TOOL_CATALOG = {
     detail: { inputOrder: ["action", "args"], outputFields: ["delivered", "ok", "error"] },
   },
   list_app_actions: { label: "List app actions", completedLabel: "Listed app actions" },
+  // Nazmul mod (home-map)
+  home_get: {
+    label: "Read Home",
+    completedLabel: "Read Home",
+    detail: { outputFields: ["headline", "tally"] },
+  },
+  home_refresh: {
+    label: "Refresh Home",
+    completedLabel: "Refreshed Home",
+    detail: { inputOrder: ["wait"], outputFields: ["headline", "briefRunning"] },
+  },
+  home_snooze: {
+    label: "Snooze on Home",
+    completedLabel: "Snoozed on Home",
+    context: field("agentId"),
+    detail: { inputOrder: ["agentId", "until"], outputFields: ["snoozedUntil"] },
+  },
+  home_set_layout: {
+    label: "Set Home layout",
+    completedLabel: "Set Home layout",
+    detail: { outputFields: ["active", "items", "unknownIds"] },
+  },
   archive_workspace: {
     label: "Archive workspace",
     completedLabel: "Archived workspace",

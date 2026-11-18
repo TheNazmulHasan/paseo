@@ -13,14 +13,24 @@ describe("deriveSessionState", () => {
     expect(deriveSessionState({ status: "idle", pendingPermissionCount: 2 })).toBe("needs_you");
   });
 
-  it("needs_you for attention on a permission or an error, and for the error status", () => {
+  it("needs_you for attention on a permission, and only a permission", () => {
     expect(
       deriveSessionState({ status: "idle", requiresAttention: true, attentionReason: "permission" }),
     ).toBe("needs_you");
+  });
+
+  it("an error is stopped, never needs_you (home v2 state rule)", () => {
     expect(
       deriveSessionState({ status: "idle", requiresAttention: true, attentionReason: "error" }),
-    ).toBe("needs_you");
-    expect(deriveSessionState({ status: "error" })).toBe("needs_you");
+    ).toBe("stopped");
+    expect(deriveSessionState({ status: "error" })).toBe("stopped");
+    expect(deriveSessionState({ status: "closed", requiresAttention: true, attentionReason: "error" })).toBe(
+      "stopped",
+    );
+  });
+
+  it("a pending permission still beats an error status", () => {
+    expect(deriveSessionState({ status: "error", pendingPermissionCount: 1 })).toBe("needs_you");
   });
 
   it("working while running or initializing", () => {
@@ -49,6 +59,12 @@ describe("deriveSessionState", () => {
   it("does not read message timestamps: the agent speaking last is not a move for the user", () => {
     // The old rule (lastResponseAt > lastUserMessageAt) is gone; the input has no such field.
     expect(deriveSessionState({ status: "idle", requiresAttention: false })).toBe("parked");
+  });
+
+  it("running beats an old error; needs_you beats running", () => {
+    expect(
+      deriveSessionState({ status: "running", requiresAttention: true, attentionReason: "error" }),
+    ).toBe("working");
   });
 
   it("running beats an old unread finish; needs_you beats running", () => {
@@ -95,15 +111,10 @@ describe("selectSessionStates", () => {
     row("parked-new", "parked", { lastActivityAt: daysAgo(2), workspaceId: "wks_b" }),
   ];
 
-  it("sorts needs_you, working, your_move, parked; most recent first inside each", () => {
-    expect(selectSessionStates(rows, { now: NOW }).map((r) => r.id)).toEqual([
-      "needs",
-      "working",
-      "move-new",
-      "move-old",
-      "parked-new",
-      "parked-old",
-    ]);
+  it("sorts needs_you, working, your_move, stopped, parked; most recent first inside each", () => {
+    expect(
+      selectSessionStates([...rows, row("stopped", "stopped")], { now: NOW }).map((r) => r.id),
+    ).toEqual(["needs", "working", "move-new", "move-old", "stopped", "parked-new", "parked-old"]);
   });
 
   it("filters by state", () => {

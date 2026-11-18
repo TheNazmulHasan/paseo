@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/shallow";
-import { useDeskStore } from "@/desk/desk-store";
+import { buildHomeView } from "@getpaseo/protocol/home";
 import { useFolderIndex } from "@/folders/folder-store";
 import {
   getHostRuntimeStore,
@@ -8,31 +8,47 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
+import { useHomeDataStore } from "./home-data-store";
 import { useHomeStore } from "./home-store";
+import { buildHomeSessions, findChiefAgent, type HomeSession } from "./model";
 import {
-  buildHomeBands,
-  buildHomeMap,
-  buildHomeSessions,
-  findChiefAgent,
-  type HomeBands,
-  type HomeFolderNode,
-  type HomeSession,
-} from "./model";
+  localDayKey,
+  mergeHomeSnapshots,
+  resolveClosedToday,
+  type MergedHomeSnapshot,
+} from "./snapshots";
+import type { HomeSessionView } from "./view-model";
 
 export interface HomeData {
+  view: HomeSessionView;
   sessions: HomeSession[];
-  bands: HomeBands;
-  tree: HomeFolderNode[];
+  merged: MergedHomeSnapshot;
+  closedToday: number;
+  /** The clock the view was built at (ticks every 30 s). */
+  now: number;
   /** The Chief agent (label `paseo.role=chief`), or null when none is set up. */
   chief: Agent | null;
   /** Some host is still loading its first directory and nothing has arrived yet. */
   loading: boolean;
 }
 
+/** Snoozes end by the clock, so the view is rebuilt this often even when nothing else changed. */
+const CLOCK_TICK_MS = 30_000;
+
+function useClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+    return () => clearInterval(interval);
+  }, []);
+  return now;
+}
+
 /**
- * Home reads the app's live stores (the daemons push every change), so it updates with no polling.
- * Directory demand is held while Home is mounted, as every session list does, so the agents and
- * workspaces are loaded even when no other screen asked for them.
+ * Home reads the app's live stores (the daemons push every change), the per-host Home snapshots
+ * and one clock. Every open session goes through the shared `buildHomeView`, so the groups are the
+ * ones Chief's `home_get` reports. Directory demand is held while Home is mounted, as every
+ * session list does, so the agents and workspaces are loaded even when no other screen asked.
  */
 export function useHomeData(): HomeData {
   const hosts = useHosts();
@@ -74,8 +90,9 @@ export function useHomeData(): HomeData {
     }),
   );
   const folderIndex = useFolderIndex();
-  const deskKeys = useDeskStore((state) => state.deskKeys);
-  const showQuiet = useHomeStore((state) => state.showQuiet);
+  const snapshots = useHomeDataStore((state) => state.snapshots);
+  const closedTodayLocal = useHomeStore((state) => state.closedTodayLocal);
+  const now = useClock();
 
   const agents = useMemo(() => {
     const all: Agent[] = [];
@@ -84,21 +101,41 @@ export function useHomeData(): HomeData {
     }
     return all;
   }, [agentsByServer]);
-  const sessions = useMemo(
-    () => buildHomeSessions({ agents, workspaces: workspacesByServer, folderIndex }),
-    [agents, workspacesByServer, folderIndex],
-  );
-  const bands = useMemo(() => buildHomeBands(sessions), [sessions]);
-  const tree = useMemo(
-    () => buildHomeMap({ sessions, folderIndex, deskKeys, showQuiet }),
-    [sessions, folderIndex, deskKeys, showQuiet],
-  );
   const chief = useMemo(() => findChiefAgent(agents), [agents]);
+  const sessions = useMemo(
+    () =>
+      buildHomeSessions({
+        agents,
+        workspaces: workspacesByServer,
+        folderIndex,
+        // Chief has its own bar at the bottom; its chat is not a session to check on.
+        excludeIds: chief ? new Set([`${chief.serverId}:${chief.id}`]) : undefined,
+      }),
+    [agents, workspacesByServer, folderIndex, chief],
+  );
+  const merged = useMemo(() => {
+    const openByHost: Record<string, number> = {};
+    for (const session of sessions) {
+      openByHost[session.serverId] = (openByHost[session.serverId] ?? 0) + 1;
+    }
+    return mergeHomeSnapshots(snapshots, openByHost);
+  }, [sessions, snapshots]);
+  const view = useMemo(
+    () => buildHomeView({ sessions, brief: merged.brief, state: merged.state, now }),
+    [sessions, merged, now],
+  );
+  const closedToday = resolveClosedToday({
+    merged: merged.closedToday,
+    local: closedTodayLocal,
+    today: localDayKey(new Date(now)),
+  });
 
   return {
+    view,
     sessions,
-    bands,
-    tree,
+    merged,
+    closedToday,
+    now,
     chief,
     loading: loadingKey.includes("1") && sessions.length === 0,
   };

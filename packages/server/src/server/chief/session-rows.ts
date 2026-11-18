@@ -5,6 +5,8 @@ import {
   buildWorkspaceMarkdownLink,
 } from "@getpaseo/protocol/workspace-link";
 
+import { hasChiefRoleLabel } from "@getpaseo/protocol/chief"; // Nazmul mod (home-map)
+import type { HomeCard } from "@getpaseo/protocol/topic-trail"; // Nazmul mod (home-map)
 import {
   deriveSessionState,
   resolveYourMoveText,
@@ -25,7 +27,10 @@ export interface AgentStateSource {
   updatedAt: string;
   archivedAt?: string | null;
   internal?: boolean;
-  topicTrail?: { yourMove: string | null } | null;
+  topicTrail?: { yourMove: string | null; card?: HomeCard | null } | null;
+  /** Nazmul mod (home-map): ISO time of his last message; cache-warm pings never count. */
+  lastUserMessageAt?: string | null;
+  labels?: Readonly<Record<string, string>>;
 }
 
 export interface WorkspaceSource {
@@ -55,6 +60,11 @@ export interface SessionStateRow {
   state: SessionState;
   /** What the agent waits on from the user (the topic trail's "Your move" line); null when none. */
   yourMoveText: string | null;
+  /** Nazmul mod (home-map): the session card, for Home. Not part of the `session_states` tool output. */
+  card: HomeCard | null;
+  lastUserMessageAt: string | null;
+  /** Nazmul mod (home-map): this is the Chief agent itself; Home leaves it out (it has its own bar). */
+  chief: boolean;
   lastActivityAt: string | null;
   /** Markdown link that opens this session (agent deep link). */
   link: string | null;
@@ -110,6 +120,9 @@ export function buildSessionStateRows(input: BuildRowsInput): SessionStateRow[] 
       background: workspace?.background === true,
       state,
       yourMoveText: resolveYourMoveText(state, agent.topicTrail?.yourMove),
+      card: agent.topicTrail?.card ?? null,
+      lastUserMessageAt: agent.lastUserMessageAt ?? null,
+      chief: hasChiefRoleLabel(agent.labels),
       lastActivityAt: input.lastActivityById.get(agent.id) ?? agent.updatedAt ?? null,
       link: url ? buildWorkspaceMarkdownLink(label, url) : null,
       url,

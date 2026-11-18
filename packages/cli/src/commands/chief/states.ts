@@ -32,6 +32,7 @@ const STATE_COLORS: Record<string, string> = {
   needs_you: "red",
   working: "green",
   your_move: "yellow",
+  stopped: "magenta",
   parked: "gray",
 };
 

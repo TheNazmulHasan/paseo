@@ -3,6 +3,7 @@ import { createChiefCommand } from "./index.js";
 import { oneLine, parseLimit } from "./shared.js";
 import { parseStates, statesSchema, type SessionStateRow } from "./states.js";
 import { searchSchema, type SearchHitRow } from "./search.js";
+import { runHomeLayout, toHomeRow } from "./home.js";
 
 function catchError(run: () => unknown): unknown {
   try {
@@ -26,7 +27,13 @@ describe("chief command", () => {
     expect(createChiefCommand().commands.map((command) => command.name())).toEqual([
       "states",
       "search",
+      "home",
     ]);
+    expect(
+      createChiefCommand()
+        .commands.find((command) => command.name() === "home")
+        ?.commands.map((command) => command.name()),
+    ).toEqual(["refresh", "snooze", "layout"]);
   });
 
   it("search needs its query as one argument, so an unquoted multi-word query is refused", () => {
@@ -42,6 +49,7 @@ describe("chief command", () => {
 describe("argument parsing", () => {
   it("parses a comma separated state list and refuses unknown states", () => {
     expect(parseStates("your_move, needs_you")).toEqual(["your_move", "needs_you"]);
+    expect(parseStates("stopped")).toEqual(["stopped"]);
     expect(parseStates(undefined)).toBeUndefined();
     expect(catchError(() => parseStates("done"))).toMatchObject({ code: "INVALID_ARGUMENTS" });
   });
@@ -110,5 +118,50 @@ describe("table rows", () => {
       "how does the switchboard pick an account?",
       "12345678",
     ]);
+  });
+});
+
+describe("home subcommands", () => {
+  function parseHome(argv: string[]): unknown {
+    const chief = createChiefCommand()
+      .exitOverride()
+      .configureOutput({ writeErr: () => undefined });
+    const home = chief.commands.find((command) => command.name() === "home")!;
+    home.exitOverride();
+    for (const command of home.commands) command.exitOverride();
+    return catchError(() => chief.parse(["home", ...argv], { from: "user" }));
+  }
+
+  it("snooze needs an id and a time", () => {
+    expect(parseHome(["snooze"])).toMatchObject({ code: "commander.missingArgument" });
+    expect(parseHome(["snooze", "abc"])).toMatchObject({ code: "commander.missingArgument" });
+  });
+
+  it("layout needs --file or --clear, and not both", () => {
+    expect(catchError(() => runHomeLayout({ daemonTarget: {} as never }, {} as never))).toMatchObject({
+      code: "INVALID_ARGUMENTS",
+    });
+    expect(
+      catchError(() => runHomeLayout({ clear: true, file: "x.json", daemonTarget: {} as never }, {} as never)),
+    ).toMatchObject({ code: "INVALID_ARGUMENTS" });
+    expect(
+      catchError(() => runHomeLayout({ file: "/nonexistent/layout.json", daemonTarget: {} as never }, {} as never)),
+    ).toMatchObject({ code: "INVALID_ARGUMENTS" });
+  });
+
+  it("shows the headline, brief time, counts and layout", () => {
+    const row = toHomeRow({
+      brief: { headline: "Two replies wait.", since: null, queue: [], checkOn: [], superseded: [], generatedAt: "2026-11-18T08:31:00.000Z" },
+      state: {
+        snoozed: { a: "x", b: "y" },
+        kept: { c: "z" },
+        chiefLayout: { title: "Your 10", reason: "r", createdAt: "x", groups: [] },
+      },
+      closedToday: 4,
+      briefRunning: true,
+      updatedAt: "x",
+    });
+    expect(row).toMatchObject({ headline: "Two replies wait.", closedToday: 4, snoozed: 2, kept: 1, layout: "Your 10", briefRunning: true });
+    expect(toHomeRow({ brief: null, state: { snoozed: {}, kept: {}, chiefLayout: null }, closedToday: 0, briefRunning: false, updatedAt: "x" }).headline).toBe("(no brief yet)");
   });
 });

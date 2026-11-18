@@ -1,51 +1,56 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { migrateHomeState, useHomeStore } from "./home-store";
-import { isNodeOpen } from "./model";
+import { addClosedToday, migrateHomeState, useHomeStore } from "./home-store";
 
 describe("migrateHomeState", () => {
-  it("turns junk into the defaults", () => {
-    for (const junk of [null, undefined, 42, "x", [], { baseline: "sideways" }, { extra: true }]) {
-      expect(migrateHomeState(junk)).toEqual({
-        baseline: "default",
-        overrides: {},
-        showQuiet: false,
-      });
+  it("turns junk and the removed v1 map shape into the defaults", () => {
+    const empty = { closedTodayLocal: { day: "", count: 0 } };
+    for (const junk of [
+      null,
+      undefined,
+      42,
+      "x",
+      [],
+      { baseline: "open", overrides: {}, showQuiet: true },
+      { closedTodayLocal: { day: "2026-11-18", count: -1 } },
+    ]) {
+      expect(migrateHomeState(junk)).toEqual(empty);
     }
   });
 
   it("keeps a valid persisted state", () => {
-    const stored = { baseline: "open", overrides: { "folder:faith": false }, showQuiet: true };
+    const stored = { closedTodayLocal: { day: "2026-11-18", count: 3 } };
     expect(migrateHomeState(stored)).toEqual(stored);
+  });
+});
+
+describe("addClosedToday", () => {
+  it("adds on the same day and restarts on a new one", () => {
+    expect(addClosedToday({ day: "2026-11-18", count: 2 }, 3, "2026-11-18")).toEqual({
+      day: "2026-11-18",
+      count: 5,
+    });
+    expect(addClosedToday({ day: "2026-11-17", count: 9 }, 1, "2026-11-18")).toEqual({
+      day: "2026-11-18",
+      count: 1,
+    });
+  });
+
+  it("an undo takes closes back off and never goes below 0", () => {
+    expect(addClosedToday({ day: "2026-11-18", count: 2 }, -1, "2026-11-18").count).toBe(1);
+    expect(addClosedToday({ day: "2026-11-18", count: 1 }, -5, "2026-11-18").count).toBe(0);
   });
 });
 
 describe("useHomeStore", () => {
   beforeEach(() => {
-    useHomeStore.setState({ baseline: "default", overrides: {}, showQuiet: false });
+    useHomeStore.setState({ closedTodayLocal: { day: "", count: 0 } });
   });
 
-  it("toggles nodes one by one", () => {
-    useHomeStore.getState().toggleNode("ws:faith:s1:w1", "workspace");
-    expect(isNodeOpen(useHomeStore.getState(), "ws:faith:s1:w1", "workspace")).toBe(true);
-    useHomeStore.getState().toggleNode("ws:faith:s1:w1", "workspace");
-    expect(isNodeOpen(useHomeStore.getState(), "ws:faith:s1:w1", "workspace")).toBe(false);
-  });
-
-  it("Unfold all and Fold all reset every hand-made choice", () => {
-    useHomeStore.getState().toggleNode("folder:faith", "folder");
-    useHomeStore.getState().setAll(true);
-    expect(useHomeStore.getState()).toMatchObject({ baseline: "open", overrides: {} });
-    expect(isNodeOpen(useHomeStore.getState(), "folder:faith", "folder")).toBe(true);
-    useHomeStore.getState().setAll(false);
-    expect(useHomeStore.getState()).toMatchObject({ baseline: "folded", overrides: {} });
-    expect(isNodeOpen(useHomeStore.getState(), "folder:faith", "folder")).toBe(false);
-  });
-
-  it("Show quiet is off by default and switches on and off", () => {
-    expect(useHomeStore.getState().showQuiet).toBe(false);
-    useHomeStore.getState().setShowQuiet(true);
-    expect(useHomeStore.getState().showQuiet).toBe(true);
-    useHomeStore.getState().setShowQuiet(false);
-    expect(useHomeStore.getState().showQuiet).toBe(false);
+  it("counts the sessions closed from Home today", () => {
+    useHomeStore.getState().recordClosed(2, "2026-11-18");
+    useHomeStore.getState().recordClosed(1, "2026-11-18");
+    expect(useHomeStore.getState().closedTodayLocal).toEqual({ day: "2026-11-18", count: 3 });
+    useHomeStore.getState().recordClosed(-1, "2026-11-18");
+    expect(useHomeStore.getState().closedTodayLocal.count).toBe(2);
   });
 });

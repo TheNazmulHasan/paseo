@@ -1,20 +1,21 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Bot, ExternalLink as OpenIcon, Send } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { AssistantMessage } from "@/components/message";
 import { Button } from "@/components/ui/button";
-import { ScrollView } from "@/components/ui/scroll-view";
 import { EditingTextInput, type EditingTextInputHandle } from "@/components/ui/text-input";
 import { useToast } from "@/contexts/toast-api-context";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
+import { useTimeAgo } from "@/hooks/use-time-ago";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
+import { HomeButton } from "./home-button";
 import { selectLatestAssistantText } from "./model";
 import { openHomeSession } from "./open-session";
+import { clipReplyLine } from "./view-model";
 
 const ThemedBot = withUnistyles(Bot);
 const ThemedTextInput = withUnistyles(EditingTextInput, (theme: Theme) => ({
@@ -23,46 +24,111 @@ const ThemedTextInput = withUnistyles(EditingTextInput, (theme: Theme) => ({
 }));
 const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-/** What the Chief box shows when no agent carries the Chief label. It never creates the agent. */
+/**
+ * Chief's newest reply (markdown). The text lives in the agent's stream, which is only loaded
+ * once the agent has been opened (or fetched), so it is fetched once per Chief agent; after that
+ * the live stream keeps it current.
+ */
+export function useChiefReply(chief: Agent): string | null {
+  const serverId = chief.serverId;
+  const chiefId = chief.id;
+  const client = useHostRuntimeClient(serverId);
+  const { ensureAgentIsInitialized } = useAgentInitialization({ serverId, client });
+  useEffect(() => {
+    if (!client) return;
+    ensureAgentIsInitialized(chiefId).catch(() => undefined);
+  }, [chiefId, client, ensureAgentIsInitialized]);
+  return useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    return selectLatestAssistantText(
+      session?.agentStreamHead.get(chiefId),
+      session?.agentStreamTail.get(chiefId),
+    );
+  });
+}
+
+/** What the bar shows when no agent carries the Chief label. Home never creates the agent. */
 function ChiefSetupHint() {
   const { t } = useTranslation();
   return (
-    <View style={styles.box} testID="home-chief-setup">
-      <View style={styles.headerRow}>
+    <View style={styles.bar} testID="home-chief-setup">
+      <View style={styles.hintRow}>
         <ThemedBot size={16} uniProps={mutedMapping} />
-        <Text style={styles.title}>{t("homeMap.chief.setup")}</Text>
+        <Text style={styles.hintTitle}>{t("homeMap.chief.setup")}</Text>
       </View>
       <Text style={styles.hint}>{t("homeMap.chief.setupHint")}</Text>
     </View>
   );
 }
 
-const ChiefInput = memo(function ChiefInput({ chief }: { chief: Agent }) {
+/** One line: "Chief, 2m ago: <first line of the reply>" and Read (opens the side drawer). */
+const ReplyLine = memo(function ReplyLine({
+  chief,
+  reply,
+  onRead,
+}: {
+  chief: Agent;
+  reply: string | null;
+  onRead: () => void;
+}) {
+  const { t } = useTranslation();
+  const at = useMemo(() => chief.lastActivityAt, [chief.lastActivityAt]);
+  const ago = useTimeAgo(at);
+  const line = clipReplyLine(reply);
+  const running = chief.status === "running";
+  if (!line) {
+    return (
+      <Text style={styles.hint} testID="home-chief-no-reply">
+        {running ? t("homeMap.chief.thinking") : t("homeMap.chief.noReply")}
+      </Text>
+    );
+  }
+  return (
+    <View style={styles.replyRow} testID="home-chief-reply">
+      <Text style={styles.replyText} numberOfLines={1}>
+        <Text style={styles.replyFrom}>{t("homeMap.chief.replyFrom", { ago })} </Text>
+        {line}
+      </Text>
+      {running ? <Text style={styles.hint}>{t("homeMap.chief.thinking")}</Text> : null}
+      <HomeButton kind="quiet" onPress={onRead} testID="home-chief-read">
+        {t("homeMap.chief.read")}
+      </HomeButton>
+    </View>
+  );
+});
+
+/**
+ * Nazmul mod (home-map): the Chief bar at the bottom of Home. SEND-ONLY: one input, Send and Open
+ * Chief. Send puts the text in Chief's chat, clears the box and leaves you on Home; there is no
+ * conversation here. Under it, one line with Chief's latest reply and Read (side drawer). With no
+ * Chief agent it only explains how to set one up: Home never creates agents.
+ */
+export const ChiefBar = memo(function ChiefBar({
+  chief,
+  onRead,
+}: {
+  chief: Agent | null;
+  onRead: () => void;
+}) {
+  return chief ? <ChiefInput chief={chief} onRead={onRead} /> : <ChiefSetupHint />;
+});
+
+const ChiefInput = memo(function ChiefInput({
+  chief,
+  onRead,
+}: {
+  chief: Agent;
+  onRead: () => void;
+}) {
   const { t } = useTranslation();
   const toast = useToast();
   const client = useHostRuntimeClient(chief.serverId);
   const isConnected = useHostRuntimeIsConnected(chief.serverId);
-  const { ensureAgentIsInitialized } = useAgentInitialization({ serverId: chief.serverId, client });
   const inputRef = useRef<EditingTextInputHandle>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-
-  // The latest reply comes from the agent's stream, which is only loaded once the agent has been
-  // opened (or fetched). Fetch it once per Chief agent; after that the live stream keeps it current.
+  const reply = useChiefReply(chief);
   const chiefId = chief.id;
-  useEffect(() => {
-    if (!client) return;
-    ensureAgentIsInitialized(chiefId).catch(() => undefined);
-  }, [chiefId, client, ensureAgentIsInitialized]);
-
-  const reply = useSessionStore((state) => {
-    const session = state.sessions[chief.serverId];
-    return selectLatestAssistantText(
-      session?.agentStreamHead.get(chiefId),
-      session?.agentStreamTail.get(chiefId),
-    );
-  });
-  const running = chief.status === "running";
   const canSend = text.trim().length > 0 && !sending && isConnected && client !== null;
 
   const handleSend = useCallback(async () => {
@@ -82,49 +148,11 @@ const ChiefInput = memo(function ChiefInput({ chief }: { chief: Agent }) {
 
   const handleOpenChief = useCallback(() => {
     if (!chief.workspaceId) return;
-    openHomeSession({
-      serverId: chief.serverId,
-      workspaceId: chief.workspaceId,
-      agentId: chiefId,
-    });
+    openHomeSession({ serverId: chief.serverId, workspaceId: chief.workspaceId, agentId: chiefId });
   }, [chief.serverId, chief.workspaceId, chiefId]);
 
   return (
-    <View style={styles.box} testID="home-chief">
-      <View style={styles.headerRow}>
-        <ThemedBot size={16} uniProps={mutedMapping} />
-        <Text style={styles.title}>{t("homeMap.chief.title")}</Text>
-        {running ? <Text style={styles.status}>{t("homeMap.chief.thinking")}</Text> : null}
-        <View style={styles.spacer} />
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={OpenIcon}
-          onPress={handleOpenChief}
-          disabled={!chief.workspaceId}
-          testID="home-chief-open"
-        >
-          {t("homeMap.chief.open")}
-        </Button>
-      </View>
-      {reply ? (
-        <ScrollView style={styles.reply} testID="home-chief-reply" nestedScrollEnabled>
-          <AssistantMessage
-            renderFullContent
-            occurrenceKey={`home-chief-${chiefId}`}
-            message={reply}
-            timestamp={chief.lastActivityAt.getTime()}
-            serverId={chief.serverId}
-            client={client}
-            spacing="compactBoth"
-            phase={running ? "streaming" : "complete"}
-          />
-        </ScrollView>
-      ) : (
-        <Text style={styles.hint} testID="home-chief-no-reply">
-          {t("homeMap.chief.noReply")}
-        </Text>
-      )}
+    <View style={styles.bar} testID="home-chief">
       <View style={styles.inputRow}>
         <View style={styles.field}>
           <ThemedTextInput
@@ -150,58 +178,45 @@ const ChiefInput = memo(function ChiefInput({ chief }: { chief: Agent }) {
         >
           {t("homeMap.chief.send")}
         </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={OpenIcon}
+          onPress={handleOpenChief}
+          disabled={!chief.workspaceId}
+          testID="home-chief-open"
+        >
+          {t("homeMap.chief.open")}
+        </Button>
       </View>
+      <ReplyLine chief={chief} reply={reply} onRead={onRead} />
     </View>
   );
 });
 
-/**
- * Nazmul mod (home-map): the Chief box at the bottom of Home. A single-line input sends the text as
- * a prompt to the Chief agent and the latest reply shows above it as markdown (its links open the
- * workspace or session in place, like chat links). With no Chief agent it only explains how to set
- * one up: Home never creates agents.
- */
-export function ChiefBox({ chief }: { chief: Agent | null }) {
-  return chief ? <ChiefInput chief={chief} /> : <ChiefSetupHint />;
-}
-
 const styles = StyleSheet.create((theme) => ({
-  box: {
-    gap: theme.spacing[2],
+  bar: {
+    gap: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1.5],
     borderTopWidth: theme.borderWidth[1],
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
   },
-  headerRow: {
+  hintRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minWidth: 0,
   },
-  title: {
+  hintTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
-  status: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    flexShrink: 1,
-  },
-  spacer: {
-    flexGrow: 1,
-  },
   hint: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-  },
-  reply: {
-    maxHeight: 180,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface1,
-    paddingHorizontal: theme.spacing[3],
   },
   inputRow: {
     flexDirection: "row",
@@ -225,5 +240,21 @@ const styles = StyleSheet.create((theme) => ({
     outlineWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
+  },
+  replyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    minWidth: 0,
+  },
+  replyText: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  replyFrom: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
   },
 }));

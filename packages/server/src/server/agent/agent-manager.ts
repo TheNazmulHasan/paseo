@@ -2781,6 +2781,21 @@ export class AgentManager {
     this.emitState(agent, { persist: false });
   }
 
+  /**
+   * Nazmul mod (home-map): the daemon renames a session whose title was still the automatic one
+   * (see topic-trail/auto-title.ts). Same persistence and state push as `setTitle`, but it does not
+   * touch updatedAt: an automatic rename is not user activity and must not reorder "Recent".
+   */
+  async setAutoTitle(agentId: string, title: string): Promise<void> {
+    const agent = this.agents.get(agentId);
+    const normalizedTitle = title.trim();
+    if (!agent || agent.internal || !this.registry || !normalizedTitle) {
+      return;
+    }
+    await this.persistSnapshot(agent, { title: normalizedTitle });
+    this.emitState(agent, { persist: false });
+  }
+
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
     await this.runLifecycleMutation(agentId, async () => {
       const agent = this.requireAgent(agentId);

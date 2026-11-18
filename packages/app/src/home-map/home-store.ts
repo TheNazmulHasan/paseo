@@ -3,88 +3,70 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { z } from "zod";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
-import {
-  INITIAL_HOME_FOLD_STATE,
-  setAllFolds,
-  toggleNodeFold,
-  type HomeFoldLevel,
-  type HomeFoldState,
-} from "@/home-map/model";
 
-const HOME_STORE_VERSION = 1;
+/**
+ * Home v2 keeps almost nothing on the device: the daemons own the brief and the state. What stays
+ * here is the count of sessions closed from Home today, the stand-in for "closed today" when no
+ * daemon has answered with its own count (an older daemon, or still connecting).
+ *
+ * Version 2 replaced the v1 map's fold state and Show quiet switch (both removed); an old stored
+ * shape fails the schema, is dropped by the storage wrapper and starts from the defaults.
+ */
+const HOME_STORE_VERSION = 2;
+
+export interface HomeClosedTodayLocal {
+  /** Local day the count belongs to, "YYYY-MM-DD". */
+  day: string;
+  count: number;
+}
 
 interface HomePersistedState {
-  baseline: HomeFoldState["baseline"];
-  overrides: Record<string, boolean>;
-  /** "Show quiet": parked sessions and parked-only workspaces on the map. Off by default. */
-  showQuiet: boolean;
+  closedTodayLocal: HomeClosedTodayLocal;
 }
 
 interface HomeStoreState extends HomePersistedState {
-  toggleNode: (key: string, level: HomeFoldLevel) => void;
-  /** Unfold all (`true`) or Fold all (`false`). */
-  setAll: (open: boolean) => void;
-  setShowQuiet: (showQuiet: boolean) => void;
+  /** Adds closes made from Home (negative: an undo); a new day starts the count again. */
+  recordClosed: (count: number, day: string) => void;
 }
 
 const HomePersistedStateSchema = z.strictObject({
-  baseline: z.enum(["default", "open", "folded"]).optional(),
-  overrides: z.record(z.string(), z.boolean()).optional(),
-  showQuiet: z.boolean().optional(),
+  closedTodayLocal: z.strictObject({ day: z.string(), count: z.number().int().nonnegative() }),
 });
 
 function emptyHomeState(): HomePersistedState {
-  return {
-    baseline: INITIAL_HOME_FOLD_STATE.baseline,
-    overrides: { ...INITIAL_HOME_FOLD_STATE.overrides },
-    showQuiet: false,
-  };
+  return { closedTodayLocal: { day: "", count: 0 } };
 }
 
 /** Junk or an older shape never crashes Home: it starts from the defaults. */
 export function migrateHomeState(persistedState: unknown): HomePersistedState {
   const result = HomePersistedStateSchema.safeParse(persistedState);
-  if (!result.success) {
-    return emptyHomeState();
-  }
-  const empty = emptyHomeState();
-  return {
-    baseline: result.data.baseline ?? empty.baseline,
-    overrides: result.data.overrides ?? empty.overrides,
-    showQuiet: result.data.showQuiet ?? empty.showQuiet,
-  };
+  return result.success ? result.data : emptyHomeState();
 }
 
-/** The Home map's fold state and its Show quiet switch, remembered on this device. */
+/** The next local counter after `count` more closes on `day`. */
+export function addClosedToday(
+  current: HomeClosedTodayLocal,
+  count: number,
+  day: string,
+): HomeClosedTodayLocal {
+  // `count` is negative when a close is undone; the counter never goes below 0.
+  const base = current.day === day ? current.count : 0;
+  return { day, count: Math.max(0, base + count) };
+}
+
 export const useHomeStore = create<HomeStoreState>()(
   persist(
     (set) => ({
       ...emptyHomeState(),
-      toggleNode: (key, level) =>
-        set((state) => {
-          const next = toggleNodeFold(
-            { baseline: state.baseline, overrides: state.overrides },
-            key,
-            level,
-          );
-          return { baseline: next.baseline, overrides: next.overrides };
-        }),
-      setAll: (open) => {
-        const next = setAllFolds(open);
-        set({ baseline: next.baseline, overrides: next.overrides });
-      },
-      setShowQuiet: (showQuiet) => set({ showQuiet }),
+      recordClosed: (count, day) =>
+        set((state) => ({ closedTodayLocal: addClosedToday(state.closedTodayLocal, count, day) })),
     }),
     {
       name: "paseo-home-map",
       storage: createValidatedPersistStorage(AsyncStorage, HomePersistedStateSchema),
       version: HOME_STORE_VERSION,
       migrate: migrateHomeState,
-      partialize: (state): HomePersistedState => ({
-        baseline: state.baseline,
-        overrides: state.overrides,
-        showQuiet: state.showQuiet,
-      }),
+      partialize: (state): HomePersistedState => ({ closedTodayLocal: state.closedTodayLocal }),
     },
   ),
 );

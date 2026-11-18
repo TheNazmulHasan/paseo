@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import type { TopicTrail } from "@getpaseo/protocol/topic-trail";
+import type { HomeCard, TopicTrail } from "@getpaseo/protocol/topic-trail";
 import type { AgentManager, AgentManagerEvent } from "../agent-manager.js";
 import type { AgentStorage } from "../agent-storage.js";
 import type { ProviderSnapshotManager } from "../provider-snapshot-manager.js";
@@ -8,6 +8,13 @@ import {
   type StructuredGenerationProvider,
 } from "../agent-response-loop.js";
 import { mergeTopicTrail } from "./merge-topic-trail.js";
+import {
+  cardIsCurrent,
+  dropKeepAliveRows,
+  mergeHomeCard,
+  newestMessageSeq,
+} from "./home-card.js"; // Nazmul mod (home-map)
+import { AUTO_TITLE_ENV, pickAutoRename } from "./auto-title.js"; // Nazmul mod (home-map)
 import {
   MAX_USER_MESSAGES,
   TopicTrailModelSchema,
@@ -25,7 +32,13 @@ import {
  */
 
 export const TOPIC_TRAIL_ENV = "PASEO_TOPIC_TRAIL";
+/** Nazmul mod (home-map): PASEO_HOME_CARD=0 keeps the trail but stops writing session cards. */
+export const HOME_CARD_ENV = "PASEO_HOME_CARD";
+/** Nazmul mod (home-map): PASEO_HOME_BACKFILL=0 stops the once-per-run card backfill. */
+export const HOME_BACKFILL_ENV = "PASEO_HOME_BACKFILL";
 const DEBOUNCE_MS = 3000;
+const BACKFILL_DELAY_MS = 20_000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 type ManagerPort = Pick<
   AgentManager,
@@ -34,7 +47,7 @@ type ManagerPort = Pick<
 
 export interface TopicTrailServiceOptions {
   agentManager: ManagerPort;
-  agentStorage: Pick<AgentStorage, "get">;
+  agentStorage: Pick<AgentStorage, "get"> & Partial<Pick<AgentStorage, "list">>;
   providerSnapshotManager: Pick<ProviderSnapshotManager, "listProviders">;
   logger: Pick<Logger, "info" | "warn" | "debug">;
   /** Test seams. */
@@ -42,6 +55,25 @@ export interface TopicTrailServiceOptions {
   debounceMs?: number;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Nazmul mod (home-map). Loads a stored agent so its timeline can be read (the backfill of
+   * sessions that have no card yet). Without it only already-loaded agents are backfilled.
+   */
+  loadAgent?: (agentId: string) => Promise<unknown>;
+  /** Nazmul mod (home-map): closes a session the backfill loaded, so ~60 old chats do not stay in memory. */
+  unloadAgent?: (agentId: string) => Promise<unknown>;
+  /** Workspace and folder names for the card prompt. */
+  describeSession?: (agentId: string) => Promise<{ workspace: string | null; folder: string | null }>;
+  /** The text of `~/.paseo/home-priorities.md`, when present. Read on every card. */
+  readPriorities?: () => string | null;
+  /**
+   * Renames a session the way the tab rename does, without counting as activity. Only called when
+   * its title is still the automatic one (see auto-title.ts). Absent = no renaming.
+   */
+  setAutoTitle?: (agentId: string, title: string) => Promise<void>;
+  /** A card was written or changed: Home's brief listens. */
+  onCardChanged?: (agentId: string, card: HomeCard) => void;
+  backfillDelayMs?: number;
 }
 
 export async function resolveTopicTrailProviders(
@@ -72,12 +104,18 @@ export class TopicTrailService {
   private readonly queue: string[] = [];
   private draining = false;
   private unsubscribe: (() => void) | null = null;
+  private backfillTimer: ReturnType<typeof setTimeout> | null = null;
+  private backfillStarted = false;
   private disposed = false;
 
   constructor(private readonly options: TopicTrailServiceOptions) {}
 
   static isEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
     return env[TOPIC_TRAIL_ENV] !== "0";
+  }
+
+  private cardsEnabled(): boolean {
+    return (this.options.env ?? process.env)[HOME_CARD_ENV] !== "0";
   }
 
   start(): void {
@@ -87,6 +125,47 @@ export class TopicTrailService {
     this.unsubscribe = this.options.agentManager.subscribe((event) => this.onEvent(event), {
       replayState: false,
     });
+    // Nazmul mod (home-map): once per daemon run, give every open session without a card one.
+    const env = this.options.env ?? process.env;
+    if (this.options.loadAgent && this.cardsEnabled() && env[HOME_BACKFILL_ENV] !== "0") {
+      this.backfillTimer = setTimeout(
+        () => void this.backfillCards(),
+        this.options.backfillDelayMs ?? BACKFILL_DELAY_MS,
+      );
+    }
+  }
+
+  /**
+   * Nazmul mod (home-map): load each open session that has no card, one at a time, and read it.
+   * Sequential on purpose: a model call per session, never a burst. Safe to call twice.
+   */
+  async backfillCards(): Promise<void> {
+    const { agentStorage, loadAgent } = this.options;
+    if (this.backfillStarted || this.disposed || !loadAgent || !agentStorage.list) return;
+    this.backfillStarted = true;
+    try {
+      const records = await agentStorage.list();
+      const missing = records
+        .filter((record) => !record.archivedAt && !record.internal && !record.topicTrail?.card)
+        .sort((a, b) => Date.parse(b.lastActivityAt ?? b.updatedAt) - Date.parse(a.lastActivityAt ?? a.updatedAt));
+      for (const record of missing) {
+        if (this.disposed) return;
+        try {
+          this.attemptedBackfill.add(record.id);
+          const wasLoaded = this.options.agentManager.getAgent(record.id) !== undefined;
+          await loadAgent(record.id);
+          try {
+            await this.update(record.id);
+          } finally {
+            if (!wasLoaded) await this.options.unloadAgent?.(record.id);
+          }
+        } catch (error) {
+          this.options.logger.debug({ err: error, agentId: record.id }, "home-card: backfill skipped");
+        }
+      }
+    } catch (error) {
+      this.options.logger.warn({ err: error }, "home-card: backfill failed");
+    }
   }
 
   dispose(): void {
@@ -98,6 +177,8 @@ export class TopicTrailService {
     }
     this.timers.clear();
     this.queue.length = 0;
+    if (this.backfillTimer) clearTimeout(this.backfillTimer);
+    this.backfillTimer = null;
   }
 
   /** Resolves once every queued job has finished (tests). */
@@ -139,7 +220,8 @@ export class TopicTrailService {
   private async scheduleIfNoTrail(agentId: string): Promise<void> {
     try {
       const record = await this.options.agentStorage.get(agentId);
-      if (!record?.topicTrail && !record?.internal) {
+      // Nazmul mod (home-map): a trail without a card is still missing its card.
+      if (!record?.topicTrail?.card && !record?.internal) {
         this.schedule(agentId);
       }
     } catch {
@@ -190,7 +272,8 @@ export class TopicTrailService {
       return;
     }
 
-    const rows = await agentManager.getTimelineRows(agentId);
+    // Nazmul mod (home-map): cache-warm pings are not conversation; drop them before anything reads rows.
+    const rows = dropKeepAliveRows(await agentManager.getTimelineRows(agentId));
     const userRows = rows.filter(
       (row) => row.item.type === "user_message" && row.item.text.trim().length > 0,
     );
@@ -199,12 +282,20 @@ export class TopicTrailService {
       return;
     }
     const previous = (await agentStorage.get(agentId))?.topicTrail ?? null;
-    if (previous && newestUserSeq <= previous.basedOnSeq) {
+    const withCard = this.cardsEnabled();
+    const newestSeq = newestMessageSeq(rows);
+    // Never re-read an unchanged session: nothing newer than what the trail and the card were read from.
+    if (
+      previous &&
+      newestUserSeq <= previous.basedOnSeq &&
+      (!withCard || cardIsCurrent(previous.card, newestSeq))
+    ) {
       return;
     }
 
     const window = userRows.slice(-MAX_USER_MESSAGES);
     const lastAssistant = rows.findLast((row) => row.item.type === "assistant_message");
+    const now = (this.options.now ?? (() => new Date()))();
     const prompt = buildTopicTrailPrompt({
       userMessages: window.map((row) => ({
         seq: row.seq,
@@ -212,6 +303,9 @@ export class TopicTrailService {
       })),
       finalReply: lastAssistant?.item.type === "assistant_message" ? lastAssistant.item.text : null,
       previousLabels: previous?.topics.map((topic) => topic.label) ?? [],
+      card: withCard
+        ? await this.cardContext({ agentId, agent, rows, previous: previous?.card ?? null, now })
+        : undefined,
     });
 
     const generate = this.options.generate ?? generateStructuredAgentResponseWithFallback;
@@ -239,8 +333,91 @@ export class TopicTrailService {
       result,
       new Map(window.map((row) => [row.seq, { timestamp: row.timestamp }])),
       epoch,
-      (this.options.now ?? (() => new Date()))(),
+      now,
     );
-    await agentManager.setTopicTrail(agentId, trail);
+    // Nazmul mod (home-map): a new card, else the old one stays (a card-less answer must not wipe it).
+    const modelCard = withCard ? result.card : undefined;
+    let card = modelCard
+      ? mergeHomeCard(previous?.card, modelCard, newestSeq, now)
+      : (previous?.card ?? null);
+    if (card && modelCard) {
+      card = await this.applyAutoTitle(agentId, card, userRows[0]?.item, now);
+    }
+    const stored: TopicTrail = card ? { ...trail, card } : trail;
+    await agentManager.setTopicTrail(agentId, stored);
+    if (card && modelCard) {
+      try {
+        this.options.onCardChanged?.(agentId, card);
+      } catch (error) {
+        logger.warn({ err: error, agentId }, "home-card: change listener failed");
+      }
+    }
+  }
+
+  /**
+   * Nazmul mod (home-map): rename the session to the card's theme, once, and only while its title
+   * is still the automatic one. Returns the card with `renamed` recorded when it happened.
+   */
+  private async applyAutoTitle(
+    agentId: string,
+    card: HomeCard,
+    firstUserItem: { type: string; text?: string } | undefined,
+    now: Date,
+  ): Promise<HomeCard> {
+    const { agentStorage, logger, setAutoTitle } = this.options;
+    const env = this.options.env ?? process.env;
+    if (!setAutoTitle || env[AUTO_TITLE_ENV] === "0") return card;
+    try {
+      const record = await agentStorage.get(agentId);
+      const rename = pickAutoRename({
+        enabled: true,
+        card,
+        currentTitle: record?.title,
+        firstUserMessage: firstUserItem?.type === "user_message" ? (firstUserItem.text ?? null) : null,
+        agentId,
+      });
+      if (!rename) return card;
+      await setAutoTitle(agentId, rename.to);
+      return { ...card, renamed: { from: rename.from, to: rename.to, at: now.toISOString() } };
+    } catch (error) {
+      logger.warn({ err: error, agentId }, "home-card: auto title failed");
+      return card;
+    }
+  }
+
+  /** Nazmul mod (home-map): the facts the card prompt needs beyond the trail's own input. */
+  private async cardContext(input: {
+    agentId: string;
+    agent: { lifecycle: string };
+    rows: readonly { seq: number; timestamp: string; item: { type: string; text?: string } }[];
+    previous: HomeCard | null;
+    now: Date;
+  }) {
+    const { agentStorage } = this.options;
+    const record = await agentStorage.get(input.agentId).catch(() => null);
+    const where = await this.options.describeSession?.(input.agentId).catch(() => null);
+    const lastMessage = input.rows.findLast(
+      (row) =>
+        (row.item.type === "user_message" || row.item.type === "assistant_message") &&
+        (row.item.text ?? "").trim().length > 0,
+    );
+    const lastAt = lastMessage ? Date.parse(lastMessage.timestamp) : Number.NaN;
+    return {
+      title: record?.title ?? null,
+      status: input.agent.lifecycle,
+      workspace: where?.workspace ?? null,
+      folder: where?.folder ?? null,
+      lastSpeaker:
+        lastMessage?.item.type === "user_message"
+          ? ("user" as const)
+          : lastMessage
+            ? ("assistant" as const)
+            : null,
+      quietDays: Number.isNaN(lastAt)
+        ? null
+        : Math.max(0, Math.floor((input.now.getTime() - lastAt) / MS_PER_DAY)),
+      previousCard: input.previous,
+      priorities: this.options.readPriorities?.() ?? null,
+    };
   }
 }

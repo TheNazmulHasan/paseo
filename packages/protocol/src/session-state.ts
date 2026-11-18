@@ -10,7 +10,7 @@
  * sets it again on purpose).
  */
 
-export const SESSION_STATES = ["needs_you", "working", "your_move", "parked"] as const;
+export const SESSION_STATES = ["needs_you", "working", "your_move", "stopped", "parked"] as const;
 export type SessionState = (typeof SESSION_STATES)[number];
 
 export interface SessionStateInput {
@@ -23,24 +23,25 @@ export interface SessionStateInput {
 }
 
 /**
- * - `needs_you`: a permission is pending, attention is for a permission or an error, or the agent
- *   is in the error status. The agent is stuck without the user.
+ * - `needs_you`: a permission is pending (or attention is for one). Nothing else: since Home v2
+ *   (home-map, 2026-11-18) an error is NOT "needs you", it is `stopped`.
  * - `working`: running or initializing.
+ * - `stopped`: the agent is in the error status or its last attention was an error: it ended or
+ *   was cut off (a crash, a rate limit, a daemon stop). Not a request for the user; Home shows it
+ *   under Tidy unless the session's card says real work is pending.
  * - `your_move`: a turn finished and the user has not looked at it yet (or it was marked unread).
  * - `parked`: everything else: idle and already seen.
  */
 export function deriveSessionState(input: SessionStateInput): SessionState {
   const attention = input.requiresAttention === true ? (input.attentionReason ?? null) : null;
-  if (
-    (input.pendingPermissionCount ?? 0) > 0 ||
-    attention === "permission" ||
-    attention === "error" ||
-    input.status === "error"
-  ) {
+  if ((input.pendingPermissionCount ?? 0) > 0 || attention === "permission") {
     return "needs_you";
   }
   if (input.status === "running" || input.status === "initializing") {
     return "working";
+  }
+  if (attention === "error" || input.status === "error") {
+    return "stopped";
   }
   if (attention === "finished") {
     return "your_move";
@@ -65,7 +66,8 @@ const STATE_RANK: Record<SessionState, number> = {
   needs_you: 0,
   working: 1,
   your_move: 2,
-  parked: 3,
+  stopped: 3,
+  parked: 4,
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -105,7 +107,7 @@ function activityMs(row: FilterableRow): number {
 }
 
 /**
- * Filters, then sorts needs_you, working, your_move, parked; most recent activity first inside each
+ * Filters, then sorts needs_you, working, your_move, stopped, parked; most recent activity first inside each
  * state. Ties break on the input order, so the result is stable.
  */
 export function selectSessionStates<T extends FilterableRow>(

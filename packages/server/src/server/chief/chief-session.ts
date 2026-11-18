@@ -3,6 +3,7 @@ import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.js";
 import { appCommandBus, type AppCommandBus } from "./app-command-bus.js";
 import type { ChiefCore, SearchSessionsInput } from "./chief-tools.js";
+import { dispatchHomeMessage } from "../home/home-session.js"; // Nazmul mod (home-map)
 
 export interface ChiefSessionHost {
   core: ChiefCore;
@@ -27,6 +28,8 @@ export function dispatchChiefMessage(
   if (msg.type === "chief.query.request" && host) {
     return answerQuery(msg, host);
   }
+  // Nazmul mod (home-map): `home.request` rides the same dispatcher, so session.ts needs no new line.
+  if (host) return dispatchHomeMessage(msg, host);
   return undefined;
 }
 

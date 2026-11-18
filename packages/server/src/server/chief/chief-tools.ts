@@ -33,6 +33,7 @@ import {
   type AgentStateSource,
   type WorkspaceSource,
 } from "./session-rows.js";
+import { registerHomeTools } from "../home/home-tools.js"; // Nazmul mod (home-map)
 import {
   createTranscriptLocator,
   defaultClaudeConfigDirs,
@@ -203,7 +204,7 @@ export function createChiefCore(options: ChiefCoreOptions) {
     };
   }
 
-  async function sessionStates({ state, workspaceId, folder, staleDays, limit = 100 }: SessionStatesInput) {
+  async function sessionRows({ state, workspaceId, folder, staleDays, limit = 100 }: SessionStatesInput) {
     const [agents, stored, context] = await Promise.all([
       options.listAgents(),
       options.listStoredAgents(),
@@ -226,6 +227,18 @@ export function createChiefCore(options: ChiefCoreOptions) {
     const counts: Record<string, number> = {};
     for (const row of matched) counts[row.state] = (counts[row.state] ?? 0) + 1;
     return { sessions: matched.slice(0, limit), matched: matched.length, counts };
+  }
+
+  /**
+   * The tool's and the CLI's view: without the Home-only fields (`card`, `lastUserMessageAt`, `chief`), so
+   * Chief's context does not fill with card text; `home_get` is where Chief reads cards.
+   */
+  async function sessionStates(input: SessionStatesInput) {
+    const result = await sessionRows(input);
+    return {
+      ...result,
+      sessions: result.sessions.map(({ card: _card, lastUserMessageAt: _last, chief: _chief, ...row }) => row),
+    };
   }
 
   async function search({
@@ -305,7 +318,7 @@ export function createChiefCore(options: ChiefCoreOptions) {
     };
   }
 
-  return { sessionStates, searchSessions: search };
+  return { sessionStates, sessionRows, searchSessions: search };
 }
 
 export type ChiefCore = ReturnType<typeof createChiefCore>;
@@ -325,7 +338,7 @@ export function registerChiefTools(options: ChiefToolsOptions): void {
     {
       title: "Session states",
       description:
-        "Every open (non-archived) session with its state from the user's seat: needs_you (permission, question or error waiting), working (running), your_move (a finished turn the user has not looked at yet, or marked unread), parked (idle and seen). Each row has workspace, project, folder (null = Unfiled), pinned/background flags, last activity, the 'your move' line when there is one, and a link. Sorted needs_you, working, your_move, parked; newest first inside each.",
+        "Every open (non-archived) session with its state from the user's seat: needs_you (a permission is waiting), working (running), your_move (a finished turn the user has not looked at yet, or marked unread), stopped (ended in an error or was cut off: a crash, a rate limit), parked (idle and seen). Each row has workspace, project, folder (null = Unfiled), pinned/background flags, last activity, the 'your move' line when there is one, and a link. Sorted needs_you, working, your_move, stopped, parked; newest first inside each.",
       inputSchema: {
         state: z.array(SessionStateEnum).optional().describe("Only these states."),
         workspaceId: z.string().optional(),
@@ -436,4 +449,7 @@ export function registerChiefTools(options: ChiefToolsOptions): void {
       };
     },
   );
+
+  // Nazmul mod (home-map): home_get, home_refresh, home_snooze, home_set_layout.
+  registerHomeTools({ registerTool, core, serverId: options.serverId });
 }

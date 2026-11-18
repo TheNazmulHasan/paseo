@@ -162,7 +162,7 @@ grep -q session-mention-autocomplete packages/app/src/hooks/use-agent-autocomple
 
 ## topic-trail
 
-Each agent session gets a "topic trail": its last 3 topics (newest first, click = scroll the chat to where the topic began) plus an amber "Your move" line while it waits on the user. A thin strip under every pane's tab row, also in the agent tab hover card. The daemon writes it after each turn through Antigravity (then Claude Haiku), never any other provider; `PASEO_TOPIC_TRAIL=0` turns it off. Doc: myos/paseo/topic-trail.md
+Each agent session gets a "topic trail": its last 3 topics (newest first, click = scroll the chat to where the topic began) plus an amber "Your move" line while it waits on the user. A thin strip under every pane's tab row, also in the agent tab hover card. The daemon writes it after each turn through Antigravity (then Claude Haiku), never any other provider; `PASEO_TOPIC_TRAIL=0` turns it off. Since Home v2 (2026-11-18) the same model call also writes the session card (`card` inside the trail: title, what, status, waitingOn, kind, nextStep, urgency, importance, why, looksFinished, stopped, openItems): cache-warm pings are dropped from the input, a session with no message newer than `card.basedOnSeq` is never re-read, open sessions without a card are backfilled once per daemon run (`PASEO_HOME_CARD=0`, `PASEO_HOME_BACKFILL=0`), and a session whose title is still the automatic one is renamed once to the card's theme title (`PASEO_AUTO_TITLE=0`). Doc: myos/paseo/topic-trail.md, myos/paseo/home-v2.md
 
 ```bash
 npx vitest run packages/server/src/server/agent/topic-trail packages/protocol/src/topic-trail.test.ts --bail=1
@@ -170,6 +170,8 @@ npm test --workspace=@getpaseo/app -- --project unit src/components/topic-trail 
 grep -q 'resolveTopicTrailProviders' packages/server/src/server/agent/topic-trail/topic-trail-service.ts
 grep -q topic-trail-service packages/server/src/server/bootstrap.ts
 grep -q TopicTrailStrip packages/app/src/components/split-container.tsx
+grep -q 'Nazmul mod (home-map)' packages/server/src/server/agent/topic-trail/topic-trail-service.ts
+grep -q 'setAutoTitle' packages/server/src/server/agent/agent-manager.ts
 scripts/nazmul-bundle-has.sh 'topic-trail-strip-'
 ```
 
@@ -265,13 +267,15 @@ scripts/nazmul-bundle-has.sh 'open_workspace needs args.workspaceId'
 
 ## home-map
 
-Home, the screen Paseo opens on: what needs me, and where is everything (design: myos/paseo/home-map.md, part 3). Route `/home`. Top to bottom: Needs you, Your move (each with its one-line "Your move" text) and Working bands, then the map Folder -> workspace -> session (Desk folder first, my folders in order, Unfiled last; every level folds, fold state kept in `paseo-home-map`, an always-visible Unfold all / Fold all and Show quiet button; open loops only by default; each node has a state dot, counts "2 need you · 3 your move · 5 open" and the last-activity age; a click opens the session like a sidebar tab line), and a Chief box docked at the bottom (finds the agent labelled `paseo.role=chief`, sends a prompt, shows the latest reply as markdown; no Chief agent shows a "Set up Chief" hint, Home never creates one). The state rule is the one function `deriveSessionState` in `packages/protocol/src/session-state.ts`, imported by the server's `session_states` and by Home. Reached from a Home row at the top of the sidebar nav block, the Command Center item "Open Home" (`command:open-home`) and the keyboard action `home.open` (no default key). A desktop cold start lands on Home unless Settings > General > "Open Home on launch" is off. Doc: myos/paseo/home-map.md
+Home, the screen Paseo opens on, as a briefing instead of an inventory (design: myos/paseo/home-v2.md; v1 and the chief tools: myos/paseo/home-map.md). Route `/home`. Header (date, "Updated HH:MM", Refresh, a one-sentence headline written by Haiku, a "since last night" line, a tally line with a thin bar and "closed today"), then two columns. Left: **Your queue** (only what waits on him, Now / Today tinted / "N more can wait", each item named by the session card's theme title with its next step, why, Folder > Workspace and age, and always-visible Open, Later (3 hours / tomorrow 09:00 / next week) and Close with a 10 s Undo; what he put off is counted under it; a layout Chief wrote replaces it with "Back to normal"). Right: **Recently worked on** (the 5 sessions he last wrote to), Running now, Check on these (top 4, then Sweep them: Keep / Close one at a time), Not started (backlog tasks, Start) and a Tidy line (stopped and repeated sessions, Close them). A send-only Chief bar sits at the bottom (Send, Open Chief, one line of Chief's latest reply, Read opens a side drawer). Keys 1-9, Enter, L, C. Every open session lands in exactly one group, decided in code by `buildHomeView` in `packages/protocol/src/home.ts` (shared by the screen and Chief's `home_get`); the tally shows any gap. The daemon (`packages/server/src/server/home/`) holds the brief (one small call over all session cards, same direct-route providers as the topic trail, cached in `~/.paseo/home/brief.json`) and the state (`state.json`: Later, Keep, Chief's layout), serves `home.request` and pushes `home_update`. The state rule: an error is `stopped`, `needs_you` is a pending permission only (`packages/protocol/src/session-state.ts`). Chief's levers: MCP tools `home_get`, `home_refresh`, `home_snooze`, `home_set_layout` and `paseo chief home`. Reached from a Home row at the top of the sidebar nav block, the Command Center item "Open Home" (`command:open-home`) and the keyboard action `home.open` (no default key). A desktop cold start lands on Home unless Settings > General > "Open Home on launch" is off. Kill switches: `PASEO_HOME_BRIEF=0`, `PASEO_HOME_CARD=0`, `PASEO_HOME_BACKFILL=0`, `PASEO_AUTO_TITLE=0`. Doc: myos/paseo/home-v2.md
 
 ```bash
-npx vitest run packages/protocol/src/session-state.test.ts packages/protocol/src/chief.test.ts --bail=1
-npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/chief --bail=1
-npm test --workspace=@getpaseo/app -- --project unit src/home-map src/keyboard src/navigation src/i18n src/hooks/use-settings --bail=1
-grep -q "@getpaseo/protocol/session-state" packages/app/src/home-map/model.ts
+npx vitest run packages/protocol/src/session-state.test.ts packages/protocol/src/chief.test.ts packages/protocol/src/home.test.ts packages/protocol/src/topic-trail.test.ts --bail=1
+npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/chief packages/server/src/server/home packages/server/src/server/agent/topic-trail --bail=1
+npx vitest run packages/cli/src/commands/chief --bail=1
+npm test --workspace=@getpaseo/app -- --project unit src/home-map src/chief src/keyboard src/navigation src/i18n src/hooks/use-settings --bail=1
+grep -q "@getpaseo/protocol/home" packages/app/src/home-map/use-home-data.ts
+grep -q "@getpaseo/protocol/home" packages/server/src/server/home/home-core.ts
 grep -q "@getpaseo/protocol/session-state" packages/server/src/server/chief/session-rows.ts
 grep -q hasChiefRoleLabel packages/app/src/home-map/model.ts
 grep -q buildHomeRoute packages/app/src/navigation/host-runtime-bootstrap.ts
@@ -283,9 +287,23 @@ grep -q '"home.open"' packages/app/src/keyboard/keyboard-shortcuts.ts
 grep -q '"home.open"' packages/app/src/keyboard/route-shortcut.ts
 grep -q openHomeOnLaunch packages/app/src/hooks/use-settings/storage.ts
 grep -q OpenHomeSection packages/app/src/screens/settings-screen.tsx
+grep -q HomeRequestSchema packages/protocol/src/messages.ts
+grep -q '"home_update"' packages/protocol/src/messages.ts
+grep -q homeRequest packages/client/src/daemon-client.ts
+grep -q dispatchHomeMessage packages/server/src/server/chief/chief-session.ts
+grep -q registerHomeTools packages/server/src/server/chief/chief-tools.ts
+grep -q '"home.request": "workspace.manage"' packages/server/src/server/authorization/operation-permissions.ts
+grep -q 'homeHub.bind' packages/server/src/server/bootstrap.ts
+grep -q 'createHome' packages/server/src/server/bootstrap.ts
+grep -q 'new Command("home")' packages/cli/src/commands/chief/index.ts
+grep -q 'resolveTopicTrailProviders' packages/server/src/server/home/home-bootstrap.ts
+! grep -q 'resolveStructuredGenerationProviders' packages/server/src/server/home/home-service.ts
 scripts/nazmul-bundle-has.sh 'paseo-home-map'
-scripts/nazmul-bundle-has.sh 'home-band-needs-you'
+scripts/nazmul-bundle-has.sh 'home-queue'
 scripts/nazmul-bundle-has.sh 'home-chief-send'
+scripts/nazmul-bundle-has.sh 'home-recent'
+scripts/nazmul-bundle-has.sh 'Sweep them'
+scripts/nazmul-bundle-has.sh 'Recently worked on'
 scripts/nazmul-bundle-has.sh 'Open Home on launch'
 scripts/nazmul-bundle-has.sh 'sidebar-home'
 ```

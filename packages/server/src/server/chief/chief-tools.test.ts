@@ -92,10 +92,14 @@ async function call(name: string, input: Record<string, unknown> = {}) {
 }
 
 describe("registerChiefTools", () => {
-  it("registers the four tools with agent-readable descriptions", () => {
+  it("registers the four chief tools and Home's four, with agent-readable descriptions", () => {
     register();
     expect([...tools.keys()].sort()).toEqual([
       "app_command",
+      "home_get",
+      "home_refresh",
+      "home_set_layout",
+      "home_snooze",
       "list_app_actions",
       "search_sessions",
       "session_states",
@@ -112,6 +116,8 @@ describe("session_states", () => {
         agent("move1", { requiresAttention: true, attentionReason: "finished", topicTrail: { yourMove: "Pick a colour" } }),
         agent("run1", { status: "running", topicTrail: { yourMove: "ignored while running" } }),
         agent("need1", { pendingPermissions: [{}], workspaceId: "wks_b" }),
+        // Home v2 state rule: an error is "stopped", never "needs you".
+        agent("crash1", { status: "error", requiresAttention: true, attentionReason: "error", topicTrail: { yourMove: null, card: { what: "x" } as never } }),
         agent("gone", { archivedAt: "2026-11-01T00:00:00.000Z" }),
         agent("helper", { internal: true }),
       ],
@@ -123,9 +129,18 @@ describe("session_states", () => {
 
   it("returns non-archived, non-internal sessions sorted by state, with context and links", async () => {
     const out = await call("session_states");
-    expect(out.sessions.map((s: any) => s.agentId)).toEqual(["need1", "run1", "move1", "parked1"]);
-    expect(out.matched).toBe(4);
-    expect(out.counts).toEqual({ needs_you: 1, working: 1, your_move: 1, parked: 1 });
+    expect(out.sessions.map((s: any) => s.agentId)).toEqual([
+      "need1",
+      "run1",
+      "move1",
+      "crash1",
+      "parked1",
+    ]);
+    expect(out.matched).toBe(5);
+    expect(out.counts).toEqual({ needs_you: 1, working: 1, your_move: 1, stopped: 1, parked: 1 });
+    expect(out.sessions.find((s: any) => s.agentId === "crash1").state).toBe("stopped");
+    // The card is Home's data: it never reaches session_states output.
+    expect(out.sessions.every((s: any) => !("card" in s) && !("lastUserMessageAt" in s) && !("chief" in s))).toBe(true);
     const move = out.sessions.find((s: any) => s.agentId === "move1");
     expect(move).toMatchObject({
       state: "your_move",
@@ -149,13 +164,13 @@ describe("session_states", () => {
 
   it("applies state, folder, workspace, staleDays and limit filters", async () => {
     expect((await call("session_states", { state: ["your_move"] })).sessions).toHaveLength(1);
-    expect((await call("session_states", { folder: "faith" })).matched).toBe(3);
+    expect((await call("session_states", { folder: "faith" })).matched).toBe(4);
     expect((await call("session_states", { folder: "unfiled" })).matched).toBe(1);
     expect((await call("session_states", { workspaceId: "wks_b" })).matched).toBe(1);
     expect((await call("session_states", { staleDays: 1 })).matched).toBeGreaterThan(0);
     const limited = await call("session_states", { limit: 2 });
     expect(limited.sessions).toHaveLength(2);
-    expect(limited.matched).toBe(4);
+    expect(limited.matched).toBe(5);
   });
 });
 

@@ -53,4 +53,4 @@ export function oneLine(text: string | null | undefined, max: number): string {
   return folded.length > max ? `${folded.slice(0, max - 1)}…` : folded;
 }
 
-export const SESSION_STATE_NAMES = ["needs_you", "working", "your_move", "parked"] as const;
+export const SESSION_STATE_NAMES = ["needs_you", "working", "your_move", "stopped", "parked"] as const;

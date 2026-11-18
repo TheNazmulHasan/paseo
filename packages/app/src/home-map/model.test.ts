@@ -1,27 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { buildFolderIndex, UNFILED_FOLDER_KEY, type FolderIndex } from "@/folders/model";
+import { buildHomeView } from "@getpaseo/protocol/home";
+import type { HomeCard } from "@getpaseo/protocol/topic-trail";
+import { buildFolderIndex, type FolderIndex } from "@/folders/model";
 import type { StreamItem } from "@/types/stream";
 import {
-  buildHomeBands,
-  buildHomeMap,
   buildHomeSessions,
-  countParts,
-  DESK_FOLDER_KEY,
-  dominantState,
   findChiefAgent,
-  hasFoldedNode,
-  INITIAL_HOME_FOLD_STATE,
-  isNodeOpen,
   selectLatestAssistantText,
-  setAllFolds,
-  toggleNodeFold,
+  sessionLabel,
+  sessionLocation,
   type HomeAgentSource,
-  type HomeSession,
   type HomeWorkspaceSource,
 } from "./model";
 
-const NOW = Date.UTC(2026, 10, 17, 12, 0, 0);
+const NOW = Date.UTC(2026, 10, 18, 12, 0, 0);
 const hoursAgo = (hours: number) => new Date(NOW - hours * 3_600_000);
+
+function card(over: Partial<HomeCard> = {}): HomeCard {
+  return {
+    what: "OAuth secret",
+    status: "Answer is ready, nobody tested it",
+    waitingOn: "nazmul",
+    kind: "decision",
+    nextStep: "Tell Riajul yes",
+    urgency: "now",
+    importance: "high",
+    why: "Riajul is waiting",
+    looksFinished: false,
+    stopped: false,
+    openItems: [],
+    basedOnSeq: 4,
+    updatedAt: "2026-11-18T08:00:00.000Z",
+    ...over,
+  };
+}
 
 function agent(id: string, over: Partial<HomeAgentSource> = {}): HomeAgentSource {
   return {
@@ -34,6 +46,7 @@ function agent(id: string, over: Partial<HomeAgentSource> = {}): HomeAgentSource
     pendingPermissions: [],
     workspaceId: "w1",
     lastActivityAt: hoursAgo(1),
+    lastUserMessageAt: null,
     archivedAt: null,
     labels: {},
     topicTrail: null,
@@ -41,18 +54,8 @@ function agent(id: string, over: Partial<HomeAgentSource> = {}): HomeAgentSource
   };
 }
 
-function sessionIdsOf(folders: ReturnType<typeof buildHomeMap>): string[] {
-  const ids: string[] = [];
-  for (const folder of folders) {
-    for (const workspace of folder.workspaces) {
-      for (const session of workspace.sessions) ids.push(session.agentId);
-    }
-  }
-  return ids;
-}
-
 const finished = { requiresAttention: true, attentionReason: "finished" as const };
-const permission = { requiresAttention: true, attentionReason: "permission" as const };
+const errored = { status: "error" };
 
 function workspaces(
   entries: Record<string, string>,
@@ -65,328 +68,176 @@ function workspaces(
   };
 }
 
-function folderIndex(input?: {
-  folders?: { id: string; name: string; emoji?: string | null; order: number }[];
-  membership?: Record<string, string>;
-}): FolderIndex {
+function folderIndex(): FolderIndex {
   return buildFolderIndex([
     {
       serverId: "s1",
       snapshot: {
-        folders: (input?.folders ?? []).map((folder) => ({
-          id: folder.id,
-          name: folder.name,
-          emoji: folder.emoji ?? null,
-          order: folder.order,
-          createdAt: "2026-11-01T00:00:00.000Z",
-        })),
-        membership: input?.membership ?? {},
+        folders: [
+          {
+            id: "f-faith",
+            name: "Faith",
+            emoji: "🕌",
+            order: 0,
+            createdAt: "2026-11-01T00:00:00.000Z",
+          },
+        ],
+        membership: { w1: "f-faith" },
       },
     },
   ]);
 }
 
-const FAITH_AND_WORK = folderIndex({
-  folders: [
-    { id: "f-faith", name: "Faith", emoji: "🕌", order: 0 },
-    { id: "f-work", name: "Work", order: 1 },
-  ],
-  membership: { w1: "f-faith", w2: "f-work", w3: "f-work" },
-});
-
-function sessionsOf(agents: HomeAgentSource[], index = FAITH_AND_WORK) {
+function sessionsOf(agents: HomeAgentSource[], excludeIds?: ReadonlySet<string>) {
   return buildHomeSessions({
     agents,
-    workspaces: workspaces({ w1: "Quran", w2: "Clients", w3: "Loose", w4: "Scratch" }),
-    folderIndex: index,
+    workspaces: workspaces({ w1: "Quran", w2: "Clients" }),
+    folderIndex: folderIndex(),
+    excludeIds,
   });
 }
 
-describe("buildHomeSessions", () => {
-  it("uses the shared state rule for every session", () => {
-    const sessions = sessionsOf([
-      agent("a-needs", permission),
-      agent("a-perm-count", { pendingPermissions: [{}] }),
-      agent("a-working", { status: "running" }),
-      agent("a-move", finished),
-      agent("a-parked"),
-    ]);
-    expect(Object.fromEntries(sessions.map((s) => [s.agentId, s.state]))).toEqual({
-      "a-needs": "needs_you",
-      "a-perm-count": "needs_you",
-      "a-working": "working",
-      "a-move": "your_move",
-      "a-parked": "parked",
-    });
+describe("buildHomeSessions: the agent -> HomeSessionInput mapping", () => {
+  it("keys the session `serverId:agentId` and keeps the raw agent id for the daemon files", () => {
+    const [session] = sessionsOf([agent("a1", { serverId: "s1" })]);
+    expect(session.id).toBe("s1:a1");
+    expect(session.agentId).toBe("a1");
+    expect(session.serverId).toBe("s1");
+    expect(session.workspaceId).toBe("w1");
   });
 
-  it("never lists archived sessions or sessions of a workspace that is archiving", () => {
+  it("carries the card from topicTrail.card, and null when there is none", () => {
+    const withCard = card({ what: "Brand voice file" });
+    const sessions = sessionsOf([
+      agent("a1", { topicTrail: { card: withCard } }),
+      agent("a2", { topicTrail: { card: null } }),
+      agent("a3", { topicTrail: null }),
+      agent("a4"),
+    ]);
+    expect(sessions[0].card).toEqual(withCard);
+    expect(sessions.slice(1).map((s) => s.card)).toEqual([null, null, null]);
+  });
+
+  it("maps lastActivityAt and lastUserMessageAt to epoch ms, and a missing user message to 0", () => {
+    const [a, b, c] = sessionsOf([
+      agent("a", { lastActivityAt: hoursAgo(2), lastUserMessageAt: hoursAgo(3) }),
+      agent("b", { lastUserMessageAt: null }),
+      agent("c", { lastUserMessageAt: undefined }),
+    ]);
+    expect(a.lastActivityAt).toBe(hoursAgo(2).getTime());
+    expect(a.lastUserMessageAt).toBe(hoursAgo(3).getTime());
+    expect(b.lastUserMessageAt).toBe(0);
+    expect(c.lastUserMessageAt).toBe(0);
+  });
+
+  it("uses the shared state rule: errors are stopped, only a permission is needs_you", () => {
+    const sessions = sessionsOf([
+      agent("perm", { pendingPermissions: [{}] }),
+      agent("err", errored),
+      agent("err-attn", { requiresAttention: true, attentionReason: "error" }),
+      agent("run", { status: "running" }),
+      agent("done", finished),
+      agent("idle"),
+    ]);
+    expect(sessions.map((s) => [s.agentId, s.state])).toEqual([
+      ["perm", "needs_you"],
+      ["err", "stopped"],
+      ["err-attn", "stopped"],
+      ["run", "working"],
+      ["done", "your_move"],
+      ["idle", "parked"],
+    ]);
+  });
+
+  it("gives folder and workspace display names, and null when the workspace is unknown", () => {
+    const [known, other, unknown] = sessionsOf([
+      agent("a1", { workspaceId: "w1" }),
+      agent("a2", { workspaceId: "w2" }),
+      agent("a3", { workspaceId: "nope" }),
+    ]);
+    expect(known.folder).toBe("Faith");
+    expect(known.workspace).toBe("Quran");
+    expect(sessionLocation(known)).toBe("Faith › Quran");
+    expect(other.folder).toBeNull();
+    expect(sessionLocation(other)).toBe("Clients");
+    expect(unknown.workspace).toBeNull();
+    expect(sessionLocation(unknown)).toBeNull();
+    // A session in a workspace the app does not know yet still gets a row (Home never hides one).
+    expect(unknown.workspaceId).toBe("nope");
+  });
+
+  it("leaves out archived agents, archiving workspaces and excluded ids (Chief)", () => {
+    const hostWorkspaces = {
+      s1: new Map<string, HomeWorkspaceSource>([
+        ["w1", { id: "w1", name: "Quran" }],
+        ["w9", { id: "w9", name: "Going", archivingAt: "2026-11-18T00:00:00.000Z" }],
+      ]),
+    };
     const sessions = buildHomeSessions({
       agents: [
-        agent("gone", { archivedAt: new Date(NOW) }),
-        agent("closing", { workspaceId: "w9" }),
-        agent("fine"),
+        agent("keep"),
+        agent("archived", { archivedAt: hoursAgo(1) }),
+        agent("leaving", { workspaceId: "w9" }),
+        agent("chief"),
       ],
-      workspaces: {
-        s1: new Map<string, HomeWorkspaceSource>([
-          ["w1", { id: "w1", name: "Quran" }],
-          ["w9", { id: "w9", name: "Closing", archivingAt: "2026-11-17T10:00:00.000Z" }],
-        ]),
-      },
-      folderIndex: FAITH_AND_WORK,
+      workspaces: hostWorkspaces,
+      folderIndex: folderIndex(),
+      excludeIds: new Set(["s1:chief"]),
     });
-    expect(sessions.map((s) => s.agentId)).toEqual(["fine"]);
+    expect(sessions.map((s) => s.agentId)).toEqual(["keep"]);
   });
 
-  it("carries the your-move line only while the session waits, trimmed", () => {
+  it("feeds buildHomeView: every session lands in exactly one group, the tally has no gap", () => {
     const sessions = sessionsOf([
-      agent("move", { ...finished, topicTrail: { yourMove: "  Pick the name  " } }),
-      agent("busy", { status: "running", topicTrail: { yourMove: "stale line" } }),
-      agent("blank", { ...finished, topicTrail: { yourMove: "   " } }),
+      agent("wait", { topicTrail: { card: card() } }),
+      agent("run", { status: "running" }),
+      agent("stop", errored),
+      agent("quiet", {
+        topicTrail: {
+          card: card({ waitingOn: "nobody", kind: "none", looksFinished: true, nextStep: null }),
+        },
+      }),
+      agent("unread"),
     ]);
-    const byId = Object.fromEntries(sessions.map((s) => [s.agentId, s.yourMoveText]));
-    expect(byId).toEqual({ move: "Pick the name", busy: null, blank: null });
+    const view = buildHomeView({
+      sessions,
+      brief: null,
+      state: { snoozed: {}, kept: {}, chiefLayout: null },
+      now: NOW,
+    });
+    expect(view.tally.open).toBe(5);
+    expect(view.tally.gap).toBe(0);
+    expect(view.queue.now.map((e) => e.session.agentId)).toEqual(["wait"]);
+    expect(view.running.map((e) => e.session.agentId)).toEqual(["run"]);
+    expect(view.tidy.stopped.map((e) => e.session.agentId)).toEqual(["stop"]);
+    expect(view.checkOn.map((e) => e.session.agentId).sort()).toEqual(["quiet", "unread"]);
+    expect(view.checkOn.find((e) => e.session.agentId === "unread")?.reading).toBe(true);
   });
 
-  it("resolves the workspace by map key or by id and names its folder", () => {
-    const [session] = buildHomeSessions({
-      agents: [agent("a", { workspaceId: "map-key-1" })],
-      workspaces: {
-        s1: new Map<string, HomeWorkspaceSource>([["map-key-1", { id: "w1", name: "Quran" }]]),
-      },
-      folderIndex: FAITH_AND_WORK,
-    });
-    expect(session).toMatchObject({
-      workspaceKey: "s1:w1",
-      workspaceId: "w1",
-      workspaceName: "Quran",
-      folderKey: "faith",
-      folderName: "Faith",
-      folderEmoji: "🕌",
-    });
-  });
-
-  it("keeps a session whose workspace is unknown, without a workspace key", () => {
-    const [session] = buildHomeSessions({
-      agents: [agent("a", { workspaceId: "not-loaded", ...permission })],
-      workspaces: workspaces({ w1: "Quran" }),
-      folderIndex: FAITH_AND_WORK,
-    });
-    expect(session).toMatchObject({
-      workspaceKey: null,
-      workspaceId: "not-loaded",
-      state: "needs_you",
-    });
-  });
-
-  it("prefers a user-set workspace title over its derived name", () => {
-    const [session] = buildHomeSessions({
-      agents: [agent("a")],
-      workspaces: { s1: new Map([["w1", { id: "w1", name: "branch-x", title: "My title" }]]) },
-      folderIndex: FAITH_AND_WORK,
-    });
-    expect(session.workspaceName).toBe("My title");
-  });
-});
-
-describe("buildHomeBands", () => {
-  it("splits needs you, your move and working; parked has no band; newest first", () => {
+  it("feeds `recent` from lastUserMessageAt", () => {
     const sessions = sessionsOf([
-      agent("move-old", { ...finished, lastActivityAt: hoursAgo(9) }),
-      agent("move-new", { ...finished, lastActivityAt: hoursAgo(1) }),
-      agent("needs", { ...permission, lastActivityAt: hoursAgo(3) }),
-      agent("work", { status: "running" }),
-      agent("parked"),
+      agent("old", { lastUserMessageAt: hoursAgo(30) }),
+      agent("new", { lastUserMessageAt: hoursAgo(1) }),
+      agent("never"),
     ]);
-    const bands = buildHomeBands(sessions);
-    expect(bands.needsYou.map((s) => s.agentId)).toEqual(["needs"]);
-    expect(bands.yourMove.map((s) => s.agentId)).toEqual(["move-new", "move-old"]);
-    expect(bands.working.map((s) => s.agentId)).toEqual(["work"]);
+    const view = buildHomeView({
+      sessions,
+      brief: null,
+      state: { snoozed: {}, kept: {}, chiefLayout: null },
+      now: NOW,
+    });
+    expect(view.recent.map((e) => e.session.agentId)).toEqual(["new", "old"]);
   });
 });
 
-describe("buildHomeMap: tree", () => {
-  const agents = [
-    agent("faith-needs", { workspaceId: "w1", ...permission, lastActivityAt: hoursAgo(2) }),
-    agent("faith-parked", { workspaceId: "w1", lastActivityAt: hoursAgo(50) }),
-    agent("work-move", { workspaceId: "w2", ...finished, lastActivityAt: hoursAgo(5) }),
-    agent("work-working", { workspaceId: "w2", status: "running", lastActivityAt: hoursAgo(1) }),
-    agent("loose-move", { workspaceId: "w3", ...finished, lastActivityAt: hoursAgo(8) }),
-    agent("loose-parked-only", { workspaceId: "w4", lastActivityAt: hoursAgo(70) }),
-  ];
-
-  function tree(over: Partial<Parameters<typeof buildHomeMap>[0]> = {}) {
-    return buildHomeMap({
-      sessions: sessionsOf(agents),
-      folderIndex: FAITH_AND_WORK,
-      deskKeys: [],
-      showQuiet: false,
-      ...over,
-    });
-  }
-
-  it("orders folders: Desk first, user folders in order, Unfiled last", () => {
-    const result = tree({ deskKeys: ["s1:w2"], showQuiet: true });
-    expect(result.map((folder) => folder.folderKey)).toEqual([
-      DESK_FOLDER_KEY,
-      "faith",
-      "work",
-      UNFILED_FOLDER_KEY,
-    ]);
-    expect(result.map((folder) => folder.builtin)).toEqual(["desk", null, null, "unfiled"]);
-  });
-
-  it("builds Folder -> workspace -> session with names, states and the your-move line", () => {
-    const [faith, work] = tree();
-    expect(faith).toMatchObject({ folderKey: "faith", name: "Faith", emoji: "🕌" });
-    expect(faith.workspaces.map((w) => w.name)).toEqual(["Quran"]);
-    expect(faith.workspaces[0].sessions.map((s) => s.agentId)).toEqual(["faith-needs"]);
-    expect(work.workspaces.map((w) => w.name)).toEqual(["Clients", "Loose"]);
-    expect(work.workspaces[0].sessions.map((s) => s.agentId)).toEqual([
-      "work-move",
-      "work-working",
-    ]);
-  });
-
-  it("shows open loops only: parked sessions and parked-only workspaces are hidden", () => {
-    const result = tree();
-    const sessionIds = sessionIdsOf(result);
-    expect(sessionIds).not.toContain("faith-parked");
-    expect(sessionIds).not.toContain("loose-parked-only");
-    // The parked-only workspace "Scratch" left Unfiled with nothing, so Unfiled is gone too.
-    expect(result.map((f) => f.folderKey)).toEqual(["faith", "work"]);
-  });
-
-  it("Show quiet brings back parked sessions and parked-only workspaces", () => {
-    const result = tree({ showQuiet: true });
-    const sessionIds = sessionIdsOf(result);
-    expect(sessionIds).toContain("faith-parked");
-    expect(sessionIds).toContain("loose-parked-only");
-    const unfiled = result.find((f) => f.folderKey === UNFILED_FOLDER_KEY);
-    expect(unfiled?.workspaces.map((w) => w.name)).toEqual(["Scratch"]);
-    // Inside a workspace the open loops still lead.
-    const quran = result[0].workspaces[0];
-    expect(quran.sessions.map((s) => s.agentId)).toEqual(["faith-needs", "faith-parked"]);
-  });
-
-  it("counts everything open below a node, shown or hidden", () => {
-    const [faith, work] = tree();
-    expect(faith.counts).toEqual({ needsYou: 1, yourMove: 0, working: 0, open: 2 });
-    expect(faith.workspaces[0].counts).toEqual({ needsYou: 1, yourMove: 0, working: 0, open: 2 });
-    expect(work.counts).toEqual({ needsYou: 0, yourMove: 2, working: 1, open: 3 });
-  });
-
-  it("gives every node the dot of the most demanding thing below it", () => {
-    const [faith, work] = tree();
-    expect(faith.state).toBe("needs_you");
-    expect(work.state).toBe("your_move");
-    expect(work.workspaces[0].state).toBe("your_move");
-    expect(dominantState({ needsYou: 0, yourMove: 0, working: 2, open: 2 })).toBe("working");
-    expect(dominantState({ needsYou: 0, yourMove: 0, working: 0, open: 4 })).toBe("parked");
-  });
-
-  it("sorts workspaces by what they need, then by activity, and carries the newest age up", () => {
-    const [, work] = tree();
-    expect(work.workspaces.map((w) => w.name)).toEqual(["Clients", "Loose"]);
-    expect(work.lastActivityAt).toBe(NOW - 1 * 3_600_000);
-  });
-
-  it("lists a Desk workspace in the Desk and again in its own folder", () => {
-    const result = tree({ deskKeys: ["s1:w1"] });
-    expect(result[0].folderKey).toBe(DESK_FOLDER_KEY);
-    expect(result[0].workspaces.map((w) => w.name)).toEqual(["Quran"]);
-    expect(result[1].folderKey).toBe("faith");
-    expect(result[1].workspaces.map((w) => w.name)).toEqual(["Quran"]);
-    // Two places, two fold keys.
-    expect(result[0].workspaces[0].key).not.toBe(result[1].workspaces[0].key);
-  });
-
-  it("puts a workspace whose folder the host no longer has in Unfiled", () => {
-    const stale = folderIndex({ folders: [], membership: { w1: "f-deleted" } });
-    const result = buildHomeMap({
-      sessions: sessionsOf([agent("a", { ...permission })], stale),
-      folderIndex: stale,
-      deskKeys: [],
-      showQuiet: false,
-    });
-    expect(result.map((f) => f.folderKey)).toEqual([UNFILED_FOLDER_KEY]);
-  });
-
-  it("leaves sessions with no known workspace out of the map", () => {
-    const sessions = buildHomeSessions({
-      agents: [agent("lost", { workspaceId: "nope", ...permission })],
-      workspaces: workspaces({ w1: "Quran" }),
-      folderIndex: FAITH_AND_WORK,
-    });
-    expect(
-      buildHomeMap({ sessions, folderIndex: FAITH_AND_WORK, deskKeys: [], showQuiet: true }),
-    ).toEqual([]);
-  });
-});
-
-describe("countParts", () => {
-  it("reads needs you, your move, working, open, and drops what is zero", () => {
-    expect(countParts({ needsYou: 2, yourMove: 3, working: 0, open: 5 })).toEqual([
-      { kind: "needsYou", count: 2 },
-      { kind: "yourMove", count: 3 },
-      { kind: "open", count: 5 },
-    ]);
-    expect(
-      countParts({ needsYou: 0, yourMove: 0, working: 1, open: 7 }).map((p) => p.kind),
-    ).toEqual(["working", "open"]);
-    expect(countParts({ needsYou: 0, yourMove: 0, working: 0, open: 4 })).toEqual([
-      { kind: "open", count: 4 },
-    ]);
-  });
-});
-
-describe("fold state", () => {
-  const sessions: HomeSession[] = sessionsOf([
-    agent("a", { ...permission }),
-    agent("b", { workspaceId: "w2", ...finished }),
-  ]);
-  const tree = buildHomeMap({
-    sessions,
-    folderIndex: FAITH_AND_WORK,
-    deskKeys: [],
-    showQuiet: false,
-  });
-
-  it("starts with folders open and workspaces folded", () => {
-    expect(isNodeOpen(INITIAL_HOME_FOLD_STATE, "folder:faith", "folder")).toBe(true);
-    expect(isNodeOpen(INITIAL_HOME_FOLD_STATE, "ws:faith:s1:w1", "workspace")).toBe(false);
-  });
-
-  it("toggles one node and remembers it, leaving the others alone", () => {
-    let state = toggleNodeFold(INITIAL_HOME_FOLD_STATE, "ws:faith:s1:w1", "workspace");
-    expect(isNodeOpen(state, "ws:faith:s1:w1", "workspace")).toBe(true);
-    expect(isNodeOpen(state, "ws:work:s1:w2", "workspace")).toBe(false);
-    state = toggleNodeFold(state, "folder:faith", "folder");
-    expect(isNodeOpen(state, "folder:faith", "folder")).toBe(false);
-    state = toggleNodeFold(state, "folder:faith", "folder");
-    expect(isNodeOpen(state, "folder:faith", "folder")).toBe(true);
-  });
-
-  it("Unfold all opens every level, including nodes that appear later", () => {
-    const state = setAllFolds(true);
-    expect(isNodeOpen(state, "folder:never-seen", "folder")).toBe(true);
-    expect(isNodeOpen(state, "ws:never-seen", "workspace")).toBe(true);
-    expect(hasFoldedNode(tree, state)).toBe(false);
-  });
-
-  it("Fold all folds every level, and clears what was toggled by hand", () => {
-    const toggled = toggleNodeFold(setAllFolds(true), "folder:faith", "folder");
-    expect(isNodeOpen(toggled, "folder:faith", "folder")).toBe(false);
-    const state = setAllFolds(false);
-    expect(state.overrides).toEqual({});
-    expect(isNodeOpen(state, "folder:faith", "folder")).toBe(false);
-    expect(isNodeOpen(state, "ws:faith:s1:w1", "workspace")).toBe(false);
-    expect(hasFoldedNode(tree, state)).toBe(true);
-  });
-
-  it("offers Unfold all while anything is folded (the default view hides the workspaces)", () => {
-    expect(hasFoldedNode(tree, INITIAL_HOME_FOLD_STATE)).toBe(true);
-    expect(hasFoldedNode([], INITIAL_HOME_FOLD_STATE)).toBe(false);
+describe("sessionLabel", () => {
+  it("prefers the card title, then what, then the session title", () => {
+    expect(sessionLabel({ card: card({ title: "Google OAuth secret" }), title: "x" })).toBe(
+      "Google OAuth secret",
+    );
+    expect(sessionLabel({ card: card({ title: undefined }), title: "x" })).toBe("OAuth secret");
+    expect(sessionLabel({ card: null, title: "Raw title" })).toBe("Raw title");
+    expect(sessionLabel({ card: null, title: null })).toBeNull();
   });
 });
 

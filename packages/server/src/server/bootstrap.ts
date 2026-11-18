@@ -276,6 +276,8 @@ import { deleteLocalCredential, writeLocalCredential } from "./local-credential.
 import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { TopicTrailService } from "./agent/topic-trail/topic-trail-service.js";
+import { createHome } from "./home/home-bootstrap.js"; // Nazmul mod (home-map)
+import { homeHub } from "./home/home-hub.js"; // Nazmul mod (home-map)
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
@@ -1516,14 +1518,26 @@ export async function createPaseoDaemon(
     logger,
   });
 
+  // Nazmul mod (home-map): Home's brief and state, and what the topic trail needs to write cards.
+  const { homeService, topicTrailOptions } = createHome({
+    paseoHome: config.paseoHome,
+    agentManager,
+    agentStorage,
+    providerSnapshotManager,
+    workspaceRegistry,
+    folderRegistry,
+    logger,
+  });
   // Nazmul mod (topic-trail): PASEO_TOPIC_TRAIL=0 turns it off.
   const topicTrailService = new TopicTrailService({
     agentManager,
     agentStorage,
     providerSnapshotManager,
     logger,
+    ...topicTrailOptions, // Nazmul mod (home-map)
   });
   topicTrailService.start();
+  void homeService.start(); // Nazmul mod (home-map)
 
   setupAutoArchiveOnMerge({
     paseoHome: config.paseoHome,
@@ -2283,6 +2297,7 @@ export async function createPaseoDaemon(
             pluginRuntime.bindPaseoSessionHost(wsServer);
             // Nazmul mod (chief): app_command reaches the app through the live client sessions.
             appCommandBus.bind(() => wsServer?.listSessions() ?? []);
+            homeHub.bind(homeService, () => wsServer?.listSessions() ?? []); // Nazmul mod (home-map)
             await pluginRuntime.start();
             providerSnapshotManager.settlePluginProviders();
             void bootCatalogWarmup
@@ -2384,6 +2399,8 @@ export async function createPaseoDaemon(
     await hubRelationships.stop();
     workspaceReconciliation.dispose();
     topicTrailService.dispose();
+    homeHub.bind(null, () => []); // Nazmul mod (home-map)
+    homeService.dispose(); // Nazmul mod (home-map)
     scriptHealthMonitor.stop();
     unsubscribeIdleRuntimeCleanup();
     await idleRuntimeCleanup.close();
