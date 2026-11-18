@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePathname } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { LayoutGrid } from "lucide-react-native";
+import { Home, LayoutGrid } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { useBoards } from "@/boards/controller";
 import { parseBoardIdFromPathname } from "@/boards/keyboard-contract";
+import { isHomePathname } from "@/home-map/route";
 import { useDeskStore } from "@/desk/desk-store";
 import { toKeySet } from "@/desk/model";
 import { isWeb } from "@/constants/platform";
@@ -39,6 +40,11 @@ import {
   BOARD_ROW_SERVER_ID,
   boardRowKey,
   boardVisit,
+  capSwitcherKeys,
+  HOME_ROW_KEY,
+  HOME_ROW_SERVER_ID,
+  homeVisit,
+  isHomeRowKey,
   orderSwitcherKeys,
   WORKSPACE_SWITCHER_VISIBLE_LIMIT,
   workspaceVisitKey,
@@ -50,6 +56,7 @@ import {
 } from "@/workspace-switcher/workspace-switcher-store";
 
 const ThemedLayoutGrid = withUnistyles(LayoutGrid);
+const ThemedHome = withUnistyles(Home);
 const boardIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const WORKSPACE_SWITCHER_ICON_SIZE = 22;
@@ -63,6 +70,7 @@ interface WorkspaceProjectIdentity {
 export function WorkspaceSwitcherHost() {
   useWorkspaceVisitRecorder();
   useBoardVisitRecorder();
+  useHomeVisitRecorder();
   useWorkspaceCandidateSync();
   return <WorkspaceSwitcherOverlay />;
 }
@@ -84,6 +92,15 @@ function useBoardVisitRecorder(): void {
   useEffect(() => {
     if (boardId) visit(boardVisit(boardId));
   }, [boardId, visit]);
+}
+
+/** Nazmul mod (home-map): Home is a place too: showing `/home` records a visit under `home:home`. */
+function useHomeVisitRecorder(): void {
+  const onHome = isHomePathname(usePathname());
+  const visit = useWorkspaceSwitcherMruStore((state) => state.visit);
+  useEffect(() => {
+    if (onHome) visit(homeVisit());
+  }, [onHome, visit]);
 }
 
 function createWorkspaceCandidate(input: {
@@ -119,8 +136,11 @@ function createWorkspaceCandidate(input: {
 }
 
 function useWorkspaceCandidateSync(): void {
+  const { t } = useTranslation();
   const selection = useActiveWorkspaceSelection();
-  const activeBoardId = parseBoardIdFromPathname(usePathname());
+  const pathname = usePathname();
+  const activeBoardId = parseBoardIdFromPathname(pathname);
+  const onHome = isHomePathname(pathname);
   const history = useWorkspaceSwitcherMruStore((state) => state.history);
   const setCandidates = useWorkspaceSwitcherStore((state) => state.setCandidates);
   const pruneHistory = useWorkspaceSwitcherMruStore((state) => state.prune);
@@ -179,7 +199,9 @@ function useWorkspaceCandidateSync(): void {
 
   // Row 0 is the place you are on: a view on a /boards route, else the active workspace.
   const workspaceKey = selection ? workspaceVisitKey(selection) : null;
-  const activeKey = activeBoardId ? boardRowKey(activeBoardId) : workspaceKey;
+  // Nazmul mod (home-map): on /home the place you are on is Home.
+  const placeKey = onHome ? HOME_ROW_KEY : workspaceKey;
+  const activeKey = activeBoardId ? boardRowKey(activeBoardId) : placeKey;
   const liveKeys = useMemo(
     () => new Set(workspacePlacements.map((workspace) => workspace.workspaceKey)),
     [workspacePlacements],
@@ -191,7 +213,7 @@ function useWorkspaceCandidateSync(): void {
     [boards],
   );
   const switcherLiveKeys = useMemo(
-    () => new Set([...liveKeys, ...boardByKey.keys()]),
+    () => new Set([...liveKeys, ...boardByKey.keys(), HOME_ROW_KEY]),
     [boardByKey, liveKeys],
   );
 
@@ -204,20 +226,39 @@ function useWorkspaceCandidateSync(): void {
     const placementByKey = new Map(
       switchablePlacements.map((workspace) => [workspace.workspaceKey, workspace] as const),
     );
-    const isPlace = (key: string) => placementByKey.has(key) || boardByKey.has(key);
+    const isPlace = (key: string) =>
+      placementByKey.has(key) || boardByKey.has(key) || isHomeRowKey(key);
     const rowZeroIsCurrent = Boolean(activeKey && isPlace(activeKey));
     // Workspaces and views are ordered together by recency (see orderSwitcherKeys); the cut to
     // the visible limit comes after the reorder.
-    const orderedKeys = orderSwitcherKeys({
+    const orderedAll = orderSwitcherKeys({
       currentKey: rowZeroIsCurrent ? activeKey : null,
       historyKeys: history.map((visit) => workspaceVisitKey(visit)).filter(isPlace),
       workspaceKeys: switchablePlacements.map((workspace) => workspace.workspaceKey),
       boardKeys: [...boardByKey.keys()],
       deskKeys,
-    }).slice(0, WORKSPACE_SWITCHER_VISIBLE_LIMIT);
+      withHome: true,
+    });
+    // Nazmul mod (home-map): Home is always listed, so the cut keeps it (no Desk/background filter).
+    const orderedKeys = capSwitcherKeys(orderedAll, WORKSPACE_SWITCHER_VISIBLE_LIMIT, HOME_ROW_KEY);
 
     const rows: WorkspaceSwitcherCandidate[] = [];
     for (const key of orderedKeys) {
+      if (isHomeRowKey(key)) {
+        rows.push({
+          serverId: HOME_ROW_SERVER_ID,
+          workspaceId: "home",
+          at: visitedAtByKey.get(key) ?? 0,
+          title: t("homeMap.title"),
+          status: null,
+          requiresAttention: false,
+          iconDataUri: null,
+          projectInitial: "",
+          projectViewKey: key,
+          isHome: true,
+        });
+        continue;
+      }
       const board = boardByKey.get(key);
       if (board) {
         rows.push({
@@ -266,6 +307,7 @@ function useWorkspaceCandidateSync(): void {
     layoutByWorkspace,
     projectByWorkspaceKey,
     switchablePlacements,
+    t,
     workspaceTitleByKey,
   ]);
 
@@ -331,11 +373,17 @@ function WorkspaceSwitcherRow({
   const rowStyle = useMemo(() => [styles.row, selected && styles.rowSelected], [selected]);
   return (
     <Pressable style={rowStyle} onHoverIn={onHoverIn} onPress={onPress}>
-      {candidate.boardId ? (
+      {candidate.isHome ? (
+        <View style={styles.boardIcon} testID="workspace-switcher-home-icon">
+          <ThemedHome size={16} uniProps={boardIconColorMapping} />
+        </View>
+      ) : null}
+      {!candidate.isHome && candidate.boardId ? (
         <View style={styles.boardIcon} testID="workspace-switcher-board-icon">
           <ThemedLayoutGrid size={16} uniProps={boardIconColorMapping} />
         </View>
-      ) : (
+      ) : null}
+      {!candidate.isHome && !candidate.boardId ? (
         <ProjectIconView
           iconDataUri={candidate.iconDataUri}
           initial={candidate.projectInitial}
@@ -343,7 +391,7 @@ function WorkspaceSwitcherRow({
           size={WORKSPACE_SWITCHER_ICON_SIZE}
           textStyle={styles.rowIconFallbackText}
         />
-      )}
+      ) : null}
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {candidate.title}
@@ -351,13 +399,14 @@ function WorkspaceSwitcherRow({
       </View>
       {candidate.boardId ? (
         <Text style={styles.boardCount}>{candidate.boardSessionCount ?? 0}</Text>
-      ) : (
+      ) : null}
+      {!candidate.isHome && !candidate.boardId ? (
         <AgentStatusDot
           status={candidate.status}
           requiresAttention={candidate.requiresAttention}
           showInactive
         />
-      )}
+      ) : null}
     </Pressable>
   );
 }

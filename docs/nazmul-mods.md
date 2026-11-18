@@ -113,10 +113,15 @@ scripts/nazmul-bundle-has.sh attention-banner-sidebar
 
 ## workspace-switcher
 
-Hyper+J walks recent places (workspaces and views); background workspaces follow the sidebar's Show background switch (Desk members always show). Doc: myos/paseo/workspace-switcher.md
+Hyper+J walks recent places (workspaces, views and Home); background workspaces follow the sidebar's Show background switch (Desk members always show); Home is always listed, last until visited. Doc: myos/paseo/workspace-switcher.md
 
 ```bash
 npm test --workspace=@getpaseo/app -- --project unit src/workspace-switcher --bail=1
+npm test --workspace=@getpaseo/app -- --project unit src/home-map --bail=1
+grep -q 'Nazmul mod (home-map)' packages/app/src/workspace-switcher/model.ts
+grep -q 'Nazmul mod (home-map)' packages/app/src/workspace-switcher/controller.ts
+grep -q 'Nazmul mod (home-map)' packages/app/src/workspace-switcher/workspace-switcher-host.tsx
+grep -q navigateToHome packages/app/src/home-map/navigation.ts
 scripts/nazmul-bundle-has.sh 'Switch recent workspaces'
 scripts/nazmul-bundle-has.sh paseo-workspace-switcher-mru
 ```

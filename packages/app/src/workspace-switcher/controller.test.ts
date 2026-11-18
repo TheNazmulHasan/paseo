@@ -1,12 +1,17 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-const { navigateToWorkspace, navigateToBoard } = vi.hoisted(() => ({
+const { navigateToWorkspace, navigateToBoard, navigateToHome } = vi.hoisted(() => ({
+  navigateToHome: vi.fn(),
   navigateToWorkspace: vi.fn(),
   navigateToBoard: vi.fn(),
 }));
 
 vi.mock("@/boards/navigation", () => ({
   navigateToBoard: (boardId: string) => navigateToBoard(boardId),
+}));
+
+vi.mock("@/home-map/navigation", () => ({
+  navigateToHome: () => navigateToHome(),
 }));
 
 vi.mock("@/stores/navigation-active-workspace-store", () => ({
@@ -85,6 +90,7 @@ describe("workspace switcher controller", () => {
     vi.useFakeTimers();
     navigateToWorkspace.mockClear();
     navigateToBoard.mockClear();
+    navigateToHome.mockClear();
     resetWorkspaceSwitcherReleaseLearningForTests();
     useTabSwitcherStore.setState({ open: false, visible: false, selectedIndex: 0 });
     useWorkspaceSwitcherStore.getState().close();
@@ -273,6 +279,47 @@ describe("workspace switcher controller", () => {
       useWorkspaceSwitcherStore.setState({ liveKeys: new Set(["srv:a", "srv:b", "srv:c"]) });
       commitWorkspaceSwitcher();
       expect(navigateToBoard).not.toHaveBeenCalled();
+    });
+  });
+  describe("Home as a place (home-map)", () => {
+    const homeCandidate = {
+      ...candidate("home"),
+      serverId: "home",
+      workspaceId: "home",
+      title: "Home",
+      isHome: true,
+    };
+    const liveWithHome = new Set(["home:home", "srv:a", "srv:b"]);
+
+    it("taps from a workspace back to Home when Home was the place just left", () => {
+      useWorkspaceSwitcherStore.setState({
+        open: false,
+        visible: false,
+        selectedIndex: 0,
+        candidates: [candidate("a"), homeCandidate, candidate("b")],
+        currentKey: "srv:a",
+        liveKeys: liveWithHome,
+      });
+      cycleWorkspaceSwitcher(1);
+      commitWorkspaceSwitcher();
+      expect(navigateToHome).toHaveBeenCalledTimes(1);
+      expect(navigateToWorkspace).not.toHaveBeenCalled();
+      expect(navigateToBoard).not.toHaveBeenCalled();
+    });
+
+    it("taps from Home back to the previous workspace", () => {
+      useWorkspaceSwitcherStore.setState({
+        open: false,
+        visible: false,
+        selectedIndex: 0,
+        candidates: [homeCandidate, candidate("a"), candidate("b")],
+        currentKey: "home:home",
+        liveKeys: liveWithHome,
+      });
+      cycleWorkspaceSwitcher(1);
+      commitWorkspaceSwitcher();
+      expect(navigateToWorkspace).toHaveBeenCalledWith({ serverId: "srv", workspaceId: "a" });
+      expect(navigateToHome).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   boardRowKey,
+  capSwitcherKeys,
   cycleWorkspaceIndex,
+  HOME_ROW_KEY,
+  homeVisit,
   boardVisit,
   orderSwitcherKeys,
   initialWorkspaceSelectionIndex,
@@ -153,5 +156,68 @@ describe("views in the switcher order", () => {
       "kept",
       "a",
     ]);
+  });
+});
+
+describe("Home in the switcher order (home-map)", () => {
+  const order = (input: Partial<Parameters<typeof orderSwitcherKeys>[0]>) =>
+    orderSwitcherKeys({
+      currentKey: "srv:w1",
+      historyKeys: [],
+      workspaceKeys: ["srv:w1", "srv:w2", "srv:w3"],
+      boardKeys: ["board:b0"],
+      deskKeys: new Set(["srv:w3"]),
+      withHome: true,
+      ...input,
+    });
+
+  it("keys Home under a pseudo host so it can never collide with a workspace", () => {
+    expect(HOME_ROW_KEY).toBe("home:home");
+    expect(workspaceVisitKey(homeVisit())).toBe(HOME_ROW_KEY);
+  });
+
+  it("lists a never-visited Home last, after every workspace and view", () => {
+    expect(order({})).toEqual(["srv:w1", "srv:w2", "srv:w3", "board:b0", HOME_ROW_KEY]);
+  });
+
+  it("leaves the order alone when Home is not requested", () => {
+    expect(order({ withHome: false })).toEqual(["srv:w1", "srv:w2", "srv:w3", "board:b0"]);
+  });
+
+  it("puts a visited Home at its recency position, with the Desk and views, ahead of the plain workspaces", () => {
+    expect(
+      order({ historyKeys: ["srv:w1", "srv:w2", HOME_ROW_KEY, "board:b0", "srv:w3"] }),
+    ).toEqual(["srv:w1", "srv:w2", HOME_ROW_KEY, "board:b0", "srv:w3"]);
+  });
+
+  it("makes a tap from a workspace land on Home when Home was the place just left", () => {
+    expect(
+      order({ currentKey: "srv:w2", historyKeys: ["srv:w2", HOME_ROW_KEY, "srv:w1"] }),
+    ).toEqual(["srv:w2", HOME_ROW_KEY, "srv:w3", "board:b0", "srv:w1"]);
+  });
+
+  it("makes a tap from Home land on the workspace you were on before it", () => {
+    const keys = order({
+      currentKey: HOME_ROW_KEY,
+      historyKeys: [HOME_ROW_KEY, "srv:w2", "srv:w1"],
+    });
+    expect(keys.slice(0, 2)).toEqual([HOME_ROW_KEY, "srv:w2"]);
+    expect(keys.filter((key) => key === HOME_ROW_KEY)).toHaveLength(1);
+  });
+
+  it("keeps Home in the visible cut, taking the last row, without moving the head", () => {
+    const keys = Array.from({ length: 12 }, (_, index) => `srv:w${index}`);
+    const capped = capSwitcherKeys([...keys, HOME_ROW_KEY], 10, HOME_ROW_KEY);
+    expect(capped).toHaveLength(10);
+    expect(capped.slice(0, 9)).toEqual(keys.slice(0, 9));
+    expect(capped[9]).toBe(HOME_ROW_KEY);
+    expect(capSwitcherKeys(["a", HOME_ROW_KEY, "b"], 2, HOME_ROW_KEY)).toEqual(["a", HOME_ROW_KEY]);
+    expect(capSwitcherKeys(["a", "b"], 5, HOME_ROW_KEY)).toEqual(["a", "b"]);
+  });
+
+  it("records a Home visit and prunes it never while the host is loaded", () => {
+    const history = recordWorkspaceVisit([visit("a")], { ...homeVisit(), at: 5 });
+    expect(history.map(workspaceVisitKey)).toEqual([HOME_ROW_KEY, "srv:a"]);
+    expect(pruneWorkspaceHistory(history, new Set(["srv:a", HOME_ROW_KEY]))).toBe(history);
   });
 });

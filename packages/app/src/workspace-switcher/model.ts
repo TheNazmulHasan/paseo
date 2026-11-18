@@ -38,11 +38,45 @@ export function isBoardRowKey(key: string): boolean {
 }
 
 /**
+ * Nazmul mod (home-map): Home (`/home`) is a third kind of place. Like a view it is keyed under a
+ * pseudo host, so recording, freezing, pruning and selecting need no fourth code path. There is
+ * exactly one Home, so the row key is a constant.
+ */
+export const HOME_ROW_SERVER_ID = "home";
+export const HOME_ROW_KEY = `${HOME_ROW_SERVER_ID}:home`;
+
+export function homeVisit(): Pick<WorkspaceSwitcherVisit, "serverId" | "workspaceId"> {
+  return { serverId: HOME_ROW_SERVER_ID, workspaceId: "home" };
+}
+
+export function isHomeRowKey(key: string): boolean {
+  return key === HOME_ROW_KEY;
+}
+
+/**
+ * Nazmul mod (home-map): cuts a row list to `limit` but never loses `mustKey`. Home is always
+ * listed, so when it sits past the cut it takes the last visible row. The head never moves.
+ */
+export function capSwitcherKeys(
+  keys: readonly string[],
+  limit: number,
+  mustKey: string,
+): readonly string[] {
+  const index = keys.indexOf(mustKey);
+  if (index < limit) {
+    return keys.slice(0, limit);
+  }
+  return [...keys.slice(0, limit - 1), mustKey];
+}
+
+/**
  * Orders every switcher row, workspaces and views alike, by recency. A view is just another
  * place you have been, so `historyKeys` (newest first, views included) drives the order.
  * Row 0 is the current place and row 1 the one just left (the head), so a tap always lands there.
  * After the head, the Desk workspaces and the views you have visited lead, in recency order;
  * views never visited follow, then everything else (never-visited workspaces keep placement order).
+ * Nazmul mod (home-map): with `withHome`, a visited Home leads like a visited view, at its recency
+ * position; a never-visited Home is the very last row.
  */
 export function orderSwitcherKeys(input: {
   currentKey: string | null;
@@ -50,6 +84,7 @@ export function orderSwitcherKeys(input: {
   workspaceKeys: readonly string[];
   boardKeys: readonly string[];
   deskKeys: ReadonlySet<string>;
+  withHome?: boolean;
 }): readonly string[] {
   const visited = input.historyKeys.filter((key) => key !== input.currentKey);
   const seen = new Set<string>(visited);
@@ -66,13 +101,16 @@ export function orderSwitcherKeys(input: {
   const headCount = input.currentKey ? 2 : 1;
   const head = sequence.slice(0, headCount);
   const rest = sequence.slice(headCount);
-  const leading = (key: string) => input.deskKeys.has(key) || isBoardRowKey(key);
-  return [
+  const leading = (key: string) =>
+    input.deskKeys.has(key) || isBoardRowKey(key) || isHomeRowKey(key);
+  const ordered = [
     ...head,
     ...rest.filter(leading),
     ...unvisitedBoards,
     ...rest.filter((key) => !leading(key)),
   ];
+  // Nazmul mod (home-map): Home is always listed; never visited, it goes last.
+  return input.withHome && !ordered.includes(HOME_ROW_KEY) ? [...ordered, HOME_ROW_KEY] : ordered;
 }
 
 export function recordWorkspaceVisit(

@@ -17,6 +17,8 @@ export type WorkspaceSwitcherCandidate = WorkspaceSwitcherVisit & {
   /** Set on a board row (fork mod #13): committing it opens the board, not a workspace. */
   boardId?: string;
   boardSessionCount?: number;
+  /** Nazmul mod (home-map): set on the Home row; committing it opens /home. */
+  isHome?: boolean;
 };
 
 interface WorkspaceSwitcherStoreState {

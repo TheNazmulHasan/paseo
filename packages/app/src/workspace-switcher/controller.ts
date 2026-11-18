@@ -1,4 +1,5 @@
 import { navigateToBoard } from "@/boards/navigation";
+import { navigateToHome } from "@/home-map/navigation";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { cancelTabSwitcher } from "@/tab-switcher/controller";
 import {
@@ -118,6 +119,11 @@ export function commitWorkspaceSwitcher(): void {
   store.close();
   // The list is frozen while open, so the target may have been archived meanwhile.
   if (!candidate || !store.liveKeys.has(workspaceVisitKey(candidate))) {
+    return;
+  }
+  // Nazmul mod (home-map): Home is a place too.
+  if (candidate.isHome) {
+    navigateToHome();
     return;
   }
   if (candidate.boardId) {
