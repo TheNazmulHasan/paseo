@@ -589,9 +589,25 @@ export const ar: TranslationResources = {
       bringBack: "إعادة",
       madeBy: "أعدّه Chief في {{time}}",
       backToNormal: "العودة إلى الوضع العادي",
+      sort: {
+        label: "ترتيب",
+        priority: "الأولوية",
+        waiting: "الأطول انتظارًا",
+        folder: "المجلد",
+        recent: "الأحدث",
+      },
+      priority: {
+        urgentImportant: "عاجل ومهم",
+        urgentLess: "عاجل وأقل أهمية",
+        importantNotUrgent: "مهم وغير عاجل",
+        neither: "لا هذا ولا ذاك",
+      },
+      unfiled: "بدون مجلد",
     },
     recent: {
       title: "عملت عليها مؤخرًا",
+      showMore: "عرض {{count}} أخرى",
+      closed: "مغلقة",
     },
     running: {
       title: "قيد التشغيل الآن",
@@ -606,7 +622,7 @@ export const ar: TranslationResources = {
       kept: "{{count}} محفوظة لمدة أسبوع",
     },
     notStarted: {
-      title: "لم يبدأ",
+      title: "Backlog",
       start: "ابدأ",
       since: "في قائمة المهام منذ {{date}}",
       more: "{{count}} أخرى في قائمة المهام",

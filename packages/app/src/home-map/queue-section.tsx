@@ -6,6 +6,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { HomeSnoozePreset } from "@getpaseo/protocol/home";
 import type { Theme } from "@/styles/theme";
 import { PressHighlight } from "@/components/ui/press-highlight";
+import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { HomeButton } from "./home-button";
 import { sessionLocation, type HomeSession } from "./model";
 import { QueueItem } from "./queue-item";
@@ -15,6 +16,7 @@ import {
   type HomeSessionEntry,
   type QueueBlock,
   type QueueModel,
+  type QueueSort,
 } from "./view-model";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -49,11 +51,40 @@ function useWhenLabel(): (untilMs: number) => string {
   );
 }
 
-function tintLabel(tint: QueueBlock["tint"], t: (key: string) => string): string | null {
-  if (tint === "now") return t("homeMap.queue.now");
-  if (tint === "today") return t("homeMap.queue.today");
-  return null;
+function blockLabel(block: QueueBlock, t: (key: string) => string): string | null {
+  if (block.label) return block.label;
+  if (block.labelKey === "unfiled") return t("homeMap.queue.unfiled");
+  return block.labelKey ? t(`homeMap.queue.priority.${block.labelKey}`) : null;
 }
+
+/** The sort switch: always visible in the queue header, four small segments. */
+const SortSwitch = memo(function SortSwitch({
+  sort,
+  onChange,
+}: {
+  sort: QueueSort;
+  onChange: (sort: QueueSort) => void;
+}) {
+  const { t } = useTranslation();
+  const options = useMemo<SegmentedControlOption<QueueSort>[]>(
+    () =>
+      (["priority", "waiting", "folder", "recent"] as const).map((value) => ({
+        value,
+        label: t(`homeMap.queue.sort.${value}`),
+        testID: `home-queue-sort-${value}`,
+      })),
+    [t],
+  );
+  return (
+    <SegmentedControl
+      size="sm"
+      options={options}
+      value={sort}
+      onValueChange={onChange}
+      testID="home-queue-sort"
+    />
+  );
+});
 
 function BlockView({
   block,
@@ -71,7 +102,7 @@ function BlockView({
   actions: QueueActions;
 }) {
   const { t } = useTranslation();
-  const label = block.label ?? tintLabel(block.tint, t);
+  const label = blockLabel(block, t);
   return (
     <View
       style={[
@@ -166,8 +197,9 @@ const SnoozedRow = memo(function SnoozedRow({
 });
 
 /**
- * Left column: Your queue. Now (stronger tint) and Today (faint) are always open, the rest sits
- * behind "N more can wait". With a Chief layout the layout replaces the queue (its own title, its
+ * Left column: Your queue, with a sort switch (Priority, Waiting longest, Folder, Recent). In
+ * Priority the first group is tinted strongly, the second faintly, and "Neither" sits behind
+ * "N more can wait". With a Chief layout the layout replaces the queue (its own title, its
  * groups, "Back to normal"), and the queue sessions it left out wait collapsed underneath.
  */
 export const QueueSection = memo(function QueueSection({
@@ -178,6 +210,8 @@ export const QueueSection = memo(function QueueSection({
   onLaterOpenChange,
   collapsedOpen,
   onToggleCollapsed,
+  sort,
+  onSortChange,
   actions,
 }: {
   model: QueueModel;
@@ -187,6 +221,8 @@ export const QueueSection = memo(function QueueSection({
   onLaterOpenChange: (sessionId: string, open: boolean) => void;
   collapsedOpen: boolean;
   onToggleCollapsed: () => void;
+  sort: QueueSort;
+  onSortChange: (sort: QueueSort) => void;
   actions: QueueActions;
 }) {
   const { t } = useTranslation();
@@ -211,7 +247,10 @@ export const QueueSection = memo(function QueueSection({
           </HomeButton>
         </View>
       ) : (
-        <Text style={styles.title}>{t("homeMap.queue.title")}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{t("homeMap.queue.title")}</Text>
+          <SortSwitch sort={sort} onChange={onSortChange} />
+        </View>
       )}
 
       {model.blocks.length === 0 && !collapsed ? (
@@ -281,6 +320,14 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.semibold,
     textTransform: "uppercase",
     letterSpacing: 0.7,
+  },
+  titleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+    minWidth: 0,
   },
   layoutHeader: {
     flexDirection: "row",

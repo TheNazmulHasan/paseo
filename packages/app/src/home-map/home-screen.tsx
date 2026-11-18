@@ -14,7 +14,9 @@ import { HomeHeader } from "./home-header";
 import { HomeHostSync } from "./home-host-sync";
 import type { HomeKeyAction, HomeOverlay } from "./keys";
 import { markLandedOnHome } from "./launch";
+import { useHomeStore } from "./home-store";
 import type { HomeSession } from "./model";
+import type { ClosedRecent } from "./recent";
 import { QueueSection, type QueueActions } from "./queue-section";
 import { RightColumn, type RightColumnActions } from "./right-column";
 import { advanceSweep, resolveSweep, startSweep, type SweepState } from "./sweep";
@@ -23,6 +25,7 @@ import { useHomeActions } from "./use-home-actions";
 import { useHomeBacklog } from "./use-home-backlog";
 import { useHomeData } from "./use-home-data";
 import { useHomeKeys } from "./use-home-keys";
+import { useHomeRecent } from "./use-home-recent";
 import {
   buildQueueModel,
   itemHasActions,
@@ -47,7 +50,7 @@ function overlayOf(sweeping: boolean, drawerOpen: boolean): HomeOverlay {
 /**
  * Home (fork mod, home-map), v2: a briefing, not an inventory. Header (headline, tally), then two
  * columns: Your queue on the left, what moves without him on the right (Recently worked on,
- * Running now, Check on these, Not started, Tidy); the send-only Chief bar is docked at the bottom.
+ * Running now, Check on these, Backlog, Tidy); the send-only Chief bar is docked at the bottom.
  * Every open session sits in exactly one place (the shared `buildHomeView`). Drawn from the live
  * stores plus each host's Home snapshot, so it updates with no polling beyond a quiet minute tick.
  */
@@ -82,7 +85,12 @@ function HomeScreenContent(): ReactElement {
     markLandedOnHome();
   }, []);
 
-  const model = useMemo(() => buildQueueModel(view), [view]);
+  const queueSort = useHomeStore((state) => state.queueSort);
+  const setQueueSort = useHomeStore((state) => state.setQueueSort);
+  // The order is recomputed from the view, so it follows every card and brief change for free.
+  const model = useMemo(() => buildQueueModel(view, queueSort), [view, queueSort]);
+  const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const recent = useHomeRecent({ open: view.recentAll, serverIds, resetKey: closedToday });
   const items = useMemo(() => visibleQueueItems(model, collapsedOpen), [model, collapsedOpen]);
   const focusedIndex = useMemo(
     () => (focusedId ? items.findIndex((item) => item.entry.session.id === focusedId) : -1),
@@ -146,13 +154,28 @@ function HomeScreenContent(): ReactElement {
     }),
     [actions.open, backToNormal, closeOne, snoozeOne, unsnoozeOne],
   );
+  const { dropClosed } = recent;
+  const reopenClosed = useCallback(
+    (item: ClosedRecent) => {
+      void actions.reopen(item).then((ok) => {
+        if (ok) dropClosed(item.serverId, item.agentId);
+        return undefined;
+      });
+    },
+    [actions, dropClosed],
+  );
   const rightActions = useMemo<RightColumnActions>(
     () => ({
       open: actions.open,
       close: (sessions) => void actions.close(sessions),
       startSweep: startSweepNow,
+      reopen: reopenClosed,
     }),
-    [actions, startSweepNow],
+    [actions, reopenClosed, startSweepNow],
+  );
+  const recentProps = useMemo(
+    () => ({ rows: recent.rows, canShowMore: recent.canShowMore, onShowMore: recent.showMore }),
+    [recent.rows, recent.canShowMore, recent.showMore],
   );
 
   const handleSweepKeep = useCallback(() => {
@@ -285,11 +308,18 @@ function HomeScreenContent(): ReactElement {
                       onLaterOpenChange={handleLaterOpenChange}
                       collapsedOpen={collapsedOpen}
                       onToggleCollapsed={toggleCollapsed}
+                      sort={queueSort}
+                      onSortChange={setQueueSort}
                       actions={queueActions}
                     />
                   </View>
                   <View style={wide ? styles.right : styles.full}>
-                    <RightColumn view={view} backlog={backlog} actions={rightActions} />
+                    <RightColumn
+                      view={view}
+                      recent={recentProps}
+                      backlog={backlog}
+                      actions={rightActions}
+                    />
                   </View>
                 </View>
               )}
@@ -329,11 +359,13 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     alignItems: "center",
     paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
   },
+  // One horizontal inset for the whole Home body (header, both columns); the Chief bar uses the
+  // same value so everything lines up. Inside the column so it holds at any window width.
   column: {
     width: "100%",
     maxWidth: CONTENT_MAX_WIDTH,
+    paddingHorizontal: theme.spacing[6],
     gap: theme.spacing[3],
     minWidth: 0,
   },
@@ -377,7 +409,7 @@ const styles = StyleSheet.create((theme) => ({
   keysHint: {
     color: theme.colors.foregroundMuted,
     fontSize: 11,
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[6],
     paddingBottom: theme.spacing[1.5],
     backgroundColor: theme.colors.surface0,
   },

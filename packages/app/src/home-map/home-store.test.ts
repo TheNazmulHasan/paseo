@@ -3,7 +3,7 @@ import { addClosedToday, migrateHomeState, useHomeStore } from "./home-store";
 
 describe("migrateHomeState", () => {
   it("turns junk and the removed v1 map shape into the defaults", () => {
-    const empty = { closedTodayLocal: { day: "", count: 0 } };
+    const empty = { closedTodayLocal: { day: "", count: 0 }, queueSort: "priority" };
     for (const junk of [
       null,
       undefined,
@@ -12,14 +12,22 @@ describe("migrateHomeState", () => {
       [],
       { baseline: "open", overrides: {}, showQuiet: true },
       { closedTodayLocal: { day: "2026-11-18", count: -1 } },
+      { closedTodayLocal: { day: "", count: 0 }, queueSort: "sideways" },
     ]) {
       expect(migrateHomeState(junk)).toEqual(empty);
     }
   });
 
   it("keeps a valid persisted state", () => {
-    const stored = { closedTodayLocal: { day: "2026-11-18", count: 3 } };
+    const stored = { closedTodayLocal: { day: "2026-11-18", count: 3 }, queueSort: "folder" };
     expect(migrateHomeState(stored)).toEqual(stored);
+  });
+
+  it("an older state without a sort gets the default", () => {
+    expect(migrateHomeState({ closedTodayLocal: { day: "2026-11-18", count: 3 } })).toEqual({
+      closedTodayLocal: { day: "2026-11-18", count: 3 },
+      queueSort: "priority",
+    });
   });
 });
 
@@ -42,8 +50,13 @@ describe("addClosedToday", () => {
 });
 
 describe("useHomeStore", () => {
+  it("remembers the queue sort", () => {
+    useHomeStore.getState().setQueueSort("recent");
+    expect(useHomeStore.getState().queueSort).toBe("recent");
+  });
+
   beforeEach(() => {
-    useHomeStore.setState({ closedTodayLocal: { day: "", count: 0 } });
+    useHomeStore.setState({ closedTodayLocal: { day: "", count: 0 }, queueSort: "priority" });
   });
 
   it("counts the sessions closed from Home today", () => {

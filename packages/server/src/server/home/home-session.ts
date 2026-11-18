@@ -66,6 +66,16 @@ async function answer(
         if (typeof input.agentId !== "string" || !input.agentId) throw new Error("agentId is required");
         snapshot = await service.keep(input.agentId, input.keep !== false);
         break;
+      case "recent": {
+        const offset = Math.max(0, Math.floor(Number(input.offset ?? 0)) || 0);
+        const limit = Math.min(50, Math.max(1, Math.floor(Number(input.limit ?? 10)) || 10));
+        const recent = await service.recentClosed(offset, limit);
+        host.emit({
+          type: "home.response",
+          payload: { requestId: msg.requestId, snapshot: null, recent, error: null },
+        });
+        return;
+      }
       case "set_layout": {
         const layout = input.layout === null || input.layout === undefined
           ? null

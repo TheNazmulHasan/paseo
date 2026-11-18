@@ -13,6 +13,8 @@ import {
   fallbackHeadline,
   formatClock,
   itemHasActions,
+  priorityGroupOf,
+  QUEUE_SORTS,
   splitCheckOn,
   visibleQueueItems,
 } from "./view-model";
@@ -147,30 +149,50 @@ describe("times", () => {
   });
 });
 
-describe("buildQueueModel: the default queue", () => {
-  it("numbers Now, Today and the collapsed rest straight on", () => {
-    const view = viewOf([
-      waitingNow("n1"),
-      waitingNow("n2"),
-      waitingToday("t1"),
-      waitingLater("l1"),
-      waitingLater("l2"),
+const lowOf = (id: string, over: Partial<HomeCard> = {}, extra: Partial<HomeSession> = {}) =>
+  session(id, { card: card({ importance: "low", ...over }), ...extra });
+
+describe("buildQueueModel: priority (the default sort)", () => {
+  const mixed = () =>
+    viewOf([
+      lowOf("urgent-less", { urgency: "now" }),
+      waitingLater("important-only"),
+      lowOf("neither-1", { urgency: "whenever" }),
+      waitingNow("both-1"),
+      waitingToday("both-2"),
+      lowOf("neither-2", { urgency: "week" }),
     ]);
-    const model = buildQueueModel(view);
-    expect(model.mode).toBe("queue");
-    const numbersOf = (items: { number: number }[]) => items.map((item) => item.number);
-    expect(model.blocks.map((b) => [b.key, b.tint, numbersOf(b.items)])).toEqual([
-      ["now", "now", [1, 2]],
-      ["today", "today", [3]],
+
+  it("splits by urgency now|today and importance high, in the four named groups", () => {
+    const model = buildQueueModel(mixed());
+    expect(model.sort).toBe("priority");
+    expect(
+      model.blocks.map((b) => [b.labelKey, b.items.map((i) => i.entry.session.id)]),
+    ).toEqual([
+      ["urgentImportant", ["both-1", "both-2"]],
+      ["urgentLess", ["urgent-less"]],
+      ["importantNotUrgent", ["important-only"]],
     ]);
-    expect(model.collapsed?.items.map((i) => i.number)).toEqual([4, 5]);
-    expect(model.layout).toBeNull();
+    expect(model.collapsed?.items.map((i) => i.entry.session.id)).toEqual(["neither-2", "neither-1"]);
   });
 
-  it("leaves out empty groups (no empty tinted block)", () => {
-    const model = buildQueueModel(viewOf([waitingToday("t1")]));
-    expect(model.blocks.map((b) => b.key)).toEqual(["today"]);
-    expect(model.collapsed).toBeNull();
+  it("tints the first group strong, the second light, the rest none; numbers run straight on", () => {
+    const model = buildQueueModel(mixed());
+    expect(model.blocks.map((b) => b.tint)).toEqual(["now", "today", "none"]);
+    const numbers = [...model.blocks.flatMap((b) => b.items), ...(model.collapsed?.items ?? [])];
+    expect(numbers.map((i) => i.number)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("hides empty groups, so the first group shown is the strongest whatever it is", () => {
+    const model = buildQueueModel(viewOf([waitingLater("a"), lowOf("b", { urgency: "week" })]));
+    expect(model.blocks.map((b) => [b.labelKey, b.tint])).toEqual([["importantNotUrgent", "now"]]);
+    expect(model.collapsed?.items.map((i) => i.entry.session.id)).toEqual(["b"]);
+  });
+
+  it("a pending permission is urgent; a session with no card is Neither", () => {
+    const model = buildQueueModel(viewOf([session("perm", { state: "needs_you", card: null })]));
+    expect(model.blocks[0].labelKey).toBe("urgentLess");
+    expect(priorityGroupOf(session("x", { card: null, state: "your_move" }))).toBe("neither");
   });
 
   it("an empty queue is empty", () => {
@@ -181,16 +203,73 @@ describe("buildQueueModel: the default queue", () => {
 
   it("keys 1-9 reach only what is on screen: the collapsed group joins when opened", () => {
     const model = buildQueueModel(
-      viewOf([waitingNow("n1"), waitingToday("t1"), waitingLater("l1")]),
+      viewOf([waitingNow("n1"), waitingToday("t1"), lowOf("l1", { urgency: "whenever" })]),
     );
     expect(visibleQueueItems(model, false).map((i) => i.number)).toEqual([1, 2]);
     expect(visibleQueueItems(model, true).map((i) => i.number)).toEqual([1, 2, 3]);
   });
 
-  it("every item of the default queue has Later and Close", () => {
-    const model = buildQueueModel(viewOf([waitingNow("n1"), waitingLater("l1")]));
-    for (const item of visibleQueueItems(model, true))
-      expect(itemHasActions(model, item)).toBe(true);
+  it("every item of the normal queue has Later and Close", () => {
+    const model = buildQueueModel(mixed(), "folder");
+    for (const item of visibleQueueItems(model, true)) expect(itemHasActions(model, item)).toBe(true);
+  });
+});
+
+describe("buildQueueModel: the other sorts", () => {
+  const at = (minutesAgo: number) => NOW - minutesAgo * 60_000;
+  const sessions = (layout: HomeLayout | null = null) =>
+    viewOf([
+      session("old", { lastActivityAt: at(300), card: card({ urgency: "today" }), folder: "B" }),
+      session("mid", { lastActivityAt: at(60), card: card({ urgency: "whenever" }), folder: null }),
+      session("fresh", { lastActivityAt: at(1), folder: "A" }),
+      session("fresh2", { lastActivityAt: at(2), folder: "B", card: card({ urgency: "week" }) }),
+    ], layout);
+  const ids = (model: ReturnType<typeof buildQueueModel>) =>
+    model.blocks.flatMap((b) => b.items.map((i) => i.entry.session.id));
+
+  it("waiting longest: one flat list, oldest activity first, nothing collapsed", () => {
+    const model = buildQueueModel(sessions(), "waiting");
+    expect(model.blocks).toHaveLength(1);
+    expect(model.blocks[0].tint).toBe("none");
+    expect(ids(model)).toEqual(["old", "mid", "fresh2", "fresh"]);
+    expect(model.collapsed).toBeNull();
+    expect(model.blocks[0].items.map((i) => i.number)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("recent: one flat list, newest activity first", () => {
+    expect(ids(buildQueueModel(sessions(), "recent"))).toEqual(["fresh", "fresh2", "mid", "old"]);
+  });
+
+  it("folder: a block per folder by best rank, rank order inside, Unfiled last", () => {
+    const model = buildQueueModel(sessions(), "folder");
+    expect(model.blocks.map((b) => [b.label ?? b.labelKey, ids({ ...model, blocks: [b] })])).toEqual([
+      ["A", ["fresh"]],
+      ["B", ["old", "fresh2"]],
+      ["unfiled", ["mid"]],
+    ]);
+    expect(model.blocks.every((b) => b.tint === "none")).toBe(true);
+  });
+
+  it("recomputes from the view every time: the same sessions in a new order give a new order", () => {
+    const a = buildQueueModel(sessions(), "waiting");
+    const touched = viewOf([
+      session("old", { lastActivityAt: at(0.5), card: card({ urgency: "today" }) }),
+      session("mid", { lastActivityAt: at(60), card: card({ urgency: "whenever" }) }),
+    ]);
+    expect(ids(a)[0]).toBe("old");
+    expect(ids(buildQueueModel(touched, "waiting"))).toEqual(["mid", "old"]);
+  });
+
+  it("a Chief layout wins over every sort", () => {
+    const layout: HomeLayout = {
+      title: "t",
+      reason: "r",
+      createdAt: "2026-11-18T08:40:00.000Z",
+      groups: [{ label: "G", items: [{ agentId: "old" }] }],
+    };
+    for (const sort of QUEUE_SORTS) {
+      expect(buildQueueModel(sessions(layout), sort).mode).toBe("layout");
+    }
   });
 });
 

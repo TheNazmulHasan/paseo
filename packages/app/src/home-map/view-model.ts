@@ -9,7 +9,7 @@ export type HomeSessionView = HomeView<HomeSession>;
 
 /** Check on these shows this many rows; the rest sit behind "Sweep them". */
 export const CHECK_ON_VISIBLE = 4;
-/** Not started shows this many backlog tasks. */
+/** Backlog shows this many backlog tasks. */
 export const BACKLOG_VISIBLE = 3;
 /** The Chief reply line is clipped to this many characters. */
 export const REPLY_LINE_MAX = 140;
@@ -95,6 +95,20 @@ export function describeSnoozeBack(untilMs: number, now: Date): SnoozeBack {
 
 export type QueueTint = "now" | "today" | "none";
 
+/** How Your queue is ordered; "priority" is the default and the only one that tints. */
+export const QUEUE_SORTS = ["priority", "waiting", "folder", "recent"] as const;
+export type QueueSort = (typeof QUEUE_SORTS)[number];
+export const DEFAULT_QUEUE_SORT: QueueSort = "priority";
+
+/** The four priority groups, strongest first. */
+export const PRIORITY_GROUPS = [
+  "urgentImportant",
+  "urgentLess",
+  "importantNotUrgent",
+  "neither",
+] as const;
+export type PriorityGroup = (typeof PRIORITY_GROUPS)[number];
+
 export interface QueueItemModel {
   entry: HomeSessionEntry;
   /** 1-based; counts straight on across the groups, the collapsed one included. */
@@ -105,17 +119,20 @@ export interface QueueItemModel {
 
 export interface QueueBlock {
   key: string;
-  /** Chief's group label; null in the default queue (the tint says Now / Today). */
+  /** A literal heading: Chief's group label or a folder name; null otherwise. */
   label: string | null;
+  /** A heading the screen translates: a priority group or "unfiled"; null otherwise. */
+  labelKey: PriorityGroup | "unfiled" | null;
   tint: QueueTint;
   items: QueueItemModel[];
 }
 
 export interface QueueModel {
   mode: "queue" | "layout";
+  sort: QueueSort;
   /** The always-visible groups. */
   blocks: QueueBlock[];
-  /** "N more can wait" (default) or "N more waiting on you" (Chief's layout): collapsed. */
+  /** "N more can wait" (priority) or "N more waiting on you" (Chief's layout): collapsed. */
   collapsed: QueueBlock | null;
   /** Layout only: the title and reason Chief gave it. */
   layout: { title: string; reason: string; createdAt: string } | null;
@@ -124,12 +141,56 @@ export interface QueueModel {
 const LAYOUT_TINTS: readonly QueueTint[] = ["now", "today"];
 
 /**
- * The queue as numbered blocks. Default: Now (strong tint), Today (faint), and the `later` group
- * collapsed. With a Chief layout: its groups in order (first strongest, second faint, the rest
- * plain) and the queue sessions it did not mention collapsed under it. Numbers run through all of
- * it, so item 7 is item 7 whether its block is open or not.
+ * Which of the four priority groups a queue session is in, from its card: urgent = urgency now or
+ * today, important = importance high. A pending permission is urgent; a session with no card yet
+ * has nothing to say it is important.
  */
-export function buildQueueModel(view: Pick<HomeSessionView, "queue" | "layout">): QueueModel {
+export function priorityGroupOf(session: HomeSession): PriorityGroup {
+  const card = session.card;
+  const urgent = session.state === "needs_you" || card?.urgency === "now" || card?.urgency === "today";
+  const important = card?.importance === "high";
+  if (urgent) return important ? "urgentImportant" : "urgentLess";
+  return important ? "importantNotUrgent" : "neither";
+}
+
+/**
+ * The waiting sessions in the order the brief and the rules rank them (`buildHomeView` sorts
+ * each of now / today / later; this is the three joined). Every queue sort starts from this, so
+ * "keep the rank order inside a group" is just a stable filter or sort over it.
+ */
+export function rankedQueue(view: Pick<HomeSessionView, "queue">): HomeSessionEntry[] {
+  return [...view.queue.now, ...view.queue.today, ...view.queue.later];
+}
+
+/** A stable sort: ties keep the rank order they came in. */
+function stableSortedBy(
+  entries: readonly HomeSessionEntry[],
+  compare: (a: HomeSessionEntry, b: HomeSessionEntry) => number,
+): HomeSessionEntry[] {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => compare(a.entry, b.entry) || a.index - b.index)
+    .map(({ entry }) => entry);
+}
+
+/**
+ * The queue as numbered blocks, ordered by `sort` (the order is recomputed from the view every
+ * time, so it follows the cards and the brief with no extra model call):
+ * - priority: the four groups (empty ones left out); the first shown has the strong tint, the
+ *   second the faint one, the rest none; the last group, Neither, is collapsed ("can wait").
+ * - waiting: one flat list, the session that has waited on him longest first (last activity
+ *   ascending).
+ * - folder: one block per folder in order of its best-ranked session, Unfiled last.
+ * - recent: one flat list, newest activity first.
+ * With a Chief layout the layout replaces the queue whatever the sort: its groups in order
+ * (first strongest, second faint, the rest plain) and the queue sessions it did not mention
+ * collapsed under it. Numbers run through all of it, so item 7 is item 7 whether its block is
+ * open or not.
+ */
+export function buildQueueModel(
+  view: Pick<HomeSessionView, "queue" | "layout">,
+  sort: QueueSort = DEFAULT_QUEUE_SORT,
+): QueueModel {
   let count = 0;
   const number = (
     entries: readonly { entry: HomeSessionEntry; line: string | null }[],
@@ -145,16 +206,18 @@ export function buildQueueModel(view: Pick<HomeSessionView, "queue" | "layout">)
     const blocks = view.layout.groups.map((group, index) => ({
       key: `layout:${index}`,
       label: group.label,
+      labelKey: null,
       tint: LAYOUT_TINTS[index] ?? ("none" as QueueTint),
       items: number(group.items),
     }));
     const rest = view.layout.restOfQueue;
     return {
       mode: "layout",
+      sort,
       blocks,
       collapsed:
         rest.length > 0
-          ? { key: "rest", label: null, tint: "none", items: number(plain(rest)) }
+          ? { key: "rest", label: null, labelKey: null, tint: "none", items: number(plain(rest)) }
           : null,
       layout: {
         title: view.layout.title,
@@ -164,20 +227,72 @@ export function buildQueueModel(view: Pick<HomeSessionView, "queue" | "layout">)
     };
   }
 
-  const blocks: QueueBlock[] = [];
-  for (const section of ["now", "today"] as const) {
-    const entries = view.queue[section];
-    if (entries.length === 0) continue;
-    blocks.push({ key: section, label: null, tint: section, items: number(plain(entries)) });
+  const ranked = rankedQueue(view);
+  const flat = (key: string, entries: readonly HomeSessionEntry[]): QueueModel => ({
+    mode: "queue",
+    sort,
+    blocks: entries.length > 0
+      ? [{ key, label: null, labelKey: null, tint: "none", items: number(plain(entries)) }]
+      : [],
+    collapsed: null,
+    layout: null,
+  });
+
+  if (sort === "waiting") {
+    return flat("waiting", stableSortedBy(ranked, (a, b) => a.session.lastActivityAt - b.session.lastActivityAt));
   }
-  const later = view.queue.later;
+  if (sort === "recent") {
+    return flat("recent", stableSortedBy(ranked, (a, b) => b.session.lastActivityAt - a.session.lastActivityAt));
+  }
+  if (sort === "folder") {
+    const byFolder = new Map<string, HomeSessionEntry[]>();
+    for (const entry of ranked) {
+      const folder = entry.session.folder?.trim() || "";
+      byFolder.set(folder, [...(byFolder.get(folder) ?? []), entry]);
+    }
+    const names = [...byFolder.keys()].filter((name) => name !== "");
+    const keys = byFolder.has("") ? [...names, ""] : names;
+    return {
+      mode: "queue",
+      sort,
+      blocks: keys.map((name) => ({
+        key: `folder:${name}`,
+        label: name === "" ? null : name,
+        labelKey: name === "" ? ("unfiled" as const) : null,
+        tint: "none" as QueueTint,
+        items: number(plain(byFolder.get(name) ?? [])),
+      })),
+      collapsed: null,
+      layout: null,
+    };
+  }
+
+  const shown = PRIORITY_GROUPS.map((group) => ({
+    group,
+    entries: ranked.filter((entry) => priorityGroupOf(entry.session) === group),
+  })).filter(({ entries }) => entries.length > 0);
+  const last = shown[shown.length - 1];
+  const collapsedGroup = last?.group === "neither" ? last : null;
+  const open = collapsedGroup ? shown.slice(0, -1) : shown;
   return {
     mode: "queue",
-    blocks,
-    collapsed:
-      later.length > 0
-        ? { key: "later", label: null, tint: "none", items: number(plain(later)) }
-        : null,
+    sort,
+    blocks: open.map(({ group, entries }, index) => ({
+      key: group,
+      label: null,
+      labelKey: group,
+      tint: LAYOUT_TINTS[index] ?? ("none" as QueueTint),
+      items: number(plain(entries)),
+    })),
+    collapsed: collapsedGroup
+      ? {
+          key: "later",
+          label: null,
+          labelKey: "neither",
+          tint: "none",
+          items: number(plain(collapsedGroup.entries)),
+        }
+      : null,
     layout: null,
   };
 }

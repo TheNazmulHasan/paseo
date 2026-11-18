@@ -286,8 +286,8 @@ describe("entry title", () => {
 });
 
 describe("Recently worked on", () => {
-  it("lists the 5 sessions he last wrote to, newest first, whatever their importance", () => {
-    const sessions = Array.from({ length: 7 }, (_, index) =>
+  it("lists the 10 sessions he last wrote to, newest first, whatever their importance; recentAll has the rest", () => {
+    const sessions = Array.from({ length: 13 }, (_, index) =>
       session(`s${index}`, {
         lastUserMessageAt: NOW - index * HOUR,
         card: card({ importance: index % 2 ? "low" : "high", waitingOn: "nobody", kind: "none" }),
@@ -295,7 +295,9 @@ describe("Recently worked on", () => {
     );
     sessions.push(session("never", { lastUserMessageAt: 0 }), session("unset"));
     const view = buildHomeView({ sessions, brief: null, state: EMPTY_HOME_STATE, now: NOW });
-    expect(ids(view.recent)).toEqual(["s0", "s1", "s2", "s3", "s4"]);
+    expect(ids(view.recent)).toEqual(Array.from({ length: 10 }, (_, i) => `s${i}`));
+    expect(ids(view.recentAll)).toHaveLength(13);
+    expect(ids(view.recentAll).slice(0, 10)).toEqual(ids(view.recent));
   });
 
   it("is an overlay: a session may be in recent and in the queue, and the tally still adds up", () => {

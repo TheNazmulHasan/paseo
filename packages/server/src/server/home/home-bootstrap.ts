@@ -107,6 +107,39 @@ export function createHome(deps: HomeBootstrapDeps): {
       }
       return cards;
     },
+    listRecentClosed: async (offset, limit) => {
+      const [records, lookup] = await Promise.all([agentStorage.list(), lookups()]);
+      const closed = records
+        .filter(
+          (record) =>
+            !record.internal &&
+            record.archivedAt &&
+            !hasChiefRoleLabel(record.labels) &&
+            Date.parse(record.lastUserMessageAt ?? "") > 0,
+        )
+        .sort(
+          (a, b) =>
+            Date.parse(b.lastUserMessageAt ?? "") - Date.parse(a.lastUserMessageAt ?? "") ||
+            Date.parse(b.archivedAt ?? "") - Date.parse(a.archivedAt ?? ""),
+        );
+      const items = closed.slice(offset, offset + limit).map((record) => {
+        const card = record.topicTrail?.card;
+        const place = [lookup.folderName(record.workspaceId), lookup.workspaceName(record.workspaceId)]
+          .filter((part): part is string => Boolean(part))
+          .join(" › ");
+        return {
+          agentId: record.id,
+          title:
+            card?.title?.trim() || card?.what?.trim() || record.title?.trim() || record.id.slice(0, 8),
+          workspaceId: record.workspaceId ?? null,
+          place: place || null,
+          lastUserMessageAt: record.lastUserMessageAt ?? "",
+          lastActivityAt: record.lastActivityAt ?? record.updatedAt,
+          archivedAt: record.archivedAt ?? "",
+        };
+      });
+      return { items, hasMore: closed.length > offset + limit };
+    },
     countClosedToday: async () => {
       const since = startOfLocalDay(new Date());
       const records = await agentStorage.list();

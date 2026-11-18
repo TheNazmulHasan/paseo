@@ -27,8 +27,9 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 /** A Chief layout holds at most this many items in total. */
 export const HOME_LAYOUT_MAX_ITEMS = 12;
 export const HOME_LAYOUT_MAX_GROUPS = 6;
-/** "Recently worked on" shows this many sessions. */
-export const HOME_RECENT_LIMIT = 5;
+/** "Recently worked on" shows this many sessions first, then this many more per "Show more". */
+export const HOME_RECENT_LIMIT = 10;
+export const HOME_RECENT_PAGE = 10;
 
 // ---------------------------------------------------------------------------------------------
 // Wire shapes
@@ -88,7 +89,14 @@ export const HomeSnapshotSchema = z.object({
 });
 export type HomeSnapshot = z.infer<typeof HomeSnapshotSchema>;
 
-export const HOME_REQUEST_ACTIONS = ["get", "refresh", "snooze", "keep", "set_layout"] as const;
+export const HOME_REQUEST_ACTIONS = [
+  "get",
+  "refresh",
+  "snooze",
+  "keep",
+  "set_layout",
+  "recent",
+] as const;
 export const HomeRequestActionSchema = z.enum(HOME_REQUEST_ACTIONS);
 export type HomeRequestAction = z.infer<typeof HomeRequestActionSchema>;
 
@@ -98,6 +106,8 @@ export type HomeRequestAction = z.infer<typeof HomeRequestActionSchema>;
  * - snooze: {agentId, until: ISO | null} (null brings it back now).
  * - keep: {agentId, keep: boolean} (Sweep "Keep"; false releases it).
  * - set_layout: {layout: HomeLayout | null} (null = back to normal).
+ * - recent: {offset, limit}: CLOSED (archived) sessions he wrote to, newest first, answered in
+ *   `payload.recent` (the snapshot is null). Open ones are already in the app's store.
  */
 export const HomeRequestSchema = z.object({
   type: z.literal("home.request"),
@@ -106,11 +116,34 @@ export const HomeRequestSchema = z.object({
   input: z.record(z.string(), z.unknown()).default({}),
 });
 
+/** One closed session in "Recently worked on" (the `recent` action). */
+export const HomeRecentItemSchema = z.object({
+  agentId: z.string(),
+  /** card.title, else card.what, else the session title. */
+  title: z.string(),
+  workspaceId: z.string().nullable(),
+  /** "Folder › Workspace" when known. */
+  place: z.string().nullable(),
+  lastUserMessageAt: z.string(),
+  lastActivityAt: z.string(),
+  archivedAt: z.string(),
+});
+export type HomeRecentItem = z.infer<typeof HomeRecentItemSchema>;
+
+export const HomeRecentPageSchema = z.object({
+  items: z.array(HomeRecentItemSchema),
+  /** More closed sessions exist beyond offset + items.length. */
+  hasMore: z.boolean(),
+});
+export type HomeRecentPage = z.infer<typeof HomeRecentPageSchema>;
+
 export const HomeResponseSchema = z.object({
   type: z.literal("home.response"),
   payload: z.object({
     requestId: z.string(),
     snapshot: HomeSnapshotSchema.nullable(),
+    /** Only for the `recent` action. */
+    recent: HomeRecentPageSchema.optional(),
     error: z.string().nullable(),
   }),
 });
@@ -217,6 +250,8 @@ export interface HomeView<T extends HomeSessionInput> {
    * session may be here and in the queue; this block is where he is, the queue is what to do.
    */
   recent: HomeEntry<T>[];
+  /** Every open session he wrote to, newest first: `recent` is its first HOME_RECENT_LIMIT. */
+  recentAll: HomeEntry<T>[];
   /** `running` without the sessions already shown in `recent`: what "Running now" lists. */
   runningElsewhere: HomeEntry<T>[];
   checkOn: HomeEntry<T>[];
@@ -455,14 +490,14 @@ export function buildHomeView<T extends HomeSessionInput>(input: {
     tidy,
   });
 
-  const recent = entries
+  const recentAll = entries
     .filter((entry) => (entry.session.lastUserMessageAt ?? 0) > 0)
     .sort(
       (a, b) =>
         (b.session.lastUserMessageAt ?? 0) - (a.session.lastUserMessageAt ?? 0) ||
         b.session.lastActivityAt - a.session.lastActivityAt,
-    )
-    .slice(0, HOME_RECENT_LIMIT);
+    );
+  const recent = recentAll.slice(0, HOME_RECENT_LIMIT);
   const recentIds = new Set(recent.map((entry) => entry.session.id));
 
   return {
@@ -473,6 +508,7 @@ export function buildHomeView<T extends HomeSessionInput>(input: {
     snoozed,
     running,
     recent,
+    recentAll,
     runningElsewhere: running.filter((entry) => !recentIds.has(entry.session.id)),
     checkOn,
     kept,

@@ -6,6 +6,7 @@ import {
   HomeBriefSchema,
   type HomeBrief,
   type HomeLayout,
+  type HomeRecentPage,
   type HomeSnapshot,
   type HomeState,
 } from "@getpaseo/protocol/home";
@@ -48,6 +49,8 @@ export interface HomeServiceOptions {
   listCards: () => Promise<BriefCard[]>;
   /** Sessions archived since local midnight. */
   countClosedToday: () => Promise<number>;
+  /** Closed (archived) sessions he wrote to, newest first: one page. */
+  listRecentClosed?: (offset: number, limit: number) => Promise<HomeRecentPage>;
   manager: Pick<AgentManager, "getProviderAvailability"> & Record<string, unknown>;
   resolveProviders: (cwd: string) => Promise<StructuredGenerationProvider[]>;
   logger: Pick<Logger, "info" | "warn" | "debug">;
@@ -143,6 +146,12 @@ export class HomeService {
       briefRunning: this.running !== null,
       updatedAt: this.now().toISOString(),
     };
+  }
+
+  /** "Recently worked on", past the open sessions: closed ones, newest first. */
+  async recentClosed(offset: number, limit: number): Promise<HomeRecentPage> {
+    if (!this.options.listRecentClosed) return { items: [], hasMore: false };
+    return this.options.listRecentClosed(offset, limit);
   }
 
   /** A card was written or changed. Debounced, and never more often than every 10 minutes. */

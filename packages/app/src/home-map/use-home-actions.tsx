@@ -18,6 +18,7 @@ import {
 import { useHomeDataStore } from "./home-data-store";
 import { useHomeStore } from "./home-store";
 import { sessionLabel, type HomeSession } from "./model";
+import type { ClosedRecent } from "./recent";
 import { requestHomeRefetch } from "./refetch";
 import { hostsWithLayout, localDayKey } from "./snapshots";
 import { UndoToast } from "./undo-toast";
@@ -25,6 +26,8 @@ import { openHomeSession } from "./open-session";
 
 export interface HomeActions {
   open: (session: HomeSession) => void;
+  /** A closed session from Recently worked on: unarchive it (as Undo does), then open it. */
+  reopen: (item: ClosedRecent) => Promise<boolean>;
   /** Archives the sessions (one Undo toast for the batch). */
   close: (sessions: readonly HomeSession[]) => Promise<void>;
   snooze: (session: HomeSession, preset: HomeSnoozePreset) => Promise<void>;
@@ -66,6 +69,27 @@ export function useHomeActions(): HomeActions {
       agentId: session.agentId,
     });
   }, []);
+
+  const reopen = useCallback(
+    async (item: ClosedRecent): Promise<boolean> => {
+      try {
+        await clientFor(item.serverId, disconnected).refreshAgent(item.agentId);
+      } catch (error) {
+        reportError(error);
+        return false;
+      }
+      requestHomeRefetch();
+      if (item.workspaceId) {
+        openHomeSession({
+          serverId: item.serverId,
+          workspaceId: item.workspaceId,
+          agentId: item.agentId,
+        });
+      }
+      return true;
+    },
+    [disconnected, reportError],
+  );
 
   const undo = useCallback(async () => {
     dismissRef.current?.();
@@ -182,7 +206,7 @@ export function useHomeActions(): HomeActions {
   }, [disconnected, reportError]);
 
   return useMemo(
-    () => ({ open, close, snooze, unsnooze, keep, refresh, backToNormal }),
-    [open, close, snooze, unsnooze, keep, refresh, backToNormal],
+    () => ({ open, reopen, close, snooze, unsnooze, keep, refresh, backToNormal }),
+    [open, reopen, close, snooze, unsnooze, keep, refresh, backToNormal],
   );
 }

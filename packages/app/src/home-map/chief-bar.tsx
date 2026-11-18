@@ -197,7 +197,7 @@ const ChiefInput = memo(function ChiefInput({
 const styles = StyleSheet.create((theme) => ({
   bar: {
     gap: theme.spacing[1.5],
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[6],
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[1.5],
     borderTopWidth: theme.borderWidth[1],

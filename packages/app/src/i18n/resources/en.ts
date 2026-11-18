@@ -586,9 +586,25 @@ export const en = {
       bringBack: "Bring back",
       madeBy: "made by Chief at {{time}}",
       backToNormal: "Back to normal",
+      sort: {
+        label: "Sort",
+        priority: "Priority",
+        waiting: "Waiting longest",
+        folder: "Folder",
+        recent: "Recent",
+      },
+      priority: {
+        urgentImportant: "Urgent and important",
+        urgentLess: "Urgent, less important",
+        importantNotUrgent: "Important, not urgent",
+        neither: "Neither",
+      },
+      unfiled: "Unfiled",
     },
     recent: {
       title: "Recently worked on",
+      showMore: "Show {{count}} more",
+      closed: "closed",
     },
     running: {
       title: "Running now",
@@ -603,7 +619,7 @@ export const en = {
       kept: "{{count}} kept for a week",
     },
     notStarted: {
-      title: "Not started",
+      title: "Backlog",
       start: "Start",
       since: "Backlog since {{date}}",
       more: "{{count}} more in the backlog",

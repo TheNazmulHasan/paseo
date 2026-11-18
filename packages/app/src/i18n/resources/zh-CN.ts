@@ -588,9 +588,25 @@ export const zhCN: TranslationResources = {
       bringBack: "召回",
       madeBy: "由 Chief 于 {{time}} 生成",
       backToNormal: "恢复正常",
+      sort: {
+        label: "排序",
+        priority: "优先级",
+        waiting: "等待最久",
+        folder: "文件夹",
+        recent: "最近",
+      },
+      priority: {
+        urgentImportant: "紧急且重要",
+        urgentLess: "紧急，较不重要",
+        importantNotUrgent: "重要但不紧急",
+        neither: "都不是",
+      },
+      unfiled: "未归档",
     },
     recent: {
       title: "最近处理的",
+      showMore: "再显示 {{count}} 条",
+      closed: "已关闭",
     },
     running: {
       title: "正在运行",
@@ -605,7 +621,7 @@ export const zhCN: TranslationResources = {
       kept: "{{count}} 个保留一周",
     },
     notStarted: {
-      title: "未开始",
+      title: "Backlog",
       start: "开始",
       since: "自 {{date}} 起在待办中",
       more: "待办中还有 {{count}} 个",

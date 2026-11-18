@@ -593,9 +593,25 @@ export const ja: TranslationResources = {
       bringBack: "戻す",
       madeBy: "Chief が {{time}} に作成",
       backToNormal: "元に戻す",
+      sort: {
+        label: "並べ替え",
+        priority: "優先度",
+        waiting: "待ち時間が長い順",
+        folder: "フォルダ",
+        recent: "最近",
+      },
+      priority: {
+        urgentImportant: "緊急かつ重要",
+        urgentLess: "緊急、重要度は低め",
+        importantNotUrgent: "重要だが緊急ではない",
+        neither: "どちらでもない",
+      },
+      unfiled: "未分類",
     },
     recent: {
       title: "最近作業したもの",
+      showMore: "さらに{{count}}件表示",
+      closed: "閉じた",
     },
     running: {
       title: "実行中",
@@ -610,7 +626,7 @@ export const ja: TranslationResources = {
       kept: "{{count}} 件は1週間保持",
     },
     notStarted: {
-      title: "未着手",
+      title: "Backlog",
       start: "開始",
       since: "{{date}} からバックログ",
       more: "バックログにあと {{count}} 件",

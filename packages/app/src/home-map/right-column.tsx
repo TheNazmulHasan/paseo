@@ -8,6 +8,7 @@ import type { MasterBacklogTask } from "@/tasks/master-backlog";
 import { buildBacklogRoute } from "@/utils/host-routes";
 import { HomeButton } from "./home-button";
 import { sessionLocation, type HomeSession } from "./model";
+import { HOME_RECENT_PAGE, type ClosedRecent, type RecentRow } from "./recent";
 import { ActivityAge, StateDot } from "./state-dot";
 import type { HomeBacklog } from "./use-home-backlog";
 import {
@@ -23,6 +24,14 @@ export interface RightColumnActions {
   open: (session: HomeSession) => void;
   close: (sessions: readonly HomeSession[]) => void;
   startSweep: () => void;
+  /** Unarchives a closed session and opens it. */
+  reopen: (item: ClosedRecent) => void;
+}
+
+export interface RecentProps {
+  rows: readonly RecentRow[];
+  canShowMore: boolean;
+  onShowMore: () => void;
 }
 
 function Block({
@@ -135,27 +144,82 @@ function CloseButton({
   );
 }
 
-/** Recently worked on: the sessions he last wrote to, newest first, however important. */
+/** A closed session in Recently worked on: marked "closed", Open reopens it, no Close. */
+const ClosedRow = memo(function ClosedRow({
+  item,
+  onReopen,
+}: {
+  item: ClosedRecent;
+  onReopen: (item: ClosedRecent) => void;
+}) {
+  const { t } = useTranslation();
+  const handle = useCallback(() => onReopen(item), [item, onReopen]);
+  const meta = [t("homeMap.recent.closed"), item.place].filter(Boolean).join(" · ");
+  return (
+    <PressHighlight
+      style={styles.row}
+      onPress={handle}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      testID={`home-recent-closed-${item.agentId}`}
+    >
+      <View style={styles.dotSlot}>
+        <View style={styles.ring} />
+      </View>
+      <View style={styles.rowBody}>
+        <Text style={styles.rowName} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.rowMeta} numberOfLines={1}>
+          {meta}
+        </Text>
+      </View>
+      <View style={styles.rowButtons}>
+        <HomeButton kind="go" onPress={handle} testID={`home-open-closed-${item.agentId}`}>
+          {t("homeMap.queue.open")}
+        </HomeButton>
+      </View>
+    </PressHighlight>
+  );
+});
+
+/**
+ * Recently worked on: the last 10 sessions he wrote to, newest first, however important, then
+ * "Show 10 more" for as far back as there is. Open ones have Open and Close; closed ones come
+ * after them, marked "closed", with Open only.
+ */
 const RecentBlock = memo(function RecentBlock({
-  entries,
+  recent,
   actions,
 }: {
-  entries: readonly HomeSessionEntry[];
+  recent: RecentProps;
   actions: RightColumnActions;
 }) {
   const { t } = useTranslation();
-  if (entries.length === 0) return null;
+  if (recent.rows.length === 0) return null;
   return (
     <Block title={t("homeMap.recent.title")} testID="home-recent">
-      {entries.map((entry) => (
-        <SessionRow
-          key={entry.session.id}
-          entry={entry}
-          onOpen={actions.open}
-          buttons="open"
-          testID={`home-recent-${entry.session.id}`}
-        />
-      ))}
+      {recent.rows.map((row) =>
+        row.kind === "open" ? (
+          <SessionRow
+            key={row.key}
+            entry={row.entry}
+            onOpen={actions.open}
+            buttons="open-close"
+            onClose={actions.close}
+            testID={`home-recent-${row.entry.session.id}`}
+          />
+        ) : (
+          <ClosedRow key={row.key} item={row.item} onReopen={actions.reopen} />
+        ),
+      )}
+      {recent.canShowMore ? (
+        <View style={styles.moreRow}>
+          <HomeButton kind="plain" onPress={recent.onShowMore} testID="home-recent-more">
+            {t("homeMap.recent.showMore", { count: HOME_RECENT_PAGE })}
+          </HomeButton>
+        </View>
+      ) : null}
     </Block>
   );
 });
@@ -382,21 +446,23 @@ const TidyBlock = memo(function TidyBlock({
 });
 
 /**
- * Right column: Recently worked on, Running now, Check on these (and the kept line), Not started,
+ * Right column: Recently worked on, Running now, Check on these (and the kept line), Backlog,
  * Tidy. Blocks with nothing in them are left out.
  */
 export const RightColumn = memo(function RightColumn({
   view,
+  recent,
   backlog,
   actions,
 }: {
   view: HomeSessionView;
+  recent: RecentProps;
   backlog: HomeBacklog;
   actions: RightColumnActions;
 }) {
   return (
     <View style={styles.column} testID="home-right-column">
-      <RecentBlock entries={view.recent} actions={actions} />
+      <RecentBlock recent={recent} actions={actions} />
       <RunningBlock entries={view.runningElsewhere} actions={actions} />
       <CheckOnBlock
         checkOn={view.checkOn}

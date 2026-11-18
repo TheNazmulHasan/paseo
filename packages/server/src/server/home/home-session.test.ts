@@ -21,6 +21,7 @@ function fakeService() {
     snooze: vi.fn(async () => snapshot),
     keep: vi.fn(async () => snapshot),
     setLayout: vi.fn(async () => snapshot),
+    recentClosed: vi.fn(async () => ({ items: [], hasMore: true })),
     subscribe: vi.fn(() => () => undefined),
   };
 }
@@ -60,6 +61,21 @@ describe("dispatchHomeMessage", () => {
     expect(new Date(until).getHours()).toBe(9);
     const again = await run(request("snooze", { agentId: "a", until: null }));
     expect(again.service.snooze).toHaveBeenCalledWith("a", null);
+  });
+
+  it("recent pages the closed sessions: offset and limit are clamped, the snapshot is null", async () => {
+    const { service, emitted } = await run(request("recent", { offset: 20, limit: 10 }));
+    expect(service.recentClosed).toHaveBeenCalledWith(20, 10);
+    expect(emitted[0].payload).toEqual({
+      requestId: "r1",
+      snapshot: null,
+      recent: { items: [], hasMore: true },
+      error: null,
+    });
+    const odd = await run(request("recent", { offset: -5, limit: 9999 }));
+    expect(odd.service.recentClosed).toHaveBeenCalledWith(0, 50);
+    const bare = await run(request("recent"));
+    expect(bare.service.recentClosed).toHaveBeenCalledWith(0, 10);
   });
 
   it("keep defaults to true and false releases", async () => {

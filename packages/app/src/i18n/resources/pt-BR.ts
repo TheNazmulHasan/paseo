@@ -593,9 +593,25 @@ export const ptBR: TranslationResources = {
       bringBack: "Trazer de volta",
       madeBy: "feito pelo Chief às {{time}}",
       backToNormal: "Voltar ao normal",
+      sort: {
+        label: "Ordenar",
+        priority: "Prioridade",
+        waiting: "Esperando há mais tempo",
+        folder: "Pasta",
+        recent: "Recente",
+      },
+      priority: {
+        urgentImportant: "Urgente e importante",
+        urgentLess: "Urgente, menos importante",
+        importantNotUrgent: "Importante, não urgente",
+        neither: "Nenhum",
+      },
+      unfiled: "Sem pasta",
     },
     recent: {
       title: "Trabalhado recentemente",
+      showMore: "Mostrar mais {{count}}",
+      closed: "fechada",
     },
     running: {
       title: "Em andamento agora",
@@ -610,7 +626,7 @@ export const ptBR: TranslationResources = {
       kept: "{{count}} mantidas por uma semana",
     },
     notStarted: {
-      title: "Não iniciado",
+      title: "Backlog",
       start: "Iniciar",
       since: "No backlog desde {{date}}",
       more: "mais {{count}} no backlog",

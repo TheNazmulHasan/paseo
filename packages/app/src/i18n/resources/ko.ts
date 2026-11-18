@@ -589,9 +589,25 @@ export const ko: TranslationResources = {
       bringBack: "되돌리기",
       madeBy: "{{time}}에 Chief가 만듦",
       backToNormal: "원래대로",
+      sort: {
+        label: "정렬",
+        priority: "우선순위",
+        waiting: "오래 기다린 순",
+        folder: "폴더",
+        recent: "최근",
+      },
+      priority: {
+        urgentImportant: "긴급하고 중요",
+        urgentLess: "긴급, 덜 중요",
+        importantNotUrgent: "중요하지만 긴급하지 않음",
+        neither: "해당 없음",
+      },
+      unfiled: "폴더 없음",
     },
     recent: {
       title: "최근 작업",
+      showMore: "{{count}}개 더 보기",
+      closed: "닫힘",
     },
     running: {
       title: "지금 실행 중",
@@ -606,7 +622,7 @@ export const ko: TranslationResources = {
       kept: "{{count}}개를 일주일간 유지",
     },
     notStarted: {
-      title: "시작 전",
+      title: "Backlog",
       start: "시작",
       since: "{{date}}부터 백로그",
       more: "백로그에 {{count}}개 더",

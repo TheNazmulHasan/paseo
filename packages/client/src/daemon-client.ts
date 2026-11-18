@@ -13,7 +13,7 @@ import type { HostAdd, HostUpdate, HostDirectory } from "@getpaseo/protocol/host
 import type { Folder, FoldersSnapshot } from "@getpaseo/protocol/folders";
 // Nazmul mod (chief)
 import type { AppActionInfo } from "@getpaseo/protocol/chief";
-import type { HomeSnapshot } from "@getpaseo/protocol/home"; // Nazmul mod (home-map)
+import type { HomeRecentPage, HomeSnapshot } from "@getpaseo/protocol/home"; // Nazmul mod (home-map)
 import { legacyUsageIcon } from "./legacy-usage-icons.js";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
@@ -4242,6 +4242,15 @@ export class DaemonClient {
     });
     if (payload.error || !payload.snapshot) throw new Error(payload.error ?? "Home is not running");
     return payload.snapshot;
+  }
+
+  /** Nazmul mod (home-map): a page of CLOSED sessions he wrote to, newest first. */
+  async homeRecent(offset: number, limit: number): Promise<HomeRecentPage> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"home.response">({
+      message: { type: "home.request", action: "recent", input: { offset, limit } },
+    });
+    if (payload.error || !payload.recent) throw new Error(payload.error ?? "Home is not running");
+    return payload.recent;
   }
 
   /** Nazmul mod (chief): the app's answer to an `app_command` push. Fire and forget. */

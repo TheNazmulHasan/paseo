@@ -594,9 +594,25 @@ export const fr: TranslationResources = {
       bringBack: "Ramener",
       madeBy: "créé par Chief à {{time}}",
       backToNormal: "Revenir à la normale",
+      sort: {
+        label: "Trier",
+        priority: "Priorité",
+        waiting: "Attend depuis le plus longtemps",
+        folder: "Dossier",
+        recent: "Récent",
+      },
+      priority: {
+        urgentImportant: "Urgent et important",
+        urgentLess: "Urgent, moins important",
+        importantNotUrgent: "Important, pas urgent",
+        neither: "Ni l'un ni l'autre",
+      },
+      unfiled: "Sans dossier",
     },
     recent: {
       title: "Travaillé récemment",
+      showMore: "Afficher {{count}} de plus",
+      closed: "fermée",
     },
     running: {
       title: "En cours maintenant",
@@ -611,7 +627,7 @@ export const fr: TranslationResources = {
       kept: "{{count}} gardées une semaine",
     },
     notStarted: {
-      title: "Pas commencé",
+      title: "Backlog",
       start: "Démarrer",
       since: "Dans le backlog depuis le {{date}}",
       more: "{{count}} de plus dans le backlog",

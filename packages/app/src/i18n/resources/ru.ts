@@ -593,9 +593,25 @@ export const ru: TranslationResources = {
       bringBack: "Вернуть",
       madeBy: "составлено Chief в {{time}}",
       backToNormal: "Вернуть как было",
+      sort: {
+        label: "Сортировка",
+        priority: "Приоритет",
+        waiting: "Ждёт дольше всего",
+        folder: "Папка",
+        recent: "Недавние",
+      },
+      priority: {
+        urgentImportant: "Срочно и важно",
+        urgentLess: "Срочно, менее важно",
+        importantNotUrgent: "Важно, не срочно",
+        neither: "Ни то, ни другое",
+      },
+      unfiled: "Без папки",
     },
     recent: {
       title: "Недавно в работе",
+      showMore: "Показать ещё {{count}}",
+      closed: "закрыт",
     },
     running: {
       title: "Выполняется сейчас",
@@ -610,7 +626,7 @@ export const ru: TranslationResources = {
       kept: "{{count}} оставлены на неделю",
     },
     notStarted: {
-      title: "Не начато",
+      title: "Backlog",
       start: "Начать",
       since: "В бэклоге с {{date}}",
       more: "Ещё {{count}} в бэклоге",
